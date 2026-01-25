@@ -380,8 +380,6 @@ What this spec delivers.
 
 The `claudesprint init` command parses specifications and generates structured sprints with individual issues, dependencies, and acceptance criteria.
 
-## ⚠️ Warning: Hooks Configuration
-
 > [!WARNING]
 > **ClaudeSprint uses hooks that may interfere with normal Claude Code usage.**
 >
