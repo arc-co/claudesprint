@@ -3,7 +3,7 @@
 > [!CAUTION]
 > **Alpha Software** - This project is in early development. APIs, configuration formats, and behavior may change without notice. Use in production environments at your own risk. Please report issues and feedback on [GitHub Issues](https://github.com/anthropics/claude-code/issues).
 
-A dual-loop agentic workflow for autonomous software development, aligned with Anthropic's ["Effective harnesses for long-running agents"](https://www.anthropic.com/engineering/claude-code-best-practices) research.
+A dual-loop agentic workflow for autonomous software development, aligned with Anthropic's ["Effective harnesses for long-running agents"](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) research.
 
 ClaudeSprint orchestrates Claude Code sessions to build complete features autonomously - from specification to tested, committed code - while maintaining context across sessions through structured JSON artifacts.
 
