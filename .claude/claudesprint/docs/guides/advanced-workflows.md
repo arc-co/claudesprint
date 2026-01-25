@@ -8,14 +8,14 @@ ClaudeSprint can run multiple sprints simultaneously by leveraging git branches.
 
 ### How Parallel Execution Works
 
-```
-main branch
-    │
-    ├── sprint/SPEC_01 ← Terminal 1 running claudesprint
-    │
-    ├── sprint/SPEC_02 ← Terminal 2 running claudesprint
-    │
-    └── sprint/SPEC_03 ← Terminal 3 running claudesprint
+```mermaid
+flowchart LR
+    main[main branch] --> spec1[sprint/SPEC_01]
+    main --> spec2[sprint/SPEC_02]
+    main --> spec3[sprint/SPEC_03]
+    spec1 -.- t1[Terminal 1 running claudesprint]
+    spec2 -.- t2[Terminal 2 running claudesprint]
+    spec3 -.- t3[Terminal 3 running claudesprint]
 ```
 
 Each terminal:

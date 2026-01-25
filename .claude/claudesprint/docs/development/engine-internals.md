@@ -4,34 +4,26 @@ This guide explains how ClaudeSprint works under the hood. Understanding the eng
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          CLI Layer                               │
-│                       (cli.py, click)                            │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Workflow Engine                            │
-│                      (workflow.py)                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │   Sprint    │  │    Issue    │  │    Step     │              │
-│  │    Loop     │──│    Loop     │──│  Executor   │              │
-│  └─────────────┘  └─────────────┘  └─────────────┘              │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-            ┌───────────────────┼───────────────────┐
-            ▼                   ▼                   ▼
-┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
-│  State Manager    │ │  Hook Runner      │ │  Notifier         │
-│   (state.py)      │ │   (hooks.py)      │ │ (notifications.py)│
-└───────────────────┘ └───────────────────┘ └───────────────────┘
-            │                   │                   │
-            ▼                   ▼                   ▼
-┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
-│ current_issue.json│ │   npm/pytest/etc  │ │   Bark/Webhook    │
-│   sprint.json     │ │                   │ │                   │
-└───────────────────┘ └───────────────────┘ └───────────────────┘
+```mermaid
+flowchart TB
+    subgraph CLI[CLI Layer]
+        cli_app[CLI Application]
+    end
+
+    subgraph Engine[Workflow Engine]
+        SprintLoop[Sprint Loop] --> IssueLoop[Issue Loop]
+        IssueLoop --> StepExec[Step Executor]
+    end
+
+    CLI --> Engine
+
+    Engine --> StateManager[State Manager]
+    Engine --> HookRunner[Hook Runner]
+    Engine --> Notifier[Notifier]
+
+    StateManager --> StateFiles[JSON State Files]
+    HookRunner --> Commands[npm / pytest / etc]
+    Notifier --> Alerts[Bark / Webhook]
 ```
 
 ## Core Components
@@ -379,35 +371,17 @@ class Sprint:
 
 ### Step Lifecycle
 
-```
-1. Load current_issue.json
-         │
-         ▼
-2. Validate state
-         │
-         ▼
-3. Load prompt for step
-         │
-         ▼
-4. Inject context (issue, sprint, log)
-         │
-         ▼
-5. Call Claude API
-         │
-         ▼
-6. Parse response
-         │
-         ▼
-7. Validate output
-         │
-         ▼
-8. Update state files
-         │
-         ▼
-9. Append to log
-         │
-         ▼
-10. Return to workflow engine
+```mermaid
+flowchart TB
+    Step1[1. Load current_issue.json] --> Step2[2. Validate state]
+    Step2 --> Step3[3. Load prompt for step]
+    Step3 --> Step4[4. Inject context]
+    Step4 --> Step5[5. Call Claude API]
+    Step5 --> Step6[6. Parse response]
+    Step6 --> Step7[7. Validate output]
+    Step7 --> Step8[8. Update state files]
+    Step8 --> Step9[9. Append to log]
+    Step9 --> Step10[10. Return to workflow engine]
 ```
 
 ### Prompt Loading

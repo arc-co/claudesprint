@@ -4,67 +4,58 @@ ClaudeSprint's architecture is designed around one core insight: **long-running 
 
 ## The Dual-Loop System
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                         SPRINT LOOP (Outer)                            │
-│                                                                        │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐         │
-│  │  Load    │───▶│   Get    │───▶│  Select  │───▶│  Create  │         │
-│  │ Sprint   │    │ Bearings │    │  Issue   │    │ Context  │         │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘         │
-│                                         │                              │
-│                                         ▼                              │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │                      ISSUE LOOP (Inner)                          │ │
-│  │                                                                  │ │
-│  │  read-docs ──▶ implement ──▶ write-tests ──▶ run-tests          │ │
-│  │       │                                          │               │ │
-│  │       │                           ┌──────────────┴───────────┐   │ │
-│  │       │                           │                          │   │ │
-│  │       │                           ▼                          ▼   │ │
-│  │       │                     fix-tests ◀────────────────── (fail) │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       │                   browser-validation                     │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       │                     code-review                          │ │
-│  │       │                           │                              │ │
-│  │       │              ┌────────────┴────────────┐                 │ │
-│  │       │              │                         │                 │ │
-│  │       │              ▼                         ▼                 │ │
-│  │       │    fix-code-review-issues          (pass)                │ │
-│  │       │              │                         │                 │ │
-│  │       │              └──────▶ run-tests ◀──────┘                 │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       │                     update-docs                          │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       │                    stage-changes                         │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       │                   commit-changes                         │ │
-│  │       │                           │                              │ │
-│  │       │                           ▼                              │ │
-│  │       └──────────────────▶ complete-issue                        │ │
-│  │                                                                  │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-│                                         │                              │
-│                                         ▼                              │
-│                              Mark Done in Sprint                       │
-│                                         │                              │
-│                                         ▼                              │
-│                            ┌─────────────────────┐                     │
-│                            │ More issues pending?│                     │
-│                            └─────────────────────┘                     │
-│                                    │    │                              │
-│                                 Yes│    │No                            │
-│                                    │    │                              │
-│                                    ▼    ▼                              │
-│                               (loop)  DONE                             │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Sprint["SPRINT LOOP (Outer)"]
+        direction TB
+        Load[Load Sprint]
+        GetBearings[Get Bearings]
+        SelectIssue[Select Issue]
+        CreateContext[Create Context]
+        MarkDone[Mark Done in Sprint]
+        MoreIssues{More issues?}
+        Done[DONE]
+
+        Load --> GetBearings
+        GetBearings --> SelectIssue
+        SelectIssue --> CreateContext
+    end
+
+    subgraph Issue["ISSUE LOOP (Inner)"]
+        direction TB
+        ReadDocs[read-docs]
+        Implement[implement]
+        WriteTests[write-tests]
+        RunTests[run-tests]
+        FixTests[fix-tests]
+        BrowserVal[browser-validation]
+        CodeReview[code-review]
+        FixReview[fix-code-review-issues]
+        UpdateDocs[update-docs]
+        StageChanges[stage-changes]
+        CommitChanges[commit-changes]
+        CompleteIssue[complete-issue]
+
+        ReadDocs --> Implement
+        Implement --> WriteTests
+        WriteTests --> RunTests
+        RunTests -->|fail| FixTests
+        FixTests --> RunTests
+        RunTests -->|pass| BrowserVal
+        BrowserVal --> CodeReview
+        CodeReview -->|issues| FixReview
+        FixReview --> RunTests
+        CodeReview -->|pass| UpdateDocs
+        UpdateDocs --> StageChanges
+        StageChanges --> CommitChanges
+        CommitChanges --> CompleteIssue
+    end
+
+    CreateContext --> ReadDocs
+    CompleteIssue --> MarkDone
+    MarkDone --> MoreIssues
+    MoreIssues -->|Yes| SelectIssue
+    MoreIssues -->|No| Done
 ```
 
 ## Sprint Loop (Outer Loop)
@@ -206,44 +197,36 @@ Finalizes the issue:
 
 ### State Flow
 
-```
-Sprint Loop Start
-       │
-       ▼
-┌──────────────────┐
-│   sprint.json    │◀─────────────────────────────┐
-│                  │                              │
-│  - issues[]      │                              │
-│  - config        │                              │
-│  - metadata      │                              │
-└────────┬─────────┘                              │
-         │                                        │
-         │ Select Issue                           │
-         ▼                                        │
-┌──────────────────┐                              │
-│current_issue.json│                              │
-│                  │                              │
-│  - issue_id      │                              │
-│  - step          │                              │
-│  - changes       │                              │
-│  - rationale     │                              │
-└────────┬─────────┘                              │
-         │                                        │
-         │ Execute Steps                          │
-         ▼                                        │
-┌──────────────────┐                              │
-│current_issue.log │                              │
-│                  │                              │
-│  (append-only)   │                              │
-│  - Step entries  │                              │
-│  - Decisions     │                              │
-│  - Failures      │                              │
-└────────┬─────────┘                              │
-         │                                        │
-         │ Issue Complete                         │
-         ▼                                        │
-   Update sprint.json ────────────────────────────┘
-   Clear current_issue.*
+```mermaid
+flowchart TB
+    Start[Sprint Loop Start] --> SprintJson
+
+    subgraph SprintJson[sprint.json]
+        issues[issues]
+        config[config]
+        metadata[metadata]
+    end
+
+    SprintJson -->|Select Issue| CurrentIssue
+
+    subgraph CurrentIssue[current_issue.json]
+        issue_id[issue_id]
+        step[step]
+        changes[changes]
+        rationale[rationale]
+    end
+
+    CurrentIssue -->|Execute Steps| Log
+
+    subgraph Log[current_issue.log]
+        append[append-only]
+        entries[Step entries]
+        decisions[Decisions]
+        failures[Failures]
+    end
+
+    Log -->|Issue Complete| Update[Update sprint.json]
+    Update --> SprintJson
 ```
 
 ## Recovery Mechanisms

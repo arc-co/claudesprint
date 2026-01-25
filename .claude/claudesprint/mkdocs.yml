@@ -1,15 +1,14 @@
 site_name: ClaudeSprint Documentation
-site_description: Autonomous workflow orchestration for AI-driven development
 docs_dir: docs
+repo_url: https://github.com/arc-co/claudesprint
+repo_name: arc-co/claudesprint
 
 theme:
-  name: terminal
-  palette: gruvbox_dark
+  name: material
 
 nav:
   - Home: index.md
   - Getting Started:
-    - Introduction: getting-started/introduction.md
     - Installation: getting-started/installation.md
     - Quickstart: getting-started/quickstart.md
   - Core Concepts:
@@ -32,6 +31,11 @@ nav:
     - Engine Internals: development/engine-internals.md
 
 markdown_extensions:
-  - admonition
-  - toc:
-      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js

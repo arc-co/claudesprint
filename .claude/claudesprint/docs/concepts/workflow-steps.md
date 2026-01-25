@@ -4,40 +4,36 @@ This document details each step in the ClaudeSprint Issue Loop. Each step runs i
 
 ## Step Overview
 
-```
-select-issue → read-docs → implement → write-tests → run-tests
-                                                         │
-                                              ┌──────────┴──────────┐
-                                              │                     │
-                                              ▼                     ▼
-                                         fix-tests              (pass)
-                                              │                     │
-                                              └──────────┬──────────┘
-                                                         │
-                                                         ▼
-                                              browser-validation
-                                                         │
-                                                         ▼
-                                                   code-review
-                                                         │
-                                              ┌──────────┴──────────┐
-                                              │                     │
-                                              ▼                     ▼
-                                   fix-code-review-issues       (pass)
-                                              │                     │
-                                              └──────────┬──────────┘
-                                                         │
-                                                         ▼
-                                                   update-docs
-                                                         │
-                                                         ▼
-                                                  stage-changes
-                                                         │
-                                                         ▼
-                                                 commit-changes
-                                                         │
-                                                         ▼
-                                                 complete-issue
+```mermaid
+flowchart TB
+    SelectIssue[select-issue]
+    ReadDocs[read-docs]
+    Implement[implement]
+    WriteTests[write-tests]
+    RunTests[run-tests]
+    FixTests[fix-tests]
+    BrowserVal[browser-validation]
+    CodeReview[code-review]
+    FixReview[fix-code-review-issues]
+    UpdateDocs[update-docs]
+    StageChanges[stage-changes]
+    CommitChanges[commit-changes]
+    CompleteIssue[complete-issue]
+
+    SelectIssue --> ReadDocs
+    ReadDocs --> Implement
+    Implement --> WriteTests
+    WriteTests --> RunTests
+    RunTests -->|fail| FixTests
+    FixTests --> RunTests
+    RunTests -->|pass| BrowserVal
+    BrowserVal --> CodeReview
+    CodeReview -->|issues| FixReview
+    FixReview --> RunTests
+    CodeReview -->|pass| UpdateDocs
+    UpdateDocs --> StageChanges
+    StageChanges --> CommitChanges
+    CommitChanges --> CompleteIssue
 ```
 
 ## Step Details
@@ -173,10 +169,10 @@ select-issue → read-docs → implement → write-tests → run-tests
 
 **Test Mapping**:
 Each acceptance criterion should have at least one test:
-```
-Criterion: "Initial count value is 0"
-    ↓
-Test: "renders with initial count of 0"
+
+```mermaid
+flowchart LR
+    Criterion[Criterion: Initial count is 0] --> Test[Test: renders with count of 0]
 ```
 
 **Output State**:
@@ -251,18 +247,14 @@ Test: "renders with initial count of 0"
    - Test bug → Fix test, route to `run-tests`
 
 **Verification Process**:
-```
-Failure: "expected 0, received undefined"
-    ↓
-Check spec: "Initial count value is 0"
-    ↓
-Check test: expect(count).toBe(0)
-    ↓
-Test matches spec → Code bug
-    ↓
-Check code: useState() // missing initial value
-    ↓
-Fix: useState(0)
+
+```mermaid
+flowchart TB
+    Failure[Failure: expected 0 received undefined] --> CheckSpec[Check spec: Initial count is 0]
+    CheckSpec --> CheckTest[Check test: expect count toBe 0]
+    CheckTest --> Match[Test matches spec - Code bug]
+    Match --> CheckCode[Check code: useState]
+    CheckCode --> Fix[Fix: useState 0]
 ```
 
 **Output State (Test Fixed)**:
