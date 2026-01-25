@@ -46,8 +46,12 @@ dev = [
 browser = [
     "playwright>=1.40.0",
 ]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-terminal>=4.6.0",
+]
 all = [
-    "claudesprint[dev,browser]",
+    "claudesprint[dev,browser,docs]",
 ]
 
 [project.scripts]

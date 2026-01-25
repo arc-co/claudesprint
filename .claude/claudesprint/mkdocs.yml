@@ -1,0 +1,37 @@
+site_name: ClaudeSprint Documentation
+site_description: Autonomous workflow orchestration for AI-driven development
+docs_dir: docs
+
+theme:
+  name: terminal
+  palette: gruvbox_dark
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Introduction: getting-started/introduction.md
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+  - Core Concepts:
+    - Architecture: concepts/architecture.md
+    - State & Artifacts: concepts/state-management.md
+    - Workflow Steps: concepts/workflow-steps.md
+  - Guides:
+    - Specifications & Scoping: guides/specifications-and-scoping.md
+    - Configuration: guides/configuration.md
+    - Browser Automation: guides/browser-automation.md
+    - Cost Management: guides/cost-management.md
+    - Advanced Workflows: guides/advanced-workflows.md
+  - Reference:
+    - CLI Commands: reference/cli-commands.md
+    - JSON Schemas: reference/schema-reference.md
+    - Troubleshooting: reference/troubleshooting.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Customizing Prompts: development/prompt-engineering.md
+    - Engine Internals: development/engine-internals.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true

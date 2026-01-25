@@ -51,3 +51,6 @@ htmlcov/
 # ClaudeSprint workflow artifacts
 .claude/claudesprint/project/*.log
 .claude/claudesprint/project/*.tmp
+
+# MkDocs build output
+.claude/claudesprint/site/
