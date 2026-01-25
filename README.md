@@ -380,6 +380,28 @@ What this spec delivers.
 
 The `claudesprint init` command parses specifications and generates structured sprints with individual issues, dependencies, and acceptance criteria.
 
+## ⚠️ Warning: Hooks Configuration
+
+> [!WARNING]
+> **ClaudeSprint uses hooks that may interfere with normal Claude Code usage.**
+>
+> The `.claude/settings.json` file contains hooks (`PreToolUse`, `Stop`) that enable ClaudeSprint's autonomous workflow. These hooks:
+> - **`server-guard.sh`** - Manages dev server lifecycle before Bash commands
+> - **`browser-guard.sh`** - Coordinates browser automation for Skill tool
+> - **`autonomous-continue.sh`** - Enables autonomous loop continuation on Stop events
+>
+> **If you plan to use Claude Code manually** (outside of ClaudeSprint), rename the settings file:
+> ```bash
+> mv .claude/settings.json .claude/example.settings.json
+> ```
+>
+> **To re-enable ClaudeSprint**, restore the settings file:
+> ```bash
+> mv .claude/example.settings.json .claude/settings.json
+> ```
+>
+> Without these hooks, ClaudeSprint's autonomous workflow will not function correctly. A more graceful solution for switching between modes may be added in the future.
+
 ## Troubleshooting
 
 ### "current_issue.json validation failed"
