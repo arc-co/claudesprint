@@ -1,7 +1,7 @@
 # ClaudeSprint v2
 
 > [!CAUTION]
-> **Alpha Software** - This project is in early development. APIs, configuration formats, and behavior may change without notice. Use in production environments at your own risk. Please report issues and feedback on [GitHub Issues](https://github.com/anthropics/claude-code/issues).
+> **Alpha Software** - This project is in early development. APIs, configuration formats, and behavior may change without notice. Use in production environments at your own risk. Please report issues and feedback on [GitHub Issues](https://github.com/arc-co/claudesprint/issues).
 
 A dual-loop agentic workflow for autonomous software development, aligned with Anthropic's ["Effective harnesses for long-running agents"](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) research.
 
