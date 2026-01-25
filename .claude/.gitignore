@@ -1,0 +1,7 @@
+# Local settings (not committed)
+settings.local.json
+
+# Python cache (if running outside claudesprint/)
+__pycache__/
+*.py[cod]
+.pytest_cache/

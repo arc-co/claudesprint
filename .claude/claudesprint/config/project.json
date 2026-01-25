@@ -1,0 +1,7 @@
+{
+  "dev_server": {
+    "url": "http://localhost:3000",
+    "start_command": "npm run dev",
+    "wait_seconds": 5
+  }
+}
