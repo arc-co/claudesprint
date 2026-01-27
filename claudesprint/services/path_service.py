@@ -229,6 +229,11 @@ class PathService:
         return self._project_root / ".claudesprint" / "config.toml"
 
     @property
+    def sprint_lock_file(self) -> Path:
+        """Path to sprint session lock file (.claudesprint/state/sprint.lock)."""
+        return self._project_root / ".claudesprint" / "state" / "sprint.lock"
+
+    @property
     def conversation_log_file(self) -> Path:
         """Path to agent_conversations.log for debug mode."""
         return self.project_dir / "agent_conversations.log"

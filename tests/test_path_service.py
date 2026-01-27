@@ -156,6 +156,13 @@ class TestPathServiceLocalPaths:
             "/project/.claude/claudesprint/config/models.json"
         )
 
+    def test_sprint_lock_file(self) -> None:
+        """Test sprint lock file path."""
+        paths = PathService(project_root="/project")
+        assert paths.sprint_lock_file == Path(
+            "/project/.claudesprint/state/sprint.lock"
+        )
+
 
 class TestPathServiceSprintPaths:
     """Tests for sprint-specific path resolution."""

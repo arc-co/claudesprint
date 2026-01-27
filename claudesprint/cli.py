@@ -960,6 +960,12 @@ def run_hook(
     Example:
         echo '{"tool_input":{"command":"npm test"}}' | claudesprint hook --type server-guard
     """
+    from claudesprint.services.session_state import is_session_active
+
+    # Early exit if no active session - allow manual Claude usage
+    if not is_session_active():
+        raise typer.Exit(0)
+
     from claudesprint.services.claude_hook_service import (
         ClaudeHookService,
         HookInput,
