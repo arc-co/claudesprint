@@ -4,8 +4,6 @@ import io
 import sys
 from unittest.mock import patch
 
-import pytest
-
 from claudesprint.services.claude_hook_service import (
     ClaudeHookService,
     HookInput,
@@ -217,3 +215,92 @@ class TestHookResult:
         """Test hook result exit code values."""
         assert HookResult.ALLOW.value == 0
         assert HookResult.BLOCK.value == 2
+
+
+class TestQuotedContentFalsePositives:
+    """Tests to ensure quoted content doesn't trigger false positives."""
+
+    def test_allows_commit_message_with_watch(self) -> None:
+        """Test that 'watch' in a commit message is allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": 'git commit -m "watch out for this bug"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_echo_with_watch(self) -> None:
+        """Test that 'watch' in an echo statement is allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": 'echo "Remember to watch the logs"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_commit_message_with_serve(self) -> None:
+        """Test that 'serve' in a commit message is allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": "git commit -m 'Add serve endpoint'"}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_grep_for_watch(self) -> None:
+        """Test that grepping for 'watch' is allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": 'grep "watch" package.json'})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_still_blocks_actual_watch_command(self) -> None:
+        """Test that actual watch commands are still blocked."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "npm run watch"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_still_blocks_watch_with_quoted_args(self) -> None:
+        """Test that watch commands with quoted args are still blocked."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": 'npm run watch --include "src/**/*.ts"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_helper_ignores_quoted_watch(self) -> None:
+        """Test is_watch_command ignores quoted content."""
+        service = ClaudeHookService()
+
+        assert service.is_watch_command('git commit -m "watch this"') is False
+        assert service.is_watch_command("npm run watch") is True
+
+    def test_helper_ignores_quoted_server(self) -> None:
+        """Test is_server_command ignores quoted content."""
+        service = ClaudeHookService()
+
+        assert service.is_server_command('echo "npm run dev"') is False
+        assert service.is_server_command("npm run dev") is True
+
+    def test_helper_ignores_quoted_git_interactive(self) -> None:
+        """Test is_interactive_git_command ignores quoted content."""
+        service = ClaudeHookService()
+
+        assert (
+            service.is_interactive_git_command('echo "git rebase -i main"') is False
+        )
+        assert service.is_interactive_git_command("git rebase -i main") is True

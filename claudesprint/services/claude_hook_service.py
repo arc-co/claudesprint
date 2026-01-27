@@ -97,6 +97,10 @@ class ClaudeHookService:
         r"\bnpx\s+.*serve\b",
     ]
 
+    # Regex patterns for stripping quoted content
+    _SINGLE_QUOTE_PATTERN = re.compile(r"'[^']*'")
+    _DOUBLE_QUOTE_PATTERN = re.compile(r'"[^"]*"')
+
     def __init__(self) -> None:
         """Initialize the hook service."""
         self._watch_regex = [re.compile(p, re.IGNORECASE) for p in self.WATCH_PATTERNS]
@@ -106,6 +110,27 @@ class ClaudeHookService:
         self._server_regex = [
             re.compile(p, re.IGNORECASE) for p in self.SERVER_PATTERNS
         ]
+
+    def _strip_quoted_content(self, command: str) -> str:
+        """Remove content inside quotes to avoid matching args/messages.
+
+        This prevents false positives where blocked patterns appear inside
+        quoted strings (e.g., commit messages, echo statements).
+
+        Example:
+            'git commit -m "watch out for bugs"' -> 'git commit -m ""'
+
+        Args:
+            command: The command string to process
+
+        Returns:
+            Command with quoted content replaced by empty quotes
+        """
+        # Replace single-quoted strings with empty quotes
+        result = self._SINGLE_QUOTE_PATTERN.sub('""', command)
+        # Replace double-quoted strings with empty quotes
+        result = self._DOUBLE_QUOTE_PATTERN.sub('""', result)
+        return result
 
     def execute_hook(self, hook_type: HookType, hook_input: HookInput) -> HookResult:
         """Execute the specified hook type.
@@ -147,9 +172,13 @@ class ClaudeHookService:
         if not command:
             return HookResult.ALLOW
 
+        # Strip quoted content to avoid false positives on commit messages, etc.
+        # e.g., 'git commit -m "watch out"' should not be blocked
+        command_for_matching = self._strip_quoted_content(command)
+
         # Check for watch patterns
         for pattern in self._watch_regex:
-            if pattern.search(command):
+            if pattern.search(command_for_matching):
                 self._print_block_message(
                     f"Blocked watch command: {command[:50]}..."
                     if len(command) > 50
@@ -159,7 +188,7 @@ class ClaudeHookService:
 
         # Check for interactive git patterns
         for pattern in self._git_regex:
-            if pattern.search(command):
+            if pattern.search(command_for_matching):
                 self._print_block_message(
                     f"Blocked interactive git command: {command[:50]}..."
                     if len(command) > 50
@@ -218,16 +247,21 @@ class ClaudeHookService:
     def is_watch_command(self, command: str) -> bool:
         """Check if a command is a watch/blocking command.
 
+        Quoted content is stripped before matching to avoid false positives.
+
         Args:
             command: The command string to check
 
         Returns:
             True if the command would block waiting for input
         """
-        return any(pattern.search(command) for pattern in self._watch_regex)
+        stripped = self._strip_quoted_content(command)
+        return any(pattern.search(stripped) for pattern in self._watch_regex)
 
     def is_interactive_git_command(self, command: str) -> bool:
         """Check if a command is an interactive git command.
+
+        Quoted content is stripped before matching to avoid false positives.
 
         Args:
             command: The command string to check
@@ -235,10 +269,13 @@ class ClaudeHookService:
         Returns:
             True if the command requires interactive input
         """
-        return any(pattern.search(command) for pattern in self._git_regex)
+        stripped = self._strip_quoted_content(command)
+        return any(pattern.search(stripped) for pattern in self._git_regex)
 
     def is_server_command(self, command: str) -> bool:
         """Check if a command starts a server.
+
+        Quoted content is stripped before matching to avoid false positives.
 
         Args:
             command: The command string to check
@@ -246,4 +283,5 @@ class ClaudeHookService:
         Returns:
             True if the command starts a server
         """
-        return any(pattern.search(command) for pattern in self._server_regex)
+        stripped = self._strip_quoted_content(command)
+        return any(pattern.search(stripped) for pattern in self._server_regex)
