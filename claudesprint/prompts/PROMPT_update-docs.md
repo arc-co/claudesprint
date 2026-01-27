@@ -11,11 +11,9 @@ If `current_failures` non-empty, set `step` back to `code-review` and exit.
 ```bash
 pwd
 cat .claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
-cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
+claudesprint-tools sprint details "$ISSUE_ID"
 ls -la docs/ 2>/dev/null || echo "No docs directory"
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Skip Docs Update If ALL True:

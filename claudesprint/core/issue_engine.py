@@ -387,15 +387,15 @@ class IssueEngine:
         if self.on_step_start:
             self.on_step_start(step, model)
 
-        # Build context from log tail for agent awareness
-        log_tail = self.issue_service.read_log_tail(num_lines=20)
+        # Build context from full session log for agent awareness
+        session_log = self.issue_service.read_full_log()
         context_str: str | None = None
-        if log_tail:
+        if session_log:
             context_str = (
-                "## Recent Activity Log (last 20 entries)\n"
-                "The following log shows recent workflow activity. Use this to understand "
-                "what happened in previous steps, including any failures or decisions made.\n\n"
-                f"```\n{log_tail}\n```\n"
+                "## Session Activity Log\n"
+                "The following log shows the complete workflow activity for this session. "
+                "Use this to understand the full progression, including any failures or decisions made.\n\n"
+                f"```\n{session_log}\n```\n"
             )
 
         # Run Claude with the prompt

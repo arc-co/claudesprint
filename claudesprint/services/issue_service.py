@@ -221,6 +221,21 @@ class IssueService:
         tail_lines = lines[-num_lines:]
         return "\n".join(tail_lines)
 
+    def read_full_log(self) -> str:
+        """Read the full current_issue.log content.
+
+        This provides complete session history for context continuity between
+        agent invocations. The full log is important for understanding the
+        complete workflow progression.
+
+        Returns:
+            String containing all log lines, or empty string if no log
+        """
+        lines = self.read_log()
+        if not lines:
+            return ""
+        return "\n".join(lines)
+
     def clear_log(self) -> bool:
         """Clear current_issue.log.
 

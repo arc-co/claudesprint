@@ -8,7 +8,6 @@ You are a **test execution agent**. Run the test suite and report results.
 pwd
 cat .claudesprint/project/current_issue.json
 cat .claudesprint/config/hooks.json
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Run Tests

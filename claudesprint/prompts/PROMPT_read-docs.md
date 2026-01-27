@@ -7,9 +7,8 @@ You are a **documentation gathering agent**. Gather documentation needed for the
 ```bash
 pwd
 cat .claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
-cat "$SPRINT_PATH" | jq '.issues[] | select(.id == "<issue_id>")'
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
 ```
 
 Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `context.category`

@@ -21,7 +21,6 @@ If NOT a git repo:
 pwd
 cat .claudesprint/project/current_issue.json
 git diff --stat 2>/dev/null
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Safety Check

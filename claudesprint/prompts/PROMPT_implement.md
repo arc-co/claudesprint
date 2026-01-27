@@ -7,10 +7,9 @@ You are a **coding agent**. Make minimal changes to implement the selected issue
 ```bash
 pwd
 cat .claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
-cat "$SPRINT_PATH"
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `current_failures`, `rationale`

@@ -54,11 +54,12 @@ claudesprint validate                  # Validate JSON files
 ```bash
 pwd
 cat .claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
-cat "$SPRINT_PATH"
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
+
+Note: The full session log is automatically injected into the context. Do NOT read it manually.
 
 Then execute ONLY the `next_action` in `current_issue.json`.
 
@@ -79,7 +80,8 @@ Then execute ONLY the `next_action` in `current_issue.json`.
 ## Critical Rules
 
 ### Context Rules
-- `current_issue.json` + `sprint.json` are the ONLY context between sessions
+- `current_issue.json` is the ONLY context between sessions
+- Use `claudesprint-tools sprint details <issue_id>` to get issue details (not full sprint.json)
 - If required info missing, FAIL FAST
 
 ### Commit Rules

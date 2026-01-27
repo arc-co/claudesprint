@@ -10,7 +10,6 @@ cat .claudesprint/project/current_issue.json 2>/dev/null || echo "No current iss
 claudesprint-tools sprint available
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
 git status --short 2>/dev/null | head -n 10
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Decision Flow

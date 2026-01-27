@@ -14,12 +14,10 @@ If `current_failures` non-empty (tests failing), set `step` to `run-tests` and e
 
 ```bash
 pwd
-SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
-cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
+claudesprint-tools sprint details "$ISSUE_ID"
 git diff --stat 2>/dev/null
 git diff 2>/dev/null
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Review Checklist

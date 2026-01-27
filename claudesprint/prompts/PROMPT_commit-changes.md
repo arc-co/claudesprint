@@ -19,7 +19,6 @@ If NOT a git repo or nothing staged:
 ```bash
 pwd
 cat .claudesprint/project/current_issue.json
-tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `issue_id`, `issue_title`, `changes`
