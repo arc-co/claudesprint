@@ -1,60 +1,119 @@
 # Quickstart
 
-This guide walks you through running ClaudeSprint from zero to a completed sprint. You'll see the orchestrator in action—autonomously selecting issues, implementing features, running tests, and committing code.
+This guide walks you through running ClaudeSprint from zero to a completed sprint. You'll see the orchestrator in action - autonomously selecting issues, implementing features, running tests, and committing code.
 
 ## Prerequisites
 
-Ensure you have completed [Installation](./installation.md) and can run:
+Ensure you have ClaudeSprint installed:
 
 ```bash
-source .venv/bin/activate
-claudesprint status
+claudesprint doctor
 ```
 
-## Step 1: Initialize from the Demo Spec
+If any required checks fail, see the [Installation Guide](./installation.md).
 
-ClaudeSprint includes a "Textbook Exchange" demo specification that showcases the full power of the orchestrator—database setup, authentication, and UI components working together.
+## Step 1: Initialize a Project
 
-View the included spec to understand what will be built:
+Navigate to your project directory and initialize ClaudeSprint:
 
 ```bash
-cat .claude/claudesprint/specs/examples/textbook-exchange.md
+cd your-project
+claudesprint initrepo
 ```
 
-This spec defines a minimal textbook exchange app with:
-- Express + TypeScript + SQLite stack
-- User authentication (register/login/logout)
-- Listing creation and browsing
-- Server-rendered views with Handlebars
+This creates the `.claudesprint/` directory and configures Claude Code hooks.
 
-Copy it to your specs directory and initialize:
+## Step 2: Create or Use a Spec
+
+ClaudeSprint works from specification files. You can use the included demo or create your own.
+
+### Option A: Use the Demo Spec
+
+Copy the textbook exchange demo spec:
 
 ```bash
-cp .claude/claudesprint/specs/examples/textbook-exchange.md .claude/claudesprint/specs/SPEC_01.md
+mkdir -p .claude/claudesprint/specs
+cat > .claude/claudesprint/specs/SPEC_01.md << 'EOF'
+# SPEC 01 - Counter App
+
+## Purpose
+A simple counter application to demonstrate ClaudeSprint.
+
+## Constraints
+- Use vanilla TypeScript
+- No external UI frameworks
+
+## Work Plan
+
+### 1) Project Setup
+- Initialize npm project
+- Configure TypeScript
+- Create basic HTML structure
+
+### 2) Counter Display
+- Display current count
+- Center on page
+
+### 3) Increment Button
+- Add button to increase count
+- Update display on click
+
+### 4) Decrement Button
+- Add button to decrease count
+- Prevent negative values
+
+## Acceptance Checklist
+- [ ] Counter displays current value
+- [ ] Increment button increases count
+- [ ] Decrement button decreases count
+- [ ] Count cannot go below zero
+EOF
+```
+
+### Option B: Write Your Own Spec
+
+Create a spec file in `.claude/claudesprint/specs/` following this structure:
+
+```markdown
+# SPEC 01 - Feature Name
+
+## Purpose
+What this spec delivers.
+
+## Constraints
+- Technical constraints
+- What NOT to do
+
+## Work Plan
+### 1) First milestone
+- Task details
+- Acceptance criteria
+
+### 2) Second milestone
+...
+
+## Acceptance Checklist
+- [ ] Criterion 1
+- [ ] Criterion 2
+```
+
+## Step 3: Initialize a Sprint
+
+```bash
 claudesprint init --spec SPEC_01.md
 ```
 
 This creates:
 - A git branch: `sprint/SPEC_01`
-- A sprint file: `.claude/claudesprint/sprints/SPEC_01/sprint.json`
-- Issues with acceptance criteria derived from the spec
+- A sprint file with issues derived from the spec
 
 Inspect the generated sprint:
 
 ```bash
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[] | {id, title, priority, status}'
+claudesprint status
 ```
 
-You'll see issues like:
-```json
-{"id": "setup-001", "title": "Project Setup", "priority": "critical", "status": "pending"}
-{"id": "db-001", "title": "Database Schema", "priority": "critical", "status": "pending"}
-{"id": "auth-001", "title": "User Authentication", "priority": "high", "status": "pending"}
-{"id": "feature-001", "title": "Listings Feature", "priority": "high", "status": "pending"}
-{"id": "ui-001", "title": "Styling and Polish", "priority": "medium", "status": "pending"}
-```
-
-## Step 2: Run the Sprint
+## Step 4: Run the Sprint
 
 Start the autonomous workflow:
 
@@ -79,7 +138,7 @@ In a separate terminal, you can watch the workflow:
 
 ```bash
 # Watch the log
-tail -f .claude/claudesprint/project/current_issue.log
+tail -f .claudesprint/state/current_issue.log
 
 # Check current status
 watch -n 5 claudesprint status
@@ -94,7 +153,7 @@ To run a specific number of iterations (useful for testing):
 claudesprint run -n 10
 ```
 
-## Step 3: Monitor and Intervene
+## Step 5: Monitor and Intervene
 
 ### Check Status
 
@@ -106,20 +165,14 @@ Example output:
 ```
 ClaudeSprint Status
 ==================
-Current Issue: auth-001 (User Authentication)
+Current Issue: feature-002 (Increment Button)
 Step: run-tests
 Retry Count: 0
 
 Sprint: SPEC_01
-  Completed: 2/5
+  Completed: 2/4
   In Progress: 1
-  Pending: 2
-```
-
-### View Recent Activity
-
-```bash
-tail -20 .claude/claudesprint/project/current_issue.log
+  Pending: 1
 ```
 
 ### Pause the Workflow
@@ -142,7 +195,7 @@ claudesprint reset
 claudesprint status
 ```
 
-## Step 4: Review Completed Work
+## Step 6: Review Completed Work
 
 After issues complete, review what was built:
 
@@ -153,45 +206,8 @@ git log --oneline -10
 # See all changes since sprint started
 git diff main..sprint/SPEC_01
 
-# Run the application
+# Run the application (if applicable)
 npm run dev
-```
-
-## Understanding the Output
-
-### Sprint File Updates
-
-As issues complete, `sprint.json` is updated:
-
-```json
-{
-  "id": "feature-001",
-  "status": "completed",
-  "history": [
-    {"timestamp": "...", "action": "started", "session_id": "..."},
-    {"timestamp": "...", "action": "completed", "session_id": "..."}
-  ]
-}
-```
-
-### Commit Messages
-
-Each completed issue creates a commit:
-
-```
-feat(auth): implement user authentication
-
-- Add register/login/logout routes
-- Hash passwords with bcrypt
-- Session management with express-session
-- Add auth middleware for protected routes
-
-Acceptance Criteria:
-- [x] User can register with username/password
-- [x] User can login and logout
-- [x] Passwords are hashed (not stored in plain text)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 ## Common Scenarios
@@ -217,27 +233,24 @@ If the workflow hits the retry limit:
 
 ```bash
 # Check what failed
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+claudesprint status
 
 # Fix the issue manually, then reset retry count
-jq '.retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+# Edit .claudesprint/state/current_issue.json and set retry_count to 0
 
 # Continue
 claudesprint run
 ```
 
-## What's Next?
-
-You've now seen ClaudeSprint autonomously build a full-stack application with authentication, database, and UI. For your own projects:
-
-1. **[Specifications and Scoping](../guides/specifications-and-scoping.md)**: Write effective specs that guide the agent
-2. **[Configuration](../guides/configuration.md)**: Customize hooks, models, and settings
-3. **[Architecture](../concepts/architecture.md)**: Understand the dual-loop system in depth
-4. **[Advanced Workflows](../guides/advanced-workflows.md)**: Run parallel sprints, handle complex projects
-
 ## Quick Reference
 
 ```bash
+# Verify environment
+claudesprint doctor
+
+# Initialize project
+claudesprint initrepo
+
 # Initialize a sprint from a spec
 claudesprint init --spec SPEC_01.md
 
@@ -262,3 +275,12 @@ claudesprint validate
 # View model configuration
 claudesprint models
 ```
+
+## What's Next?
+
+You've now seen ClaudeSprint autonomously build an application. For your own projects:
+
+1. **[Specifications and Scoping](../guides/specifications-and-scoping.md)**: Write effective specs that guide the agent
+2. **[Configuration](../guides/configuration.md)**: Customize hooks, models, and settings
+3. **[Prompt Customization](../guides/prompt-customization.md)**: Tailor agent behavior to your standards
+4. **[Architecture](../concepts/architecture.md)**: Understand the dual-loop system in depth

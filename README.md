@@ -98,29 +98,12 @@ Executes a single issue through a structured workflow:
 
 ### Required Dependencies
 
-Install these **before** running `setup.sh`:
-
 | Dependency | Version | Installation | Verify |
 |------------|---------|--------------|--------|
-| **Claude Code CLI** | Latest | [Installation Guide](https://docs.anthropic.com/en/docs/claude-code) | `claude --version` |
 | **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) | `python3 --version` |
-| **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) | `node --version` |
-| **npm** | 8+ | Included with Node.js | `npm --version` |
-| **Git** | Any | [git-scm.com](https://git-scm.com/) | `git --version` |
+| **Claude Code CLI** | Latest | [Installation Guide](https://docs.anthropic.com/en/docs/claude-code) | `claude --version` |
 
 > **Critical:** Claude Code CLI must be installed and authenticated. Run `claude login` after installation.
-
-### Python Dependencies (Auto-installed)
-
-These are installed automatically by `setup.sh` via pip:
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `rich` | >=14.0.0 | Terminal formatting and output |
-| `typer` | >=0.15.0 | CLI framework |
-| `pydantic` | >=2.10.0 | Data validation and settings |
-| `pydantic-settings` | >=2.0.0 | Configuration management |
-| `httpx` | >=0.28.0 | HTTP client for notifications |
 
 ### Optional Dependencies
 
@@ -128,64 +111,50 @@ These are installed automatically by `setup.sh` via pip:
 |------|---------|--------------|
 | `agent-browser` | Browser automation for E2E UI testing | `npm install -g agent-browser && agent-browser install` |
 | `jq` | JSON parsing in shell (helpful for debugging) | `brew install jq` or `apt install jq` |
-| Context7 MCP | Real-time library documentation lookup | [Context7 docs](https://github.com/upstash/context7) |
-
-> **Note:** `agent-browser` is installed by default with `setup.sh`. Skip with `./setup.sh --no-browser`.
 
 ## Installation
 
-### Step 1: Verify Prerequisites
-
-Before proceeding, ensure all required dependencies are installed:
+### Using pip (Recommended)
 
 ```bash
-# Check each dependency
-claude --version      # Claude Code CLI (required)
-python3 --version     # Python 3.10+ (required)
-node --version        # Node.js 18+ (required)
-npm --version         # npm 8+ (required)
-git --version         # Git (required)
+# Install from PyPI
+pip install claudesprint
+
+# Verify installation
+claudesprint --version
 ```
 
-If any command fails, install the missing dependency from the links in [Prerequisites](#prerequisites).
-
-### Step 2: Clone and Setup
+### Using pipx (Isolated Environment)
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd <repo-name>
+# Install pipx if needed
+pip install pipx
+pipx ensurepath
 
-# Run the setup script
-./setup.sh
+# Install ClaudeSprint
+pipx install claudesprint
 ```
 
-The setup script will:
-1. Create a Python virtual environment (`.venv/`)
-2. Install the `claudesprint` CLI and all Python dependencies
-3. Install `agent-browser` for browser automation (skip with `--no-browser`)
-4. Verify the installation
-
-### Step 3: Activate and Verify
+### From Source
 
 ```bash
-# Activate the virtual environment
-source .venv/bin/activate
-
-# Verify ClaudeSprint is working
-claudesprint status
-
-# (Optional) Verify agent-browser
-agent-browser --version
+git clone https://github.com/arc-co/claudesprint.git
+cd claudesprint
+pip install -e ".[dev]"
 ```
 
-### Setup Options
+### Verify Installation
+
+Run the doctor command to verify all dependencies:
 
 ```bash
-./setup.sh              # Full setup (recommended)
-./setup.sh --no-browser # Skip agent-browser installation
-./setup.sh --no-venv    # Use system Python (not recommended)
-./setup.sh --help       # Show all options
+claudesprint doctor
+```
+
+Use `--fix` to auto-install missing packages:
+
+```bash
+claudesprint doctor --fix
 ```
 
 ## Cost Awareness & Limits
@@ -200,25 +169,30 @@ ClaudeSprint runs autonomous loops that consume API tokens. By default, critical
 
 ## Quick Start
 
-### 1. Initialize a Sprint
+### 1. Initialize a Project
 
 ```bash
-# Initialize from the example spec
-claudesprint init --spec .claude/claudesprint/specs/examples/textbook-exchange-mvp.md
-
-# View the generated sprint
-claudesprint sprints
+cd your-project
+claudesprint initrepo
 ```
 
-### 2. Run the Workflow
+### 2. Create a Spec
+
+Create a specification file in `.claudesprint/specs/`:
 
 ```bash
-# Start the autonomous workflow
-claudesprint run --sprint .claude/claudesprint/sprints/SPEC_01/sprint.json
-
-# Or limit iterations
-claudesprint run -n 10
+mkdir -p .claudesprint/specs
+# Create your spec file (see docs for format)
 ```
+
+### 3. Initialize and Run
+
+```bash
+claudesprint init --spec SPEC_01.md
+claudesprint run
+```
+
+For detailed instructions, see the [Quickstart Guide](docs/getting-started/quickstart.md).
 
 ## Demo: TextBook Exchange MVP
 
@@ -239,12 +213,8 @@ The repository includes a complete example specification for a textbook exchange
 To build this demo:
 
 ```bash
-# Setup the environment
-./setup.sh
-source .venv/bin/activate
-
-# Initialize the sprint
-claudesprint init --spec .claude/claudesprint/specs/examples/textbook-exchange-mvp.md
+# Initialize the sprint (assumes claudesprint is installed)
+claudesprint init --spec .claudesprint/specs/examples/textbook-exchange-mvp.md
 
 # Run ClaudeSprint - it will autonomously:
 # 1. Set up the project structure
@@ -260,6 +230,8 @@ Watch as ClaudeSprint autonomously builds the complete application, issue by iss
 ## CLI Reference
 
 ```bash
+claudesprint doctor              # Diagnose environment
+claudesprint initrepo            # Initialize project
 claudesprint status              # Check workflow state
 claudesprint init --spec FILE    # Create sprint from specification
 claudesprint run                 # Execute the workflow
@@ -381,24 +353,16 @@ What this spec delivers.
 The `claudesprint init` command parses specifications and generates structured sprints with individual issues, dependencies, and acceptance criteria.
 
 > [!WARNING]
-> **ClaudeSprint uses hooks that may interfere with normal Claude Code usage.**
+> **ClaudeSprint uses Claude Code hooks that may interfere with normal Claude Code usage.**
 >
 > The `.claude/settings.json` file contains hooks (`PreToolUse`, `Stop`) that enable ClaudeSprint's autonomous workflow. These hooks:
-> - **`server-guard.sh`** - Manages dev server lifecycle before Bash commands
-> - **`browser-guard.sh`** - Coordinates browser automation for Skill tool
-> - **`autonomous-continue.sh`** - Enables autonomous loop continuation on Stop events
+> - **server-guard** - Blocks watch commands and interactive git that would hang the agent
+> - **browser-guard** - Coordinates browser automation for the Skill tool
+> - **autonomous-continue** - Enables autonomous loop continuation on Stop events
 >
-> **If you plan to use Claude Code manually** (outside of ClaudeSprint), rename the settings file:
-> ```bash
-> mv .claude/settings.json .claude/example.settings.json
-> ```
+> The hooks call `claudesprint hook --type <hook-type>` and only activate when a ClaudeSprint session is running (detected via `.claudesprint/state/session.lock`).
 >
-> **To re-enable ClaudeSprint**, restore the settings file:
-> ```bash
-> mv .claude/example.settings.json .claude/settings.json
-> ```
->
-> Without these hooks, ClaudeSprint's autonomous workflow will not function correctly. A more graceful solution for switching between modes may be added in the future.
+> **If you plan to use Claude Code manually** (outside of ClaudeSprint), you can safely do so - the hooks auto-disable when no session is active.
 
 ## Troubleshooting
 

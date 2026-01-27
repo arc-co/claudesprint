@@ -943,6 +943,105 @@ def config_edit() -> None:
         raise typer.Exit(1)
 
 
+@app.command("doctor")
+def doctor(
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show detailed information"),
+    ] = False,
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="Attempt to auto-fix issues"),
+    ] = False,
+) -> None:
+    """Diagnose environment and verify dependencies.
+
+    Checks that all required dependencies are installed and configured:
+    - Python version (3.10+ required)
+    - Required Python packages (rich, typer, pydantic, httpx, jinja2)
+    - Claude CLI installed and accessible
+    - Project structure (.claudesprint/ directory)
+    - Optional dependencies (agent-browser, npm)
+    """
+    from claudesprint.services.health_check_service import (
+        CheckStatus,
+        HealthCheckService,
+    )
+
+    project_root = get_project_root()
+    service = HealthCheckService(project_root)
+
+    console.print(Panel.fit("ClaudeSprint Doctor", style="bold blue"))
+    console.print("")
+
+    # Run all checks
+    report = service.run_all_checks(verbose=verbose)
+
+    # Display results
+    for check in report.checks:
+        if check.status == CheckStatus.OK:
+            icon = "[green]✓[/green]"
+            message = check.message
+        elif check.status == CheckStatus.WARNING:
+            icon = "[yellow]⚠[/yellow]"
+            message = f"[yellow]{check.message}[/yellow]"
+        else:
+            icon = "[red]✗[/red]"
+            message = f"[red]{check.message}[/red]"
+
+        console.print(f"  {icon} {check.name}: {message}")
+
+        if verbose and check.details:
+            for line in check.details.split("\n"):
+                console.print(f"      [dim]{line}[/dim]")
+
+    console.print("")
+
+    # Summary
+    if report.is_healthy:
+        if report.has_warnings:
+            console.print(
+                f"[green]✓ All required checks passed[/green] "
+                f"[yellow]({report.warning_count} warning{'s' if report.warning_count > 1 else ''})[/yellow]"
+            )
+        else:
+            console.print("[green]✓ All checks passed[/green]")
+    else:
+        console.print(
+            f"[red]✗ {report.error_count} error{'s' if report.error_count > 1 else ''} found[/red]"
+        )
+
+    # Handle --fix flag
+    if fix and report.fixable_issues:
+        console.print("")
+        console.print("[bold]Attempting auto-fixes...[/bold]")
+        console.print("")
+
+        for issue in report.fixable_issues:
+            if issue.fix_command:
+                console.print(f"  Running: [cyan]{issue.fix_command}[/cyan]")
+                success = service.attempt_fix(
+                    issue,
+                    on_output=lambda line: console.print(f"    {line}"),
+                )
+                if success:
+                    console.print("    [green]✓ Fixed[/green]")
+                else:
+                    console.print("    [red]✗ Failed - run manually[/red]")
+
+        console.print("")
+        console.print("Re-run [cyan]claudesprint doctor[/cyan] to verify fixes.")
+    elif not fix and report.fixable_issues:
+        console.print("")
+        console.print(
+            f"[dim]Tip: Run [cyan]claudesprint doctor --fix[/cyan] to attempt auto-fixes "
+            f"for {len(report.fixable_issues)} issue{'s' if len(report.fixable_issues) > 1 else ''}[/dim]"
+        )
+
+    if not report.is_healthy:
+        raise typer.Exit(1)
+
+
 @app.command("hook")
 def run_hook(
     hook_type: Annotated[

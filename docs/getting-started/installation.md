@@ -1,14 +1,15 @@
 # Installation
 
-ClaudeSprint can be installed as a new project or dropped into an existing codebase. Both approaches are straightforward.
+ClaudeSprint is a Python CLI tool that can be installed globally and used across multiple projects.
 
 ## Prerequisites
 
 ### Required
 
-- **Python 3.10+**: The workflow engine is Python
-- **Node.js 18+**: For running tests and the typical JavaScript/TypeScript stack
-- **Claude Code CLI**: The underlying AI agent (install from Anthropic)
+| Dependency | Version | Installation | Verify |
+|------------|---------|--------------|--------|
+| **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) | `python3 --version` |
+| **Claude Code CLI** | Latest | [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code) | `claude --version` |
 
 ### Platform Support
 
@@ -20,159 +21,119 @@ ClaudeSprint can be installed as a new project or dropped into an existing codeb
 
 ### Optional
 
-- **Git**: For version control features (staging, commits, branches). The workflow functions without Git but skips commit-related steps.
-- **agent-browser**: For browser-based e2e validation. Installed by default with `setup.sh`.
+| Tool | Purpose | Installation |
+|------|---------|--------------|
+| **Git** | Version control features | `brew install git` or `apt install git` |
+| **Node.js 18+** | For agent-browser and npm-based projects | [nodejs.org](https://nodejs.org/) |
+| **agent-browser** | Browser automation for E2E testing | `npm install -g agent-browser` |
 
-## New Project Setup
+## Installation Methods
 
-For a fresh project, run the setup script:
+### Using pip (Recommended)
 
 ```bash
-# Clone or create your project directory
-mkdir my-project && cd my-project
-
-# If starting from a template, clone it
-git clone https://github.com/your-org/claudesprint-template.git .
-
-# Run setup
-./setup.sh
-
-# Activate the virtual environment
-source .venv/bin/activate
+# Install from PyPI
+pip install claudesprint
 
 # Verify installation
-claudesprint status
+claudesprint --version
 ```
 
-### What `setup.sh` Does
+### Using pipx (Isolated Environment)
 
-1. Creates a Python virtual environment (`.venv/`)
-2. Installs the `claudesprint` package in editable mode
-3. Installs `agent-browser` globally (for browser validation)
-4. Validates the installation
-
-### Setup Options
+[pipx](https://pypa.github.io/pipx/) installs Python CLI tools in isolated environments:
 
 ```bash
-# Skip browser automation installation
-./setup.sh --no-browser
+# Install pipx if needed
+pip install pipx
+pipx ensurepath
 
-# Use a specific Python version
-PYTHON=python3.11 ./setup.sh
+# Install ClaudeSprint
+pipx install claudesprint
 
-# Verbose output for debugging
-./setup.sh --verbose
+# Verify installation
+claudesprint --version
 ```
 
-## Drop-in for Existing Projects
-
-ClaudeSprint is designed to integrate into any existing codebase. Simply copy the infrastructure directory:
+### From Source
 
 ```bash
-# From a project that has ClaudeSprint
-cp -r /path/to/claudesprint-project/.claude/claudesprint .claude/
+# Clone the repository
+git clone https://github.com/arc-co/claudesprint.git
+cd claudesprint
 
-# Or clone just the claudesprint directory from a template
-git clone --depth 1 https://github.com/your-org/claudesprint-template.git /tmp/cs
-cp -r /tmp/cs/.claude/claudesprint .claude/
-rm -rf /tmp/cs
+# Install in development mode
+pip install -e ".[dev]"
 
-# Run setup from your project root
+# Verify installation
+claudesprint --version
+```
+
+## Verify Installation
+
+After installation, run the doctor command to verify all dependencies:
+
+```bash
+claudesprint doctor
+```
+
+Expected output:
+
+```
+ClaudeSprint Doctor
+
+  ✓ Python Version: Python 3.11
+  ✓ Required Packages: All required packages installed
+  ✓ Claude CLI: Claude CLI installed
+  ⚠ Project Structure: No .claudesprint/ directory found
+  ⚠ agent-browser (optional): Not installed - Browser automation for E2E testing
+  ✓ npm (optional): Required for agent-browser installation
+
+✓ All required checks passed (2 warnings)
+```
+
+Use `--verbose` for detailed information:
+
+```bash
+claudesprint doctor --verbose
+```
+
+Use `--fix` to attempt auto-installation of missing packages:
+
+```bash
+claudesprint doctor --fix
+```
+
+## Initialize a Project
+
+To use ClaudeSprint in a project, initialize it:
+
+```bash
 cd your-project
-./.claude/claudesprint/scripts/setup.sh
-
-# Activate and verify
-source .venv/bin/activate
-claudesprint status
+claudesprint initrepo
 ```
 
-### Integration with Existing Projects
+This creates:
+- `.claudesprint/state/` - Session state files
+- `.claudesprint/prompts/` - Custom prompt overrides (optional)
+- Injects ClaudeSprint hooks into `.claude/settings.json`
 
-ClaudeSprint lives entirely within `.claude/claudesprint/`. It doesn't modify your:
-- Package.json scripts (but does read them via `hooks.json`)
-- Project structure
-- Existing build/test configurations
-
-You configure ClaudeSprint to use your existing commands by editing `.claude/claudesprint/config/hooks.json`:
-
-```json
-{
-  "validate": {
-    "command": "npm run validate",
-    "timeout": 600
-  },
-  "test": {
-    "command": "pytest",
-    "timeout": 300
-  },
-  "lint": {
-    "command": "make lint",
-    "timeout": 120
-  }
-}
-```
-
-## Directory Structure After Installation
+### Directory Structure After Initialization
 
 ```
 your-project/
 ├── .claude/
-│   ├── claudesprint/          # ClaudeSprint infrastructure
-│   │   ├── config/            # Configuration files
-│   │   ├── docs/              # This documentation
-│   │   ├── prompts/           # Workflow step prompts
-│   │   ├── schemas/           # JSON schemas
-│   │   ├── scripts/           # CLI and setup scripts
-│   │   ├── specs/             # Your specification files go here
-│   │   ├── sprints/           # Generated sprint files
-│   │   ├── src/claudesprint/  # Python package
-│   │   ├── tests/             # ClaudeSprint tests
-│   │   └── pyproject.toml     # Package configuration
-│   ├── skills/                # Skills (agent-browser, etc.)
-│   ├── hooks/                 # Claude Code hooks
-│   └── CLAUDE.md              # Project instructions for Claude
-├── .venv/                     # Python virtual environment
-├── src/                       # Your project source code
-└── ...                        # Your other project files
-```
-
-## Verifying Installation
-
-After installation, run these commands to verify everything is working:
-
-```bash
-# Check CLI is accessible
-claudesprint --help
-
-# Check current status
-claudesprint status
-
-# Validate schemas and state files
-claudesprint validate
-
-# List available sprints (will be empty for new projects)
-claudesprint sprints
-
-# Check model configuration
-claudesprint models
-```
-
-Expected output from `claudesprint status` for a new project:
-
-```
-ClaudeSprint Status
-==================
-Current Issue: None
-Sprint: None
-
-Ready to initialize a sprint. Create a spec file in
-.claude/claudesprint/specs/ and run:
-  claudesprint init --spec YOUR_SPEC.md
+│   └── settings.json    # Claude Code hooks (auto-configured)
+├── .claudesprint/
+│   ├── state/           # Runtime state files
+│   └── prompts/         # Custom prompt overrides
+├── src/                 # Your project code
+└── ...
 ```
 
 ## Installing agent-browser
 
-The `browser-validation` step uses `agent-browser` for e2e testing. It's installed by default, but if you skipped it or need to reinstall:
+For browser-based E2E testing, install `agent-browser`:
 
 ```bash
 # Install globally via npm
@@ -191,58 +152,59 @@ Verify installation:
 agent-browser --version
 ```
 
-If `agent-browser` is not installed, the `browser-validation` step will be skipped automatically with a warning. Unit tests still run via your configured test command.
+If `agent-browser` is not installed, the `browser-validation` step will be skipped automatically.
 
-## Troubleshooting Installation
+## Troubleshooting
 
 ### "claudesprint: command not found"
 
-Ensure the virtual environment is activated:
+The CLI is not in your PATH. Try:
 
 ```bash
-source .venv/bin/activate
-```
+# Check if installed
+pip show claudesprint
 
-Or check that the package is installed:
-
-```bash
-pip list | grep claudesprint
+# If using pipx
+pipx ensurepath
+source ~/.bashrc  # or ~/.zshrc
 ```
 
 ### Python version issues
 
-ClaudeSprint requires Python 3.10+. Check your version:
+ClaudeSprint requires Python 3.10+:
 
 ```bash
 python3 --version
 ```
 
-If you have multiple Python versions, specify the correct one:
+If you have multiple versions, use a specific one:
 
 ```bash
-PYTHON=python3.11 ./setup.sh
+python3.11 -m pip install claudesprint
 ```
 
 ### Permission errors on Linux
 
-If you get permission errors installing `agent-browser`, you may need to configure npm for global installs:
+If you get permission errors with global pip installs:
 
 ```bash
-mkdir ~/.npm-global
-npm config set prefix '~/.npm-global'
-echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-source ~/.bashrc
+# Use pipx instead (recommended)
+pip install pipx
+pipx install claudesprint
+
+# Or use user install
+pip install --user claudesprint
 ```
 
 ### WSL2-specific issues
 
-Ensure you're running in WSL2, not WSL1:
+Ensure you're running WSL2, not WSL1:
 
 ```bash
 wsl --list --verbose
 ```
 
-If you see "1" under VERSION, upgrade to WSL2:
+If you see "1" under VERSION, upgrade:
 
 ```powershell
 wsl --set-version Ubuntu 2
@@ -252,4 +214,4 @@ wsl --set-version Ubuntu 2
 
 - [Quickstart](./quickstart.md): Run through a demo to see ClaudeSprint in action
 - [Configuration](../guides/configuration.md): Customize ClaudeSprint for your project
-- [Specifications and Scoping](../guides/specifications-and-scoping.md): Learn how to write effective specs
+- [Prompt Customization](../guides/prompt-customization.md): Customize agent prompts

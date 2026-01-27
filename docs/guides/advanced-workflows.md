@@ -178,7 +178,7 @@ jobs:
           node-version: '20'
 
       - name: Install ClaudeSprint
-        run: ./setup.sh --no-browser
+        run: pip install -e "."
 
       - name: Run Sprint
         env:

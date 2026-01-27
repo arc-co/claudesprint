@@ -100,13 +100,15 @@ We recommend keeping claudesprint unmodified and submitting improvements as PRs.
 git clone https://github.com/your-org/claudesprint.git
 cd claudesprint
 
-# Run setup
-./setup.sh
-
-# Activate environment
+# Create virtual environment
+python3 -m venv .venv
 source .venv/bin/activate
 
+# Install package in development mode
+pip install -e ".[dev]"
+
 # Verify
+claudesprint doctor
 claudesprint status
 ```
 

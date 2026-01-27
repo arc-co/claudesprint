@@ -32,14 +32,23 @@ Browser validation runs for issues with UI-related categories:
 ### Installing agent-browser
 
 ```bash
-# Install globally
+# Install globally via npm
 npm install -g agent-browser
 
-# Install browsers
+# Install Playwright browsers
 agent-browser install
 
 # On Linux, include system dependencies
 agent-browser install --with-deps
+
+# Verify installation
+agent-browser --version
+```
+
+You can check if agent-browser is installed using:
+
+```bash
+claudesprint doctor --verbose
 ```
 
 ### Configuring the Dev Server

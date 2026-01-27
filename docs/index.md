@@ -79,11 +79,18 @@ The workflow enforces gates that prevent progress without passing:
 ## Quick Start
 
 ```bash
-# 1. Setup
-./setup.sh
-source .venv/bin/activate
+# 1. Install ClaudeSprint
+pip install claudesprint
 
-# 2. Create a spec
+# 2. Verify installation
+claudesprint doctor
+
+# 3. Initialize in your project
+cd your-project
+claudesprint initrepo
+
+# 4. Create a spec
+mkdir -p .claude/claudesprint/specs
 cat > .claude/claudesprint/specs/SPEC_01.md << 'EOF'
 # My Feature
 
@@ -91,7 +98,7 @@ cat > .claude/claudesprint/specs/SPEC_01.md << 'EOF'
 - Display "Hello World" on the homepage
 EOF
 
-# 3. Initialize and run
+# 5. Initialize and run
 claudesprint init --spec SPEC_01.md
 claudesprint run
 ```

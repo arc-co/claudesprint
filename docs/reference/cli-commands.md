@@ -10,6 +10,8 @@ claudesprint <command> [options]
 
 | Command | Description |
 |---------|-------------|
+| `doctor` | Diagnose environment and verify dependencies |
+| `initrepo` | Initialize .claudesprint/ in a project |
 | `status` | Show current workflow status |
 | `init` | Initialize a sprint from a specification |
 | `run` | Run the workflow loop |
@@ -19,6 +21,98 @@ claudesprint <command> [options]
 | `validate` | Validate state files against schemas |
 | `models` | Show model configuration |
 | `notify` | Send a manual notification |
+| `config` | Manage global configuration |
+| `hook` | Execute Claude hook handlers |
+
+## doctor
+
+Diagnose environment and verify all dependencies are correctly configured.
+
+```bash
+claudesprint doctor [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--verbose`, `-v` | Show detailed information for each check |
+| `--fix` | Attempt to auto-fix issues (install missing packages) |
+
+### Checks Performed
+
+| Check | Required | Description |
+|-------|----------|-------------|
+| Python Version | Yes | Python 3.10 or higher |
+| Required Packages | Yes | rich, typer, pydantic, httpx, jinja2 |
+| Claude CLI | Yes | Claude Code CLI installed and accessible |
+| Project Structure | No | .claudesprint/ directory exists |
+| agent-browser | No | Browser automation for E2E testing |
+| npm | No | Required for agent-browser installation |
+
+### Output Example
+
+```
+ClaudeSprint Doctor
+
+  ✓ Python Version: Python 3.11
+  ✓ Required Packages: All required packages installed
+  ✓ Claude CLI: Claude CLI installed
+  ⚠ Project Structure: No .claudesprint/ directory found
+  ⚠ agent-browser (optional): Not installed - Browser automation for E2E testing
+  ✓ npm (optional): Required for agent-browser installation
+
+✓ All required checks passed (2 warnings)
+```
+
+### Auto-Fix
+
+The `--fix` flag attempts to install missing Python packages:
+
+```bash
+claudesprint doctor --fix
+```
+
+This will run `pip install` for any missing required packages.
+
+## initrepo
+
+Initialize .claudesprint/ directory in the current project.
+
+```bash
+claudesprint initrepo [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--force`, `-f` | Reinitialize even if .claudesprint/ exists |
+| `--skip-hooks` | Skip injecting Claude hooks into .claude/settings.json |
+
+### Behavior
+
+1. Creates `.claudesprint/state/` for runtime state files
+2. Creates `.claudesprint/prompts/` for custom prompt overrides
+3. Adds `.claudesprint/` to `.gitignore`
+4. Injects ClaudeSprint hooks into `.claude/settings.json`
+
+### Output
+
+```
+✓ Initialized .claudesprint/ directory
+
+Created directories:
+  .claudesprint/state
+  .claudesprint/prompts
+
+✓ Claude hooks injected into .claude/settings.json
+
+Next steps:
+  1. Create a spec file in .claude/claudesprint/specs/
+  2. Run: claudesprint init --spec <spec_file>
+  3. Run: claudesprint run
+```
 
 ## status
 
@@ -384,6 +478,141 @@ claudesprint notify exit "Sprint SPEC_01 complete"
 ### Behavior
 
 Sends notification via configured channels (Bark, etc.). Only works if notifications are enabled in config.
+
+## config
+
+Manage global ClaudeSprint configuration settings.
+
+```bash
+claudesprint config <subcommand>
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `path` | Show configuration file path |
+| `init` | Create default configuration file |
+| `show` | Display current configuration |
+| `edit` | Open configuration in editor |
+
+### Examples
+
+```bash
+# Show configuration file path
+claudesprint config path
+
+# Create default configuration
+claudesprint config init
+
+# Display current settings
+claudesprint config show
+
+# Edit configuration in default editor
+claudesprint config edit
+```
+
+### Configuration File Location
+
+The global configuration is stored at `~/.config/claudesprint/config.toml`.
+
+### Configuration Keys
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `notifications.enabled` | bool | Enable/disable notifications |
+| `notifications.bark.enabled` | bool | Enable Bark notifications |
+| `notifications.bark.url` | string | Bark notification URL |
+| `model_override` | string | Override model for all steps |
+
+## hook
+
+Execute Claude Code hook handlers. This command is typically called by Claude Code hooks configured in `.claude/settings.json`.
+
+```bash
+claudesprint hook --type <hook-type> [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--type <type>` | Hook type to execute (required) |
+| `--input <json>` | JSON input from Claude Code hook system |
+
+### Hook Types
+
+| Type | Trigger | Purpose |
+|------|---------|---------|
+| `server-guard` | PreToolUse (Bash) | Blocks watch commands and interactive git operations |
+| `browser-guard` | PreToolUse (Skill) | Coordinates browser automation resources |
+| `autonomous-continue` | Stop | Controls autonomous workflow continuation |
+
+### server-guard
+
+Blocks commands that would hang or require interactive input:
+
+- Watch commands: `npm run dev`, `yarn watch`, `nodemon`, etc.
+- Interactive git: `git rebase -i`, `git add -i`, etc.
+- Long-running processes that don't exit
+
+### browser-guard
+
+Manages browser automation:
+
+- Prevents concurrent browser sessions
+- Coordinates agent-browser resource access
+
+### autonomous-continue
+
+Controls whether Claude should continue working autonomously:
+
+- Checks workflow step progression
+- Manages retry limits
+- Signals completion or continuation
+
+### Output Format
+
+Hooks return JSON for Claude Code:
+
+```json
+{
+  "decision": "allow",
+  "reason": null
+}
+```
+
+Or to block:
+
+```json
+{
+  "decision": "block",
+  "reason": "Command would start a watch process"
+}
+```
+
+### Example Hook Configuration
+
+In `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claudesprint hook --type server-guard",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Environment Variables
 

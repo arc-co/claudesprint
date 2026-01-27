@@ -7,7 +7,7 @@ This project uses ClaudeSprint for AI-driven development. All agentic infrastruc
 ## Quick Start
 
 ```bash
-./setup.sh && source .venv/bin/activate && claudesprint status
+claudesprint doctor && claudesprint status
 ```
 
 ## Build & Test Commands

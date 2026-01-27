@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/server-guard.sh",
+            "command": "claudesprint hook --type server-guard",
             "timeout": 5
           }
         ]
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/browser-guard.sh",
+            "command": "claudesprint hook --type browser-guard",
             "timeout": 10
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/autonomous-continue.sh",
+            "command": "claudesprint hook --type autonomous-continue",
             "timeout": 5
           }
         ]
