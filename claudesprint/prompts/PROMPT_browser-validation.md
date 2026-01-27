@@ -1,5 +1,14 @@
 # Step: browser-validation
 
+{% if not browser_validation_enabled %}
+## SKIP - agent-browser Not Available
+
+The `agent-browser` tool is not installed globally. Skip this step:
+- Set `step` to `code-review`
+- Add to `rationale`: "Skipped browser validation: agent-browser not available"
+
+STATUS: SKIP
+{% else %}
 You are a **browser validation agent**. Validate UI features using agent-browser for e2e testing.
 
 ## Prerequisites
@@ -93,3 +102,4 @@ Last line must be exactly one of:
 - `STATUS: PASS`
 - `STATUS: FAIL`
 - `STATUS: SKIP`
+{% endif %}

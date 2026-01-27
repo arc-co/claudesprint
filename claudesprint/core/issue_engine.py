@@ -20,6 +20,7 @@ from claudesprint.models.current_issue import CurrentIssue, IssueStep, ChunkType
 from claudesprint.models.sprint import ResolvedConfig, IssueStatus
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.models_service import ModelsService
+from claudesprint.services.prompt_service import PromptService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
 
@@ -182,6 +183,7 @@ class IssueEngine:
         self.issue_service = IssueService(config.project_dir)
         self.sprint_service = SprintService(config.sprints_dir)
         self.notification_service = NotificationService(config.notifications_file)
+        self.prompt_service = PromptService(config.paths, project_root=project_root)
         self.claude_runner = ClaudeRunner(
             project_root,
             config.claude_timeout,
@@ -356,13 +358,13 @@ class IssueEngine:
         if step == IssueStep.COMPLETE_ISSUE:
             return self._execute_complete_issue(current_issue)
 
-        # Get prompt content for this step from package resources
+        # Get prompt content for this step using hierarchical loading
         prompt_name = self._get_prompt_name(step)
         try:
-            prompt_content = self.config.paths.get_prompt_content(prompt_name)
+            prompt_content = self.prompt_service.get_prompt_content(prompt_name)
             # Prepend common prompt content if available
             try:
-                common_content = self.config.paths.get_common_prompt_content()
+                common_content = self.prompt_service.get_common_prompt_content()
                 prompt_content = common_content + "\n\n---\n\n" + prompt_content
             except FileNotFoundError:
                 pass  # Common prompt is optional
