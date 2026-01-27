@@ -6,6 +6,7 @@ from claudesprint.services.init_repo_service import InitRepoService
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.path_service import PathService
+from claudesprint.services.project_config_service import ProjectConfigService
 from claudesprint.services.sprint_service import SprintService
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "IssueService",
     "NotificationService",
     "PathService",
+    "ProjectConfigService",
     "SprintService",
 ]

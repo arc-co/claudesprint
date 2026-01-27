@@ -5,15 +5,21 @@ enabling cost optimization by using sonnet for lower-stakes steps while
 preserving opus for critical judgment steps.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING
 
 from claudesprint.models.current_issue import IssueStep
 
-ModelName = Literal["opus", "sonnet"]
+if TYPE_CHECKING:
+    from claudesprint.services.project_config_service import ProjectConfigService
+
+# Import ModelName from project_config_service to ensure consistent type definition
+from claudesprint.services.project_config_service import ModelName
 
 
 # Default model mappings for issue steps
@@ -90,6 +96,23 @@ class ModelsService:
         """
         self.config_path = config_path
         self._config: ModelsConfig | None = None
+        self._project_config_service: ProjectConfigService | None = None
+
+    @classmethod
+    def from_project_config(
+        cls, project_config_service: "ProjectConfigService"
+    ) -> "ModelsService":
+        """Create a ModelsService that reads from ProjectConfigService.
+
+        Args:
+            project_config_service: The project config service to use.
+
+        Returns:
+            ModelsService instance configured to use TOML config.
+        """
+        instance = cls()
+        instance._project_config_service = project_config_service
+        return instance
 
     @property
     def config(self) -> ModelsConfig:
@@ -119,28 +142,32 @@ class ModelsService:
         if env_override in ("opus", "sonnet"):
             return env_override  # type: ignore
 
-        # 2. Check config file override
-        if self.config.model_override in ("opus", "sonnet"):
-            return self.config.model_override
-
         # Normalize step to string
         step_name = step.value if isinstance(step, IssueStep) else str(step)
 
-        # 3. Check config file step_models
+        # 2. Check TOML project config if available
+        if self._project_config_service is not None:
+            return self._project_config_service.get_model_for_step(step_name)
+
+        # 3. Check JSON config file override
+        if self.config.model_override in ("opus", "sonnet"):
+            return self.config.model_override
+
+        # 4. Check JSON config file step_models
         if self.config.step_models and step_name in self.config.step_models:
             model = self.config.step_models[step_name]
             if model in ("opus", "sonnet"):
                 return model  # type: ignore
 
-        # 4. Check STEP_DEFAULT_MODELS
+        # 5. Check STEP_DEFAULT_MODELS
         if isinstance(step, IssueStep) and step in STEP_DEFAULT_MODELS:
             return STEP_DEFAULT_MODELS[step]
 
-        # 5. Check config file default_model
+        # 6. Check JSON config file default_model
         if self.config.default_model in ("opus", "sonnet"):
             return self.config.default_model
 
-        # 6. Fall back to opus
+        # 7. Fall back to opus
         return "opus"
 
     def get_model_for_special_step(self, step_name: str) -> ModelName:
@@ -157,17 +184,21 @@ class ModelsService:
         if env_override in ("opus", "sonnet"):
             return env_override  # type: ignore
 
-        # 2. Check config file override
+        # 2. Check TOML project config if available
+        if self._project_config_service is not None:
+            return self._project_config_service.get_model_for_special_step(step_name)
+
+        # 3. Check JSON config file override
         if self.config.model_override in ("opus", "sonnet"):
             return self.config.model_override
 
-        # 3. Check config file special_step_models
+        # 4. Check JSON config file special_step_models
         if self.config.special_step_models and step_name in self.config.special_step_models:
             model = self.config.special_step_models[step_name]
             if model in ("opus", "sonnet"):
                 return model  # type: ignore
 
-        # 4. Fall back to defaults (init=opus, plan=sonnet)
+        # 5. Fall back to defaults (init=opus, plan=sonnet)
         defaults = {"init": "opus", "plan": "sonnet"}
         return defaults.get(step_name, "opus")  # type: ignore
 

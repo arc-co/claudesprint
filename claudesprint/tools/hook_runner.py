@@ -1,12 +1,21 @@
 """Hook runner - executes user-configured commands and returns structured results."""
 
+from __future__ import annotations
+
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from claudesprint.services.project_config_service import ProjectConfigService
+
+logger = logging.getLogger(__name__)
 
 
 class HookConfigError(Exception):
@@ -84,6 +93,7 @@ class HookRunner:
         config_path: str | Path | None = None,
         project_root: str | Path | None = None,
         strict: bool = False,
+        project_config_service: "ProjectConfigService | None" = None,
     ):
         """Initialize the hook runner.
 
@@ -91,15 +101,101 @@ class HookRunner:
             config_path: Path to hooks.json config file.
             project_root: Project root directory for running commands.
             strict: If True, raise HookConfigError on missing/invalid config.
+            project_config_service: Optional ProjectConfigService for TOML config.
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.config_path = Path(config_path) if config_path else self.project_root / ".claude" / "config" / "hooks.json"
         self._config: dict[str, HookConfig] = {}
         self._config_loaded = False
         self._config_error: str | None = None
+        self._project_config_service = project_config_service
         self._load_config(strict=strict)
 
+    @classmethod
+    def from_project_config(
+        cls,
+        project_config_service: "ProjectConfigService",
+        strict: bool = False,
+    ) -> "HookRunner":
+        """Create a HookRunner that reads from ProjectConfigService.
+
+        Args:
+            project_config_service: The project config service to use.
+            strict: If True, raise HookConfigError on invalid config.
+
+        Returns:
+            HookRunner instance configured to use TOML config.
+        """
+        return cls(
+            project_root=project_config_service.project_root,
+            project_config_service=project_config_service,
+            strict=strict,
+        )
+
     def _load_config(self, strict: bool = False) -> None:
+        """Load hook configuration from TOML or JSON file.
+
+        Tries TOML config first (via ProjectConfigService), then falls back to JSON.
+
+        Args:
+            strict: If True, raise HookConfigError on missing/invalid config.
+        """
+        # Try TOML config first if ProjectConfigService is available
+        if self._project_config_service is not None:
+            if self._load_from_toml():
+                return
+
+        # Fall back to JSON config
+        self._load_from_json(strict=strict)
+
+    def _load_from_toml(self) -> bool:
+        """Load hook configuration from TOML via ProjectConfigService.
+
+        Returns:
+            True if config was loaded successfully, False otherwise.
+        """
+        if self._project_config_service is None:
+            return False
+
+        if not self._project_config_service.exists():
+            return False
+
+        try:
+            config = self._project_config_service.load()
+            hooks = config.hooks
+
+            # Convert Pydantic models to HookConfig dataclasses
+            # Map hook names to attribute names (validate -> validate_hook due to BaseModel conflict)
+            hook_attr_map = {
+                "test": "test",
+                "lint": "lint",
+                "typecheck": "typecheck",
+                "build": "build",
+                "validate": "validate_hook",
+            }
+            for hook_name, attr_name in hook_attr_map.items():
+                hook_model = getattr(hooks, attr_name, None)
+                if hook_model:
+                    self._config[hook_name] = HookConfig(
+                        command=hook_model.command,
+                        timeout=hook_model.timeout,
+                        working_dir=None,  # Not in TOML schema
+                        env={},  # Not in TOML schema
+                        success_exit_codes=list(hook_model.success_exit_codes),
+                        failure_patterns=list(hook_model.failure_patterns),
+                        success_patterns=list(hook_model.success_patterns),
+                    )
+
+            self._config_loaded = True
+            return True
+        except Exception as e:
+            logger.warning(
+                "Failed to load hooks from TOML config: %s. Falling back to JSON.",
+                e,
+            )
+            return False
+
+    def _load_from_json(self, strict: bool = False) -> None:
         """Load hook configuration from JSON file.
 
         Args:

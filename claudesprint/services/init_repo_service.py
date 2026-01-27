@@ -5,6 +5,10 @@ from pathlib import Path
 
 from claudesprint.services.constants import PROMPTS_README_CONTENT
 from claudesprint.services.git_service import GitService
+from claudesprint.services.project_config_service import (
+    DEFAULT_PROJECT_CONFIG_TOML,
+    ProjectConfigService,
+)
 
 
 @dataclass
@@ -25,6 +29,7 @@ class InitRepoService:
     STATE_DIR = "state"
     PROMPTS_DIR = "prompts"
     PROMPTS_README = "README.md"
+    CONFIG_FILE = "config.toml"
     GITIGNORE_ENTRY = ".claudesprint/"
 
     def __init__(self, project_root: str | Path) -> None:
@@ -38,6 +43,7 @@ class InitRepoService:
         self.state_dir = self.claudesprint_dir / self.STATE_DIR
         self.prompts_dir = self.claudesprint_dir / self.PROMPTS_DIR
         self.prompts_readme = self.prompts_dir / self.PROMPTS_README
+        self.config_file = self.claudesprint_dir / self.CONFIG_FILE
         self.gitignore_path = self.project_root / ".gitignore"
 
     def exists(self) -> bool:
@@ -95,6 +101,13 @@ class InitRepoService:
                 self.prompts_readme.write_text(PROMPTS_README_CONTENT)
                 result.created_files.append(
                     f"{self.CLAUDESPRINT_DIR}/{self.PROMPTS_DIR}/{self.PROMPTS_README}"
+                )
+
+            # Create config.toml
+            if not self.config_file.exists() or force:
+                self.config_file.write_text(DEFAULT_PROJECT_CONFIG_TOML)
+                result.created_files.append(
+                    f"{self.CLAUDESPRINT_DIR}/{self.CONFIG_FILE}"
                 )
 
             # Update .gitignore

@@ -224,6 +224,11 @@ class PathService:
         return self.config_files_dir / "models.json"
 
     @property
+    def project_config_file(self) -> Path:
+        """Path to project config.toml file (.claudesprint/config.toml)."""
+        return self._project_root / ".claudesprint" / "config.toml"
+
+    @property
     def conversation_log_file(self) -> Path:
         """Path to agent_conversations.log for debug mode."""
         return self.project_dir / "agent_conversations.log"

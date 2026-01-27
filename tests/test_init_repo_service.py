@@ -11,6 +11,7 @@ from claudesprint.services.init_repo_service import (
     InitRepoService,
     InitRepoResult,
 )
+from claudesprint.services.project_config_service import DEFAULT_PROJECT_CONFIG_TOML
 
 
 class TestInitRepoServiceExists:
@@ -64,6 +65,67 @@ class TestInitRepoServiceInit:
             assert ".claudesprint/state/" in result.created_dirs
             assert ".claudesprint/prompts/" in result.created_dirs
             assert ".claudesprint/prompts/README.md" in result.created_files
+            assert ".claudesprint/config.toml" in result.created_files
+
+
+class TestInitRepoServiceConfigToml:
+    """Tests for config.toml creation."""
+
+    def test_creates_config_toml(self) -> None:
+        """Test init creates config.toml with default content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            config_path = Path(tmpdir) / ".claudesprint" / "config.toml"
+            assert config_path.exists()
+            assert config_path.read_text() == DEFAULT_PROJECT_CONFIG_TOML
+
+    def test_config_toml_in_created_files(self) -> None:
+        """Test config.toml is listed in created_files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            assert ".claudesprint/config.toml" in result.created_files
+
+    def test_force_overwrites_config_toml(self) -> None:
+        """Test --force overwrites config.toml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create initial structure with custom config
+            config_dir = Path(tmpdir) / ".claudesprint"
+            config_dir.mkdir(parents=True)
+            config_path = config_dir / "config.toml"
+            config_path.write_text("# Custom content")
+
+            # Create required dirs to satisfy exists check
+            (config_dir / "state").mkdir()
+            (config_dir / "prompts").mkdir()
+
+            service = InitRepoService(tmpdir)
+            result = service.init(force=True)
+
+            assert result.success is True
+            assert config_path.read_text() == DEFAULT_PROJECT_CONFIG_TOML
+
+    def test_does_not_overwrite_without_force(self) -> None:
+        """Test init does not overwrite existing config.toml without force."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create initial structure with custom config
+            config_dir = Path(tmpdir) / ".claudesprint"
+            config_dir.mkdir(parents=True)
+            config_path = config_dir / "config.toml"
+            config_path.write_text("# Custom content")
+
+            service = InitRepoService(tmpdir)
+            # This should fail because directory exists
+            result = service.init(force=False)
+
+            assert result.success is False
+            # Original content preserved
+            assert config_path.read_text() == "# Custom content"
 
 
 class TestInitRepoServiceGitignore:
