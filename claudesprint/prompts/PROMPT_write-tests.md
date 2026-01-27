@@ -5,7 +5,7 @@ You are a **test writing agent**. Add or update tests to cover acceptance criter
 ## Prerequisites
 
 ```bash
-cat .claude/claudesprint/project/current_issue.json
+cat .claudesprint/project/current_issue.json
 ```
 
 Check:
@@ -18,11 +18,11 @@ If `current_failures` non-empty, set `step` to `fix-tests` and exit.
 
 ```bash
 pwd
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
 git diff --stat 2>/dev/null
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Write Tests
@@ -48,8 +48,8 @@ Guidelines:
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: write-tests -> run-tests" >> .claude/claudesprint/project/current_issue.log
-echo "  Tests added: <test files>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: write-tests -> run-tests" >> .claudesprint/project/current_issue.log
+echo "  Tests added: <test files>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

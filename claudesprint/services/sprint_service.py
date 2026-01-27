@@ -11,11 +11,11 @@ from claudesprint.models.sprint import Sprint, Issue, IssueStatus
 class SprintService:
     """Service for sprint file I/O and management operations."""
 
-    def __init__(self, sprints_dir: str | Path = Path(".claude/claudesprint/sprints")) -> None:
+    def __init__(self, sprints_dir: str | Path = Path(".claudesprint/sprints")) -> None:
         """Initialize SprintService.
 
         Args:
-            sprints_dir: Base directory for sprint files (default: .claude/claudesprint/sprints)
+            sprints_dir: Base directory for sprint files (default: .claudesprint/sprints)
         """
         self.sprints_dir = Path(sprints_dir)
 
@@ -26,7 +26,7 @@ class SprintService:
             spec_id: The spec identifier (e.g., SPEC_01)
 
         Returns:
-            Path to the sprint.json file (e.g., .claude/claudesprint/sprints/SPEC_01/sprint.json)
+            Path to the sprint.json file (e.g., .claudesprint/sprints/SPEC_01/sprint.json)
         """
         return self.sprints_dir / spec_id / "sprint.json"
 
@@ -37,7 +37,7 @@ class SprintService:
             spec_id: The spec identifier (e.g., SPEC_01)
 
         Returns:
-            Path to the sprint directory (e.g., .claude/claudesprint/sprints/SPEC_01)
+            Path to the sprint directory (e.g., .claudesprint/sprints/SPEC_01)
         """
         return self.sprints_dir / spec_id
 
@@ -45,7 +45,7 @@ class SprintService:
         """Derive spec_id from a spec file path.
 
         Args:
-            spec_file: Path to the spec file (e.g., .claude/claudesprint/specs/SPEC_01.md)
+            spec_file: Path to the spec file (e.g., .claudesprint/specs/SPEC_01.md)
 
         Returns:
             Derived spec_id (e.g., SPEC_01)

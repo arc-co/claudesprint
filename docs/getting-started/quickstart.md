@@ -32,8 +32,8 @@ ClaudeSprint works from specification files. You can use the included demo or cr
 Copy the textbook exchange demo spec:
 
 ```bash
-mkdir -p .claude/claudesprint/specs
-cat > .claude/claudesprint/specs/SPEC_01.md << 'EOF'
+mkdir -p .claudesprint/specs
+cat > .claudesprint/specs/SPEC_01.md << 'EOF'
 # SPEC 01 - Counter App
 
 ## Purpose
@@ -72,7 +72,7 @@ EOF
 
 ### Option B: Write Your Own Spec
 
-Create a spec file in `.claude/claudesprint/specs/` following this structure:
+Create a spec file in `.claudesprint/specs/` following this structure:
 
 ```markdown
 # SPEC 01 - Feature Name

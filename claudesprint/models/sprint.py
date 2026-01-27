@@ -233,7 +233,7 @@ class SprintMetadata(BaseModel):
 class Sprint(BaseModel):
     """Sprint model - a collection of issues for a specific spec.
 
-    Lives in: .claude/claudesprint/sprints/<spec_id>/sprint.json
+    Lives in: .claudesprint/sprints/<spec_id>/sprint.json
     """
 
     model_config = {
@@ -255,7 +255,7 @@ class Sprint(BaseModel):
     spec_file: str = Field(
         ...,
         min_length=1,
-        description="Path to the source spec file (e.g., .claude/claudesprint/specs/SPEC_01.md)",
+        description="Path to the source spec file (e.g., .claudesprint/specs/SPEC_01.md)",
     )
     description: str = Field(
         default="",

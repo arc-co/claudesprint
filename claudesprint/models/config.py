@@ -93,8 +93,8 @@ class ClaudesprintConfig(BaseSettings):
 
     # Paths (derived from script location) - kept for backward compatibility
     claude_dir: str = Field(default="", description="Path to .claude directory")
-    project_dir: str = Field(default="", description="Path to .claude/claudesprint/project directory")
-    claudesprint_dir: str = Field(default="", description="Path to .claude/claudesprint directory")
+    project_dir: str = Field(default="", description="Path to .claudesprint/project directory")
+    claudesprint_dir: str = Field(default="", description="Path to .claudesprint directory")
     prompts_dir: str = Field(default="", description="Path to prompts directory (inside claudesprint)")
 
     # Private attributes for services
@@ -103,7 +103,7 @@ class ClaudesprintConfig(BaseSettings):
     _project_root: Path | None = PrivateAttr(default=None)
 
     model_config = {
-        "env_file": ".claude/claudesprint/.env",
+        "env_file": ".claudesprint/.env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
@@ -172,7 +172,7 @@ class ClaudesprintConfig(BaseSettings):
 
         Configuration precedence (highest to lowest):
         1. Environment variables (CLAUDESPRINT_*)
-        2. Project config (.claude/claudesprint/.env)
+        2. Project config (.claudesprint/.env)
         3. Global config (~/.config/claudesprint/config.toml)
         4. Hardcoded defaults
 
@@ -187,7 +187,7 @@ class ClaudesprintConfig(BaseSettings):
         from claudesprint.services.path_service import PathService
 
         claude_dir = os.path.join(project_root, ".claude")
-        claudesprint_dir = os.path.join(claude_dir, "claudesprint")
+        claudesprint_dir = os.path.join(project_root, ".claudesprint")
 
         # Load global config defaults first
         global_defaults = cls._get_global_defaults()

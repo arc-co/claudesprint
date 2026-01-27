@@ -44,7 +44,7 @@ claudesprint run
 
 Each sprint has its own state directory:
 ```
-.claude/claudesprint/
+.claudesprint/
 ├── sprints/
 │   ├── SPEC_01/
 │   │   └── sprint.json
@@ -99,7 +99,7 @@ For large projects, break work into multiple specifications:
 ### Specification Strategy
 
 ```
-.claude/claudesprint/specs/
+.claudesprint/specs/
 ├── SPEC_01_foundation.md      # Project setup, infrastructure
 ├── SPEC_02_auth.md            # Authentication system
 ├── SPEC_03_user_management.md # User CRUD
@@ -299,15 +299,15 @@ If a sprint can't complete (blocked issue, max retries):
 
 ```bash
 # Check what failed
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+cat .claudesprint/project/current_issue.json | jq '.current_failures'
 
 # Option 1: Fix manually and continue
 # ... make manual fixes ...
-jq '.retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 claudesprint run
 
 # Option 2: Skip the issue
-jq '.status = "blocked"' .claude/claudesprint/sprints/SPEC_01/sprint.json > tmp && mv tmp .claude/claudesprint/sprints/SPEC_01/sprint.json
+jq '.status = "blocked"' .claudesprint/sprints/SPEC_01/sprint.json > tmp && mv tmp .claudesprint/sprints/SPEC_01/sprint.json
 claudesprint run
 
 # Option 3: Reset and revise the spec
@@ -386,10 +386,10 @@ Track these metrics:
 
 ```bash
 # Issues per sprint
-jq '.metadata.total_issues' .claude/claudesprint/sprints/SPEC_01/sprint.json
+jq '.metadata.total_issues' .claudesprint/sprints/SPEC_01/sprint.json
 
 # Completion rate
-jq '.metadata | "\(.completed)/\(.total_issues)"' .claude/claudesprint/sprints/SPEC_01/sprint.json
+jq '.metadata | "\(.completed)/\(.total_issues)"' .claudesprint/sprints/SPEC_01/sprint.json
 
 # Average retries
 # (calculated from history entries)
@@ -401,13 +401,13 @@ Analyze the activity log:
 
 ```bash
 # Count step transitions
-grep -c "→" .claude/claudesprint/project/current_issue.log
+grep -c "→" .claudesprint/project/current_issue.log
 
 # Find failures
-grep "FAIL" .claude/claudesprint/project/current_issue.log
+grep "FAIL" .claudesprint/project/current_issue.log
 
 # Track time per issue
-grep "completed" .claude/claudesprint/project/current_issue.log
+grep "completed" .claudesprint/project/current_issue.log
 ```
 
 ### Notification Alerts

@@ -247,26 +247,32 @@ claudesprint notify TYPE MSG     # Send manual notification
 ## Project Structure
 
 ```
-.claude/
+.claude/                      # Claude Code configuration
 ├── CLAUDE.md                 # Project instructions for Claude
-├── skills/                   # Skills (agent-browser, etc.)
-└── claudesprint/             # ClaudeSprint system
-    ├── config/               # Configuration
-    │   ├── project.json      # Dev server, URLs
-    │   ├── hooks.json        # Test/build commands
-    │   ├── models.json       # Per-step model selection
-    │   └── notifications.json
-    ├── prompts/              # Workflow step prompts
-    ├── schemas/              # JSON validation schemas
-    ├── specs/                # Specification files
-    │   └── examples/         # Example specs
-    ├── sprints/              # Generated sprints
-    │   └── SPEC_01/
-    │       └── sprint.json
-    ├── project/              # Runtime state
-    │   ├── current_issue.json
-    │   └── current_issue.log
-    └── src/claudesprint/     # Python package
+├── skills/                   # Custom skills
+└── settings.json             # Claude settings
+
+.claudesprint/                # ClaudeSprint system (user-owned)
+├── config/                   # Configuration
+│   ├── project.json          # Dev server, URLs
+│   ├── hooks.json            # Test/build commands
+│   ├── models.json           # Per-step model selection
+│   └── notifications.json
+├── prompts/                  # Prompt overrides (optional)
+├── specs/                    # Specification files
+│   └── examples/             # Example specs
+├── sprints/                  # Generated sprints
+│   └── SPEC_01/
+│       └── sprint.json
+├── project/                  # Runtime state
+│   ├── current_issue.json
+│   └── current_issue.log
+└── state/                    # Session state
+    └── sprint.lock
+
+claudesprint/                 # Python package (installed)
+├── prompts/                  # Default workflow prompts
+└── schemas/                  # JSON validation schemas
 ```
 
 ## Configuration
@@ -291,7 +297,7 @@ CLAUDESPRINT_MODEL_OVERRIDE=opus claudesprint run
 
 ### Hooks
 
-Configure test commands in `.claude/claudesprint/config/hooks.json`:
+Configure test commands in `.claudesprint/config/hooks.json`:
 
 ```json
 {
@@ -308,7 +314,7 @@ Configure test commands in `.claude/claudesprint/config/hooks.json`:
 
 ### Notifications
 
-Get notified of progress via Bark (iOS) in `.claude/claudesprint/config/notifications.json`:
+Get notified of progress via Bark (iOS) in `.claudesprint/config/notifications.json`:
 
 ```json
 {
@@ -322,7 +328,7 @@ Get notified of progress via Bark (iOS) in `.claude/claudesprint/config/notifica
 
 ## Writing Specifications
 
-Specifications define what ClaudeSprint will build. Place them in `.claude/claudesprint/specs/`:
+Specifications define what ClaudeSprint will build. Place them in `.claudesprint/specs/`:
 
 ```markdown
 # SPEC 01 - Feature Name
@@ -378,7 +384,7 @@ Check `current_issue.json` for `current_failures` - there may be unresolved issu
 ### Max retry limit reached
 ```bash
 # Review failures
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+cat .claudesprint/project/current_issue.json | jq '.current_failures'
 
 # Override limit if needed
 CLAUDESPRINT_MAX_RETRY=10 claudesprint run
@@ -409,7 +415,7 @@ ClaudeSprint runs locally on your machine.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
 
-- Contributing to the core engine (`.claude/claudesprint/`)
+- Contributing to the core engine (`.claudesprint/`)
 - Contributing example specifications
 - Governance: treating claudesprint as vendored code vs. modifying it
 

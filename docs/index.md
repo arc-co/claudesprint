@@ -63,7 +63,7 @@ ClaudeSprint runs two nested loops:
 
 ### Template Model
 
-ClaudeSprint is a **template**, not a package. You own the code in `.claude/claudesprint/`, allowing deep customization without fighting upstream abstractions.
+ClaudeSprint is a **template**, not a package. You own the code in `.claudesprint/`, allowing deep customization without fighting upstream abstractions.
 
 ### Specification-Driven
 
@@ -90,8 +90,8 @@ cd your-project
 claudesprint initrepo
 
 # 4. Create a spec
-mkdir -p .claude/claudesprint/specs
-cat > .claude/claudesprint/specs/SPEC_01.md << 'EOF'
+mkdir -p .claudesprint/specs
+cat > .claudesprint/specs/SPEC_01.md << 'EOF'
 # My Feature
 
 ## Feature 1: Hello World

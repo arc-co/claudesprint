@@ -48,19 +48,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install in editable mode with dev dependencies
-pip install -e ".claude/claudesprint/[dev]"
+pip install -e ".claudesprint/[dev]"
 
 # Install pre-commit hooks
 pre-commit install
 
 # Run tests to verify setup
-pytest .claude/claudesprint/tests/
+pytest .claudesprint/tests/
 ```
 
 ### Project Structure
 
 ```
-.claude/claudesprint/
+.claudesprint/
 ├── src/claudesprint/          # Python package
 │   ├── __init__.py
 │   ├── cli.py                 # CLI entry point
@@ -115,19 +115,19 @@ Types:
 
 ```bash
 # Run all tests
-pytest .claude/claudesprint/tests/
+pytest .claudesprint/tests/
 
 # Run specific test file
-pytest .claude/claudesprint/tests/test_workflow.py
+pytest .claudesprint/tests/test_workflow.py
 
 # Run with coverage
-pytest --cov=claudesprint .claude/claudesprint/tests/
+pytest --cov=claudesprint .claudesprint/tests/
 
 # Run type checking
-mypy .claude/claudesprint/src/claudesprint/
+mypy .claudesprint/src/claudesprint/
 
 # Run linting
-ruff check .claude/claudesprint/src/
+ruff check .claudesprint/src/
 ```
 
 ### Testing Workflow Changes
@@ -144,7 +144,7 @@ git init
 cp -r /path/to/your/.claude .
 
 # Create a simple spec
-cat > .claude/claudesprint/specs/TEST_SPEC.md << 'EOF'
+cat > .claudesprint/specs/TEST_SPEC.md << 'EOF'
 # Test Spec
 
 ## Feature 1: Hello World
@@ -209,9 +209,9 @@ This documentation. Contributions might include:
 
 ### Before Submitting
 
-1. **Run all tests**: `pytest .claude/claudesprint/tests/`
-2. **Run linting**: `ruff check .claude/claudesprint/src/`
-3. **Run type checking**: `mypy .claude/claudesprint/src/claudesprint/`
+1. **Run all tests**: `pytest .claudesprint/tests/`
+2. **Run linting**: `ruff check .claudesprint/src/`
+3. **Run type checking**: `mypy .claudesprint/src/claudesprint/`
 4. **Test manually**: Try your changes with a real spec
 5. **Update documentation**: If behavior changes
 

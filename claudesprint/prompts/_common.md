@@ -10,27 +10,27 @@ Reference file for shared patterns used across workflow prompts.
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 cat "$SPRINT_PATH"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Atomic Write Pattern
 
 ```bash
-cat > .claude/claudesprint/project/current_issue.json.tmp << 'EOF'
+cat > .claudesprint/project/current_issue.json.tmp << 'EOF'
 {...updated content...}
 EOF
-mv .claude/claudesprint/project/current_issue.json.tmp .claude/claudesprint/project/current_issue.json
+mv .claudesprint/project/current_issue.json.tmp .claudesprint/project/current_issue.json
 ```
 
 ## Log Progress
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: <from> -> <to>" >> .claude/claudesprint/project/current_issue.log
-echo "  <summary>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: <from> -> <to>" >> .claudesprint/project/current_issue.log
+echo "  <summary>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Update current_issue.json

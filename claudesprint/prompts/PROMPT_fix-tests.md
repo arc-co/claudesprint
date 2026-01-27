@@ -5,7 +5,7 @@ You are a **test fix agent**. Fix failing tests while ensuring expectations alig
 ## Prerequisites
 
 ```bash
-cat .claude/claudesprint/project/current_issue.json
+cat .claudesprint/project/current_issue.json
 ```
 
 Check `current_failures` is not empty. If empty, set `step` to `run-tests` and exit.
@@ -14,11 +14,11 @@ Check `current_failures` is not empty. If empty, set `step` to `run-tests` and e
 
 ```bash
 pwd
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
 git diff --stat 2>/dev/null
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Analyze Failures (CRITICAL)
@@ -53,8 +53,8 @@ Before ANY changes:
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-tests -> <next>" >> .claude/claudesprint/project/current_issue.log
-echo "  Analysis: <test wrong OR code wrong>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-tests -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Analysis: <test wrong OR code wrong>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

@@ -6,23 +6,23 @@ Command: `claudesprint init --spec SPEC_01.md`
 
 ## Tasks
 
-1. Read spec from `.claude/claudesprint/specs/<spec>.md`
+1. Read spec from `.claudesprint/specs/<spec>.md`
 2. Generate sprint at `sprints/<spec_id>/sprint.json`
-3. Create .gitignore (must ignore: `node_modules/`, `dist/`, `build/`, `__pycache__/`, `.env`, `.claude/claudesprint/project/*.log`, `.claude/claudesprint/project/*.tmp`)
-4. Set up `.claude/claudesprint/scripts/init.sh` for dev environment
+3. Create .gitignore (must ignore: `node_modules/`, `dist/`, `build/`, `__pycache__/`, `.env`, `.claudesprint/project/*.log`, `.claudesprint/project/*.tmp`)
+4. Set up `.claudesprint/scripts/init.sh` for dev environment
 5. Create initial project scaffolding if needed
 6. Make initial git commit (if git repo)
 
 ## Sprint Schema
 
-See `.claude/claudesprint/schemas/sprint.schema.json` for full schema.
+See `.claudesprint/schemas/sprint.schema.json` for full schema.
 
 Key fields:
 ```json
 {
   "schema_version": "2.0",
   "spec_id": "SPEC_01",
-  "spec_file": ".claude/claudesprint/specs/SPEC_01.md",
+  "spec_file": ".claudesprint/specs/SPEC_01.md",
   "issues": [{
     "id": "category-001",
     "title": "Short title",
@@ -65,11 +65,11 @@ coverage/
 __pycache__/
 *.pyc
 .venv/
-.claude/claudesprint/project/*.log
-.claude/claudesprint/project/*.tmp
+.claudesprint/project/*.log
+.claudesprint/project/*.tmp
 EOF
 
-git add .gitignore sprints/<spec_id>/sprint.json .claude/claudesprint/scripts/init.sh
+git add .gitignore sprints/<spec_id>/sprint.json .claudesprint/scripts/init.sh
 git commit -m "chore: Initialize sprint for <spec_id>"
 ```
 

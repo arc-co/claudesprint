@@ -47,7 +47,7 @@ This is an orchestrator for **shipping reliable software**, not a chat interface
 
 ## Template vs. Package: The Ownership Model
 
-ClaudeSprint is distributed as a **template**, not a package. When you install it, you're copying the entire `.claude/claudesprint/` directory into your project. You own this code.
+ClaudeSprint is distributed as a **template**, not a package. When you install it, you're copying the entire `.claudesprint/` directory into your project. You own this code.
 
 ### Why a Template?
 
@@ -71,7 +71,7 @@ Template Model (ClaudeSprint):
 ┌──────────────────────────────────────────────┐
 │  Your Project                                │
 │  ┌────────────────────────────────────────┐  │
-│  │  .claude/claudesprint/ (YOU OWN THIS)  │  │
+│  │  .claudesprint/ (YOU OWN THIS)  │  │
 │  │  - Modify prompts for your team        │  │
 │  │  - Add project-specific steps          │  │
 │  │  - Customize without asking permission │  │

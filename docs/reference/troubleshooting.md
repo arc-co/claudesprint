@@ -12,13 +12,13 @@ claudesprint status
 claudesprint validate
 
 # View recent activity
-tail -30 .claude/claudesprint/project/current_issue.log
+tail -30 .claudesprint/project/current_issue.log
 
 # Check current issue details
-cat .claude/claudesprint/project/current_issue.json | jq .
+cat .claudesprint/project/current_issue.json | jq .
 
 # Check sprint status
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata'
+cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata'
 ```
 
 ## Common Issues
@@ -36,7 +36,7 @@ source .venv/bin/activate
 pip list | grep claudesprint
 
 # Reinstall if needed
-pip install -e .claude/claudesprint/
+pip install -e .claudesprint/
 ```
 
 ### "current_issue.json validation failed"
@@ -54,7 +54,7 @@ claudesprint validate
 claudesprint reset
 
 # Or fix specific field
-jq '.step = "implement"' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.step = "implement"' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 ```
 
 ### "Invalid step in current_issue.json"
@@ -79,7 +79,7 @@ jq '.step = "implement"' .claude/claudesprint/project/current_issue.json > tmp &
 **Solution**:
 ```bash
 # Set to valid step
-jq '.step = "implement"' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.step = "implement"' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 
 # Or reset
 claudesprint reset
@@ -91,7 +91,7 @@ claudesprint reset
 
 **Diagnosis**:
 ```bash
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+cat .claudesprint/project/current_issue.json | jq '.current_failures'
 ```
 
 **Solutions**:
@@ -101,7 +101,7 @@ cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
    # Read the failure message
    # Fix the code/test manually
    # Reset retry count
-   jq '.retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+   jq '.retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
    claudesprint run
    ```
 
@@ -113,8 +113,8 @@ cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
 3. **Skip the issue**:
    ```bash
    # Mark issue as blocked
-   ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
-   SPRINT=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+   ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+   SPRINT=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
    jq --arg id "$ISSUE_ID" '(.issues[] | select(.id == $id)).status = "blocked"' "$SPRINT" > tmp && mv tmp "$SPRINT"
    claudesprint reset
    claudesprint run
@@ -140,7 +140,7 @@ claudesprint init --spec SPEC_01.md
 **Solution**:
 ```bash
 # Check sprint for valid IDs
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[].id'
+cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[].id'
 
 # Reset to pick valid issue
 claudesprint reset
@@ -154,26 +154,26 @@ claudesprint run
 **Diagnosis**:
 ```bash
 # Check retry count
-cat .claude/claudesprint/project/current_issue.json | jq '.retry_count'
+cat .claudesprint/project/current_issue.json | jq '.retry_count'
 
 # Check failures
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+cat .claudesprint/project/current_issue.json | jq '.current_failures'
 
 # Check recent log
-tail -30 .claude/claudesprint/project/current_issue.log
+tail -30 .claudesprint/project/current_issue.log
 ```
 
 **Solutions**:
 
 1. **Clear failures and retry**:
    ```bash
-   jq '.current_failures = "" | .retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+   jq '.current_failures = "" | .retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
    claudesprint run
    ```
 
 2. **Force to next step**:
    ```bash
-   jq '.step = "write-tests"' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+   jq '.step = "write-tests"' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
    claudesprint run
    ```
 
@@ -193,7 +193,7 @@ tail -30 .claude/claudesprint/project/current_issue.log
 npm run validate
 
 # Check what the agent thinks is wrong
-cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
+cat .claudesprint/project/current_issue.json | jq '.current_failures'
 ```
 
 **Solutions**:
@@ -212,7 +212,7 @@ cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
    ```bash
    # Fix code/tests manually
    # Clear failures
-   jq '.current_failures = "" | .retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+   jq '.current_failures = "" | .retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
    claudesprint run
    ```
 
@@ -223,7 +223,7 @@ cat .claude/claudesprint/project/current_issue.json | jq '.current_failures'
 **Diagnosis**:
 ```bash
 # Check dev server config
-cat .claude/claudesprint/config/project.json
+cat .claudesprint/config/project.json
 
 # Start dev server manually
 npm run dev
@@ -249,7 +249,7 @@ agent-browser close
 
 2. **Skip browser validation**:
    ```bash
-   jq '.step = "code-review"' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+   jq '.step = "code-review"' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
    claudesprint run
    ```
 
@@ -340,7 +340,7 @@ git stash
 claudesprint reset --hard
 
 # 3. Check sprint status
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata'
+cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata'
 
 # 4. Start fresh
 claudesprint run
@@ -352,7 +352,7 @@ If sprint.json is corrupted:
 
 ```bash
 # 1. Backup completed issues
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[] | select(.status == "completed")' > completed.json
+cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[] | select(.status == "completed")' > completed.json
 
 # 2. Reinitialize
 claudesprint init --spec SPEC_01.md --force
@@ -367,10 +367,10 @@ If state files were accidentally deleted:
 
 ```bash
 # Check if backup exists
-ls -la .claude/claudesprint/project/*.bak
+ls -la .claudesprint/project/*.bak
 
 # Restore
-cp .claude/claudesprint/project/current_issue.json.bak .claude/claudesprint/project/current_issue.json
+cp .claudesprint/project/current_issue.json.bak .claudesprint/project/current_issue.json
 ```
 
 ## Debug Mode
@@ -393,15 +393,15 @@ If you're still stuck:
 
 1. **Check the logs**:
    ```bash
-   tail -100 .claude/claudesprint/project/current_issue.log
+   tail -100 .claudesprint/project/current_issue.log
    ```
 
 2. **Export diagnostic info**:
    ```bash
    claudesprint status > diagnostics.txt
    claudesprint validate >> diagnostics.txt
-   cat .claude/claudesprint/project/current_issue.json >> diagnostics.txt
-   cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata' >> diagnostics.txt
+   cat .claudesprint/project/current_issue.json >> diagnostics.txt
+   cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.metadata' >> diagnostics.txt
    ```
 
 3. **Report issue** at the project repository with:

@@ -158,27 +158,27 @@ class PathService:
 
     @property
     def config_dir(self) -> Path:
-        """Main claudesprint config directory (.claude/claudesprint/)."""
-        return self.claude_dir / "claudesprint"
+        """Main claudesprint config directory (.claudesprint/)."""
+        return self._project_root / ".claudesprint"
 
     @property
     def project_dir(self) -> Path:
-        """Project state directory (.claude/claudesprint/project/)."""
+        """Project state directory (.claudesprint/project/)."""
         return self.config_dir / "project"
 
     @property
     def sprints_dir(self) -> Path:
-        """Sprints directory (.claude/claudesprint/sprints/)."""
+        """Sprints directory (.claudesprint/sprints/)."""
         return self.config_dir / "sprints"
 
     @property
     def specs_dir(self) -> Path:
-        """Specs directory (.claude/claudesprint/specs/)."""
+        """Specs directory (.claudesprint/specs/)."""
         return self.config_dir / "specs"
 
     @property
     def config_files_dir(self) -> Path:
-        """Config files directory (.claude/claudesprint/config/)."""
+        """Config files directory (.claudesprint/config/)."""
         return self.config_dir / "config"
 
     # === File Paths ===

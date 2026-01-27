@@ -6,10 +6,10 @@ You are a **documentation gathering agent**. Gather documentation needed for the
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 cat "$SPRINT_PATH" | jq '.issues[] | select(.id == "<issue_id>")'
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `context.category`
@@ -41,8 +41,8 @@ Query external docs when using: library APIs, framework patterns, external servi
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: read-docs -> implement" >> .claude/claudesprint/project/current_issue.log
-echo "  Findings: <key findings>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: read-docs -> implement" >> .claudesprint/project/current_issue.log
+echo "  Findings: <key findings>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

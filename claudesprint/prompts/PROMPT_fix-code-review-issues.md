@@ -6,12 +6,12 @@ You are a **fix agent**. Fix blocking issues identified in code review.
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
 git diff --stat 2>/dev/null
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `current_failures` (issues to fix), `next_action` (first issue to address)
@@ -35,8 +35,8 @@ Extract: `current_failures` (issues to fix), `next_action` (first issue to addre
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-code-review-issues -> run-tests" >> .claude/claudesprint/project/current_issue.log
-echo "  Fixed: <issues fixed>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-code-review-issues -> run-tests" >> .claudesprint/project/current_issue.log
+echo "  Fixed: <issues fixed>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

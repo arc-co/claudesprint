@@ -1,6 +1,6 @@
 # Prompt Engineering
 
-ClaudeSprint's behavior is defined by prompt files in `.claude/claudesprint/prompts/`. Customizing these prompts allows you to tailor the workflow to your team's needs, coding standards, and project requirements.
+ClaudeSprint's behavior is defined by prompt files in `.claudesprint/prompts/`. Customizing these prompts allows you to tailor the workflow to your team's needs, coding standards, and project requirements.
 
 ## Prompt Architecture
 
@@ -353,7 +353,7 @@ Update current_issue.json with:
 
 ```bash
 # Make your prompt change
-vim .claude/claudesprint/prompts/PROMPT_implement.md
+vim .claudesprint/prompts/PROMPT_implement.md
 
 # Create test project
 mkdir /tmp/prompt-test
@@ -364,7 +364,7 @@ cd /tmp/prompt-test
 claudesprint run -n 3
 
 # Check behavior
-cat .claude/claudesprint/project/current_issue.log
+cat .claudesprint/project/current_issue.log
 ```
 
 ### A/B Testing

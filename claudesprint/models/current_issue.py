@@ -132,7 +132,7 @@ class FileChange(BaseModel):
 class CurrentIssue(BaseModel):
     """Current issue session context - replaces Handoff for the new sprint model.
 
-    Lives in: .claude/claudesprint/project/current_issue.json
+    Lives in: .claudesprint/project/current_issue.json
     """
 
     model_config = {
@@ -159,7 +159,7 @@ class CurrentIssue(BaseModel):
     sprint_path: str = Field(
         ...,
         min_length=1,
-        description="Path to the sprint.json file (e.g., .claude/claudesprint/sprints/SPEC_01/sprint.json)",
+        description="Path to the sprint.json file (e.g., .claudesprint/sprints/SPEC_01/sprint.json)",
     )
 
     # Issue context

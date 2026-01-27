@@ -6,7 +6,7 @@ Command: `claudesprint plan --spec SPEC_01.md`
 
 ## Tasks
 
-1. Read specs from `.claude/claudesprint/specs/`
+1. Read specs from `.claudesprint/specs/`
 2. Read existing sprint from `sprints/<spec_id>/sprint.json`
 3. Analyze codebase to understand current implementation
 4. Identify gaps between spec and implementation
@@ -34,7 +34,7 @@ Order by:
 
 ## Sprint Schema
 
-See `.claude/claudesprint/schemas/sprint.schema.json` for full schema.
+See `.claudesprint/schemas/sprint.schema.json` for full schema.
 
 ### Handling Existing Issues
 

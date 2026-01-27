@@ -6,11 +6,11 @@ You are a **coding agent**. Make minimal changes to implement the selected issue
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 cat "$SPRINT_PATH"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `current_failures`, `rationale`
@@ -42,8 +42,8 @@ If routed here from `run-tests`, `fix-tests`, or `browser-validation`:
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: implement -> write-tests" >> .claude/claudesprint/project/current_issue.log
-echo "  Changes: <files modified>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: implement -> write-tests" >> .claudesprint/project/current_issue.log
+echo "  Changes: <files modified>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

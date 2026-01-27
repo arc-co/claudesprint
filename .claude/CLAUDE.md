@@ -24,14 +24,17 @@ npm run validate      # All validation (typecheck + lint + test)
 
 ```
 .claude/
-├── claudesprint/
-│   ├── config/       # notifications.json, models.json, hooks.json, project.json
-│   ├── project/      # current_issue.json, current_issue.log (session data)
-│   ├── prompts/      # PROMPT_*.md workflow prompts
-│   ├── schemas/      # JSON schemas for validation
-│   ├── specs/        # Specification files
-│   └── sprints/      # Sprint files (one per spec)
-└── CLAUDE.md
+├── CLAUDE.md           # Project instructions
+├── skills/             # Custom skills
+└── example.settings.json
+
+.claudesprint/
+├── config/       # notifications.json, models.json, hooks.json, project.json
+├── project/      # current_issue.json, current_issue.log (session data)
+├── prompts/      # PROMPT_*.md workflow prompts (for overrides)
+├── specs/        # Specification files
+├── sprints/      # Sprint files (one per spec)
+└── state/        # Session state (sprint.lock)
 ```
 
 ## CLI Commands
@@ -50,11 +53,11 @@ claudesprint validate                  # Validate JSON files
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
 cat "$SPRINT_PATH"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Then execute ONLY the `next_action` in `current_issue.json`.

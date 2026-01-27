@@ -87,8 +87,8 @@ class TestCommonPromptInjection:
 
     def test_real_common_file_structure(self):
         """Test with the actual _common.md file from the project."""
-        # Find the real _common.md (tests/ -> claudesprint/ -> prompts/)
-        common_file = Path(__file__).parent.parent / "prompts" / "_common.md"
+        # Find the real _common.md (tests/ -> claudesprint/prompts/)
+        common_file = Path(__file__).parent.parent / "claudesprint" / "prompts" / "_common.md"
 
         if not common_file.exists():
             pytest.skip("_common.md not found in expected location")
@@ -109,7 +109,7 @@ class TestCommonPromptInjection:
 
     def test_injection_with_real_prompt(self):
         """Test injection with actual prompt and common files."""
-        prompts_dir = Path(__file__).parent.parent / "prompts"
+        prompts_dir = Path(__file__).parent.parent / "claudesprint" / "prompts"
         common_file = prompts_dir / "_common.md"
         prompt_file = prompts_dir / "PROMPT_implement.md"
 

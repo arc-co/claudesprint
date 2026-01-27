@@ -18,8 +18,8 @@ If NOT a git repo or nothing staged:
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+cat .claudesprint/project/current_issue.json
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 Extract: `issue_id`, `issue_title`, `changes`
@@ -64,9 +64,9 @@ Mark issue as completed:
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: commit-changes -> select-issue (ISSUE COMPLETE)" >> .claude/claudesprint/project/current_issue.log
-echo "  Commit: <short SHA>" >> .claude/claudesprint/project/current_issue.log
-echo "  Completed: <issue_id> - <issue_title>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: commit-changes -> select-issue (ISSUE COMPLETE)" >> .claudesprint/project/current_issue.log
+echo "  Commit: <short SHA>" >> .claudesprint/project/current_issue.log
+echo "  Completed: <issue_id> - <issue_title>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

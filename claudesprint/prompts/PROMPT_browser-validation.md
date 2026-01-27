@@ -25,25 +25,25 @@ If NO UI components, skip to code-review:
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
-cat .claude/claudesprint/config/project.json
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+cat .claudesprint/config/project.json
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Start Dev Server
 
 ```bash
-DEV_URL=$(cat .claude/claudesprint/config/project.json | jq -r '.dev_server.url')
+DEV_URL=$(cat .claudesprint/config/project.json | jq -r '.dev_server.url')
 curl -s "$DEV_URL" > /dev/null 2>&1 && echo "Server running" || echo "Server not running"
 ```
 
 If not running:
 ```bash
-START_CMD=$(cat .claude/claudesprint/config/project.json | jq -r '.dev_server.start_command')
-WAIT_SECS=$(cat .claude/claudesprint/config/project.json | jq -r '.dev_server.wait_seconds')
+START_CMD=$(cat .claudesprint/config/project.json | jq -r '.dev_server.start_command')
+WAIT_SECS=$(cat .claudesprint/config/project.json | jq -r '.dev_server.wait_seconds')
 $START_CMD &
 sleep $WAIT_SECS
 ```
@@ -86,8 +86,8 @@ For each UI acceptance criterion verify:
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: browser-validation -> <next>" >> .claude/claudesprint/project/current_issue.log
-echo "  Result: <PASS/FAIL/SKIP>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: browser-validation -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Result: <PASS/FAIL/SKIP>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

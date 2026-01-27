@@ -53,7 +53,7 @@ claudesprint doctor --verbose
 
 ### Configuring the Dev Server
 
-Edit `.claude/claudesprint/config/project.json`:
+Edit `.claudesprint/config/project.json`:
 
 ```json
 {
@@ -324,7 +324,7 @@ For issues that don't need browser testing, the step auto-skips based on categor
 Browser validation captures screenshots that serve as evidence of testing:
 
 ```
-.claude/claudesprint/project/
+.claudesprint/project/
 ├── screenshots/
 │   ├── feature-001/
 │   │   ├── 01-initial-page.png

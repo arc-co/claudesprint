@@ -1,6 +1,6 @@
 # Configuration
 
-ClaudeSprint is highly configurable to match your project's stack, testing requirements, and workflow preferences. All configuration lives in `.claude/claudesprint/config/`.
+ClaudeSprint is highly configurable to match your project's stack, testing requirements, and workflow preferences. All configuration lives in `.claudesprint/config/`.
 
 ## Configuration Files
 
@@ -17,7 +17,7 @@ The `hooks.json` file defines commands for testing, linting, and building. The `
 
 ### Location
 
-`.claude/claudesprint/config/hooks.json`
+`.claudesprint/config/hooks.json`
 
 ### Basic Configuration
 
@@ -153,7 +153,7 @@ The `project.json` file contains project-specific settings, primarily for browse
 
 ### Location
 
-`.claude/claudesprint/config/project.json`
+`.claudesprint/config/project.json`
 
 ### Configuration
 
@@ -225,7 +225,7 @@ The `models.json` file controls which Claude model is used for each workflow ste
 
 ### Location
 
-`.claude/claudesprint/config/models.json`
+`.claudesprint/config/models.json`
 
 ### Configuration
 
@@ -293,7 +293,7 @@ The `notifications.json` file configures alerts for workflow events.
 
 ### Location
 
-`.claude/claudesprint/config/notifications.json`
+`.claudesprint/config/notifications.json`
 
 ### Configuration
 

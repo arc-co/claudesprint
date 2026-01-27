@@ -99,61 +99,61 @@ class TestPathServiceLocalPaths:
     def test_config_dir(self) -> None:
         """Test config directory path."""
         paths = PathService(project_root="/project")
-        assert paths.config_dir == Path("/project/.claude/claudesprint")
+        assert paths.config_dir == Path("/project/.claudesprint")
 
     def test_project_dir(self) -> None:
         """Test project state directory path."""
         paths = PathService(project_root="/project")
-        assert paths.project_dir == Path("/project/.claude/claudesprint/project")
+        assert paths.project_dir == Path("/project/.claudesprint/project")
 
     def test_sprints_dir(self) -> None:
         """Test sprints directory path."""
         paths = PathService(project_root="/project")
-        assert paths.sprints_dir == Path("/project/.claude/claudesprint/sprints")
+        assert paths.sprints_dir == Path("/project/.claudesprint/sprints")
 
     def test_specs_dir(self) -> None:
         """Test specs directory path."""
         paths = PathService(project_root="/project")
-        assert paths.specs_dir == Path("/project/.claude/claudesprint/specs")
+        assert paths.specs_dir == Path("/project/.claudesprint/specs")
 
     def test_config_files_dir(self) -> None:
         """Test config files directory path."""
         paths = PathService(project_root="/project")
-        assert paths.config_files_dir == Path("/project/.claude/claudesprint/config")
+        assert paths.config_files_dir == Path("/project/.claudesprint/config")
 
     def test_current_issue_file(self) -> None:
         """Test current_issue.json path."""
         paths = PathService(project_root="/project")
         assert paths.current_issue_file == Path(
-            "/project/.claude/claudesprint/project/current_issue.json"
+            "/project/.claudesprint/project/current_issue.json"
         )
 
     def test_current_issue_log_file(self) -> None:
         """Test current_issue.log path."""
         paths = PathService(project_root="/project")
         assert paths.current_issue_log_file == Path(
-            "/project/.claude/claudesprint/project/current_issue.log"
+            "/project/.claudesprint/project/current_issue.log"
         )
 
     def test_lock_file(self) -> None:
         """Test lock file path."""
         paths = PathService(project_root="/project")
         assert paths.lock_file == Path(
-            "/project/.claude/claudesprint/project/.loop.lock"
+            "/project/.claudesprint/project/.loop.lock"
         )
 
     def test_notifications_file(self) -> None:
         """Test notifications config file path."""
         paths = PathService(project_root="/project")
         assert paths.notifications_file == Path(
-            "/project/.claude/claudesprint/config/notifications.json"
+            "/project/.claudesprint/config/notifications.json"
         )
 
     def test_models_file(self) -> None:
         """Test models config file path."""
         paths = PathService(project_root="/project")
         assert paths.models_file == Path(
-            "/project/.claude/claudesprint/config/models.json"
+            "/project/.claudesprint/config/models.json"
         )
 
     def test_sprint_lock_file(self) -> None:
@@ -171,14 +171,14 @@ class TestPathServiceSprintPaths:
         """Test getting sprint directory."""
         paths = PathService(project_root="/project")
         sprint_dir = paths.get_sprint_dir("SPEC_01")
-        assert sprint_dir == Path("/project/.claude/claudesprint/sprints/SPEC_01")
+        assert sprint_dir == Path("/project/.claudesprint/sprints/SPEC_01")
 
     def test_get_sprint_path(self) -> None:
         """Test getting sprint.json path."""
         paths = PathService(project_root="/project")
         sprint_path = paths.get_sprint_path("SPEC_01")
         assert sprint_path == Path(
-            "/project/.claude/claudesprint/sprints/SPEC_01/sprint.json"
+            "/project/.claudesprint/sprints/SPEC_01/sprint.json"
         )
 
 

@@ -19,9 +19,9 @@ If NOT a git repo:
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
+cat .claudesprint/project/current_issue.json
 git diff --stat 2>/dev/null
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Safety Check
@@ -69,8 +69,8 @@ git diff --staged --stat
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: stage-changes -> commit-changes" >> .claude/claudesprint/project/current_issue.log
-echo "  Staged: <file count>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: stage-changes -> commit-changes" >> .claudesprint/project/current_issue.log
+echo "  Staged: <file count>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

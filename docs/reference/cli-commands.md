@@ -109,7 +109,7 @@ Created directories:
 ✓ Claude hooks injected into .claude/settings.json
 
 Next steps:
-  1. Create a spec file in .claude/claudesprint/specs/
+  1. Create a spec file in .claudesprint/specs/
   2. Run: claudesprint init --spec <spec_file>
   3. Run: claudesprint run
 ```
@@ -132,7 +132,7 @@ Step: run-tests
 Retry Count: 0
 Goal: Implement increment button that increases count by 1
 
-Sprint: SPEC_01 (.claude/claudesprint/sprints/SPEC_01/sprint.json)
+Sprint: SPEC_01 (.claudesprint/sprints/SPEC_01/sprint.json)
   Total Issues: 4
   Completed: 2
   In Progress: 1
@@ -180,9 +180,9 @@ claudesprint init --spec SPEC_01.md --force
 
 ### Behavior
 
-1. Reads specification from `.claude/claudesprint/specs/<spec_file>`
+1. Reads specification from `.claudesprint/specs/<spec_file>`
 2. Creates git branch `sprint/<spec_id>` (if git repo)
-3. Creates sprint file at `.claude/claudesprint/sprints/<spec_id>/sprint.json`
+3. Creates sprint file at `.claudesprint/sprints/<spec_id>/sprint.json`
 4. Parses spec into issues with acceptance criteria
 5. Sets all issues to `pending` status
 
@@ -191,7 +191,7 @@ claudesprint init --spec SPEC_01.md --force
 ```
 Initializing sprint from SPEC_01.md...
 Created branch: sprint/SPEC_01
-Created sprint file: .claude/claudesprint/sprints/SPEC_01/sprint.json
+Created sprint file: .claudesprint/sprints/SPEC_01/sprint.json
 
 Sprint initialized with 4 issues:
   - setup-001: Project Setup (critical)
@@ -227,7 +227,7 @@ claudesprint run
 claudesprint run -n 10
 
 # Run specific sprint
-claudesprint run --sprint .claude/claudesprint/sprints/SPEC_01/sprint.json
+claudesprint run --sprint .claudesprint/sprints/SPEC_01/sprint.json
 ```
 
 ### Behavior
@@ -307,12 +307,12 @@ Available Sprints
 =================
 
 SPEC_01 - Counter Application
-  Path: .claude/claudesprint/sprints/SPEC_01/sprint.json
+  Path: .claudesprint/sprints/SPEC_01/sprint.json
   Status: In Progress (2/4 complete)
   Branch: sprint/SPEC_01
 
 SPEC_02 - User Authentication
-  Path: .claude/claudesprint/sprints/SPEC_02/sprint.json
+  Path: .claudesprint/sprints/SPEC_02/sprint.json
   Status: Not Started (0/6 complete)
   Branch: sprint/SPEC_02
 ```
@@ -657,7 +657,7 @@ claudesprint run     # Continue
 ```bash
 claudesprint status  # Check current_failures
 # Fix the issue manually
-jq '.retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 claudesprint run
 ```
 
@@ -672,7 +672,7 @@ claudesprint run
 
 ```bash
 claudesprint reset --hard
-rm .claude/claudesprint/sprints/SPEC_01/sprint.json
+rm .claudesprint/sprints/SPEC_01/sprint.json
 claudesprint init --spec SPEC_01.md
 claudesprint run
 ```

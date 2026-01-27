@@ -10,12 +10,12 @@ If `current_failures` non-empty, set `step` back to `code-review` and exit.
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+cat .claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
 ls -la docs/ 2>/dev/null || echo "No docs directory"
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Skip Docs Update If ALL True:
@@ -63,8 +63,8 @@ Guidelines: Clear language, code examples where helpful, follow existing style, 
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: update-docs -> stage-changes" >> .claude/claudesprint/project/current_issue.log
-echo "  Docs: <updated/skipped>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: update-docs -> stage-changes" >> .claudesprint/project/current_issue.log
+echo "  Docs: <updated/skipped>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

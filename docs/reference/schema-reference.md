@@ -8,7 +8,7 @@ The sprint file defines all issues for a specification and tracks their status.
 
 ### Location
 
-`.claude/claudesprint/sprints/<SPEC_ID>/sprint.json`
+`.claudesprint/sprints/<SPEC_ID>/sprint.json`
 
 ### Full Schema
 
@@ -195,7 +195,7 @@ Computed from issues array. Updated when issues change status.
 {
   "schema_version": "2.0",
   "spec_id": "SPEC_01",
-  "spec_file": ".claude/claudesprint/specs/SPEC_01.md",
+  "spec_file": ".claudesprint/specs/SPEC_01.md",
   "description": "Counter Application MVP",
   "issues": [
     {
@@ -258,7 +258,7 @@ The current issue file contains all context for the active workflow step.
 
 ### Location
 
-`.claude/claudesprint/project/current_issue.json`
+`.claudesprint/project/current_issue.json`
 
 ### Full Schema
 
@@ -444,7 +444,7 @@ The current issue file contains all context for the active workflow step.
   "schema_version": "2.0",
   "session_id": "2026-01-23T10:45:00Z/implement",
   "timestamp": "2026-01-23T10:45:00Z",
-  "sprint_path": ".claude/claudesprint/sprints/SPEC_01/sprint.json",
+  "sprint_path": ".claudesprint/sprints/SPEC_01/sprint.json",
   "issue_id": "feature-001",
   "issue_title": "Counter Display",
   "step": "implement",
@@ -477,10 +477,12 @@ The current issue file contains all context for the active workflow step.
 
 ## Schema Files
 
-The actual JSON Schema files are located at:
+The JSON Schema files are bundled with the Python package at:
 
-- `.claude/claudesprint/schemas/sprint.schema.json`
-- `.claude/claudesprint/schemas/current_issue.schema.json`
+- `claudesprint/schemas/sprint.schema.json`
+- `claudesprint/schemas/current_issue.schema.json`
+
+These are accessed programmatically via `PathService.get_schema_content()` and are not user-editable.
 
 ### Validating Against Schemas
 
@@ -489,8 +491,8 @@ The actual JSON Schema files are located at:
 claudesprint validate
 
 # Using jq (manual validation)
-jq empty .claude/claudesprint/sprints/SPEC_01/sprint.json
-jq empty .claude/claudesprint/project/current_issue.json
+jq empty .claudesprint/sprints/SPEC_01/sprint.json
+jq empty .claudesprint/project/current_issue.json
 ```
 
 ### Common Validation Errors

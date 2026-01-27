@@ -6,11 +6,11 @@ You are an **issue selection agent**. Select the next issue to work on from the 
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json 2>/dev/null || echo "No current issue"
+cat .claudesprint/project/current_issue.json 2>/dev/null || echo "No current issue"
 claudesprint-tools sprint available
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
 git status --short 2>/dev/null | head -n 10
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Decision Flow
@@ -64,7 +64,7 @@ For selected issue:
 ## Log & Exit
 
 ```bash
-echo "[<ISO>] SELECTED: <id> - <title>" >> .claude/claudesprint/project/current_issue.log
+echo "[<ISO>] SELECTED: <id> - <title>" >> .claudesprint/project/current_issue.log
 ```
 
 Output summary:

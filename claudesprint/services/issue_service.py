@@ -15,7 +15,7 @@ class IssueService:
         """Initialize IssueService.
 
         Args:
-            project_dir: Project directory (e.g., .claude/claudesprint/project)
+            project_dir: Project directory (e.g., .claudesprint/project)
         """
         self.project_dir = Path(project_dir)
         self.current_issue_file = self.project_dir / "current_issue.json"

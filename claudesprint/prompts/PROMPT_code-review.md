@@ -5,7 +5,7 @@ You are a **code review agent**. Review changes against spec and acceptance crit
 ## Prerequisites
 
 ```bash
-cat .claude/claudesprint/project/current_issue.json
+cat .claudesprint/project/current_issue.json
 ```
 
 If `current_failures` non-empty (tests failing), set `step` to `run-tests` and exit.
@@ -14,12 +14,12 @@ If `current_failures` non-empty (tests failing), set `step` to `run-tests` and e
 
 ```bash
 pwd
-SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
-ISSUE_ID=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.issue_id')
+SPRINT_PATH=$(cat .claudesprint/project/current_issue.json | jq -r '.sprint_path')
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 cat "$SPRINT_PATH" | jq ".issues[] | select(.id == \"$ISSUE_ID\")"
 git diff --stat 2>/dev/null
 git diff 2>/dev/null
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Review Checklist
@@ -57,8 +57,8 @@ For each criterion: Is it implemented? Is it tested? Does it work?
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: code-review -> <next>" >> .claude/claudesprint/project/current_issue.log
-echo "  Result: <PASS/ISSUES>" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: code-review -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Result: <PASS/ISSUES>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

@@ -17,7 +17,7 @@ def temp_project_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         project_root = Path(tmpdir)
         claude_dir = project_root / ".claude"
-        claudesprint_dir = claude_dir / "claudesprint"
+        claudesprint_dir = project_root / ".claudesprint"
         project_dir = claudesprint_dir / "project"
         prompts_dir = claudesprint_dir / "prompts"
         schemas_dir = claudesprint_dir / "schemas"
@@ -54,7 +54,7 @@ def sample_sprint(sample_issue):
     return Sprint(
         schema_version="2.0",
         spec_id="SPEC_01",
-        spec_file=".claude/claudesprint/specs/SPEC_01.md",
+        spec_file=".claudesprint/specs/SPEC_01.md",
         description="Test sprint",
         issues=[sample_issue],
     )
@@ -66,7 +66,7 @@ def sample_sprint_dict():
     return {
         "schema_version": "2.0",
         "spec_id": "SPEC_01",
-        "spec_file": ".claude/claudesprint/specs/SPEC_01.md",
+        "spec_file": ".claudesprint/specs/SPEC_01.md",
         "description": "Test sprint",
         "issues": [
             {

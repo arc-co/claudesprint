@@ -6,15 +6,15 @@ You are a **test execution agent**. Run the test suite and report results.
 
 ```bash
 pwd
-cat .claude/claudesprint/project/current_issue.json
-cat .claude/claudesprint/config/hooks.json
-tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+cat .claudesprint/project/current_issue.json
+cat .claudesprint/config/hooks.json
+tail -n 15 .claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
 ```
 
 ## Run Tests
 
 ```bash
-VALIDATE_CMD=$(cat .claude/claudesprint/config/hooks.json | jq -r '.validate.command')
+VALIDATE_CMD=$(cat .claudesprint/config/hooks.json | jq -r '.validate.command')
 $VALIDATE_CMD
 ```
 
@@ -52,7 +52,7 @@ If `retry_count` > 5, add: "Multiple retries failed - may need human interventio
 ## Log & Exit
 
 ```bash
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: run-tests -> <next> (<PASS/FAIL>)" >> .claude/claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: run-tests -> <next> (<PASS/FAIL>)" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

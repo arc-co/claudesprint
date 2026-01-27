@@ -29,13 +29,13 @@ ClaudeSprint inverts this: **nothing is remembered between sessions**. Each step
 
 The sprint file is the source of truth for the entire project sprint. It's created by `claudesprint init` and updated as issues complete.
 
-Location: `.claude/claudesprint/sprints/<SPEC_ID>/sprint.json`
+Location: `.claudesprint/sprints/<SPEC_ID>/sprint.json`
 
 ```json
 {
   "schema_version": "2.0",
   "spec_id": "SPEC_01",
-  "spec_file": ".claude/claudesprint/specs/SPEC_01.md",
+  "spec_file": ".claudesprint/specs/SPEC_01.md",
   "description": "Counter Application MVP",
 
   "issues": [
@@ -130,7 +130,7 @@ Changing acceptance criteria requires an explicit planning step, not mid-impleme
 
 The current issue file contains all context needed for the current step. It's the "baton" passed between sessions.
 
-Location: `.claude/claudesprint/project/current_issue.json`
+Location: `.claudesprint/project/current_issue.json`
 
 ```json
 {
@@ -138,7 +138,7 @@ Location: `.claude/claudesprint/project/current_issue.json`
   "session_id": "2026-01-23T10:45:00Z/implement",
   "timestamp": "2026-01-23T10:45:00Z",
 
-  "sprint_path": ".claude/claudesprint/sprints/SPEC_01/sprint.json",
+  "sprint_path": ".claudesprint/sprints/SPEC_01/sprint.json",
   "issue_id": "feature-001",
   "issue_title": "Counter Display",
 
@@ -200,7 +200,7 @@ Location: `.claude/claudesprint/project/current_issue.json`
 
 An append-only log of workflow activity. The last 20 entries are injected into agent context for visibility into recent history.
 
-Location: `.claude/claudesprint/project/current_issue.log`
+Location: `.claudesprint/project/current_issue.log`
 
 ```
 2026-01-23T10:35:00Z [select-issue] Selected issue feature-001: Counter Display
@@ -278,8 +278,9 @@ After:
 All state files are validated against JSON schemas before use.
 
 ### Schema Locations
-- `sprint.json`: `.claude/claudesprint/schemas/sprint.schema.json`
-- `current_issue.json`: `.claude/claudesprint/schemas/current_issue.schema.json`
+Schemas are bundled with the Python package (not user-editable):
+- `sprint.json`: `claudesprint/schemas/sprint.schema.json`
+- `current_issue.json`: `claudesprint/schemas/current_issue.schema.json`
 
 ### Validation Command
 
@@ -325,13 +326,13 @@ If you need to understand what happened:
 
 ```bash
 # View recent log
-tail -50 .claude/claudesprint/project/current_issue.log
+tail -50 .claudesprint/project/current_issue.log
 
 # View current issue state
-cat .claude/claudesprint/project/current_issue.json | jq .
+cat .claudesprint/project/current_issue.json | jq .
 
 # View sprint state
-cat .claude/claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[] | {id, status}'
+cat .claudesprint/sprints/SPEC_01/sprint.json | jq '.issues[] | {id, status}'
 ```
 
 ### Manual State Edits
@@ -340,13 +341,13 @@ Sometimes you need to manually fix state:
 
 ```bash
 # Reset retry count
-jq '.retry_count = 0' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.retry_count = 0' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 
 # Force step change
-jq '.step = "implement"' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.step = "implement"' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 
 # Clear failures
-jq '.current_failures = ""' .claude/claudesprint/project/current_issue.json > tmp && mv tmp .claude/claudesprint/project/current_issue.json
+jq '.current_failures = ""' .claudesprint/project/current_issue.json > tmp && mv tmp .claudesprint/project/current_issue.json
 ```
 
 Always run `claudesprint validate` after manual edits.

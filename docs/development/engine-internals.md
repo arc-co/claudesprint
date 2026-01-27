@@ -135,8 +135,8 @@ class CurrentIssue:
 
 class StateManager:
     def __init__(self, project_dir: Path = None):
-        self.project_dir = project_dir or Path('.claude/claudesprint/project')
-        self.sprints_dir = Path('.claude/claudesprint/sprints')
+        self.project_dir = project_dir or Path('.claudesprint/project')
+        self.sprints_dir = Path('.claudesprint/sprints')
 
     def load_current_issue(self) -> Optional[CurrentIssue]:
         """Load current issue state."""
@@ -196,7 +196,7 @@ class HookConfig:
 
 class HookRunner:
     def __init__(self, config_path: Path = None):
-        self.config_path = config_path or Path('.claude/claudesprint/config/hooks.json')
+        self.config_path = config_path or Path('.claudesprint/config/hooks.json')
         self.config = self._load_config()
 
     def run(self, hook_name: str) -> HookResult:
@@ -252,7 +252,7 @@ import json
 
 class Notifier:
     def __init__(self, config_path: Path = None):
-        self.config_path = config_path or Path('.claude/claudesprint/config/notifications.json')
+        self.config_path = config_path or Path('.claudesprint/config/notifications.json')
         self.config = self._load_config()
 
     def send(self, event: str, message: str) -> bool:
@@ -389,7 +389,7 @@ flowchart TB
 ```python
 def _load_prompt(self, step: str) -> str:
     """Load and prepare prompt for a step."""
-    prompt_path = Path(f'.claude/claudesprint/prompts/PROMPT_{step}.md')
+    prompt_path = Path(f'.claudesprint/prompts/PROMPT_{step}.md')
 
     if not prompt_path.exists():
         raise ValueError(f"No prompt for step: {step}")
@@ -472,7 +472,7 @@ def recover_from_crash(self):
 ```python
 class ConfigLoader:
     def __init__(self, config_dir: Path = None):
-        self.config_dir = config_dir or Path('.claude/claudesprint/config')
+        self.config_dir = config_dir or Path('.claudesprint/config')
 
     def load_hooks(self) -> Dict[str, HookConfig]:
         return self._load_json('hooks.json')

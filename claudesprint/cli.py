@@ -249,7 +249,7 @@ def init_project(
 ) -> None:
     """Initialize a new sprint from a spec file.
 
-    Creates a new sprint.json in .claude/claudesprint/sprints/<spec_id>/ and invokes
+    Creates a new sprint.json in .claudesprint/sprints/<spec_id>/ and invokes
     the init agent to populate it with issues from the spec.
     """
     project_root = get_project_root()
@@ -258,7 +258,7 @@ def init_project(
     # Find spec file
     spec_path = Path(spec)
     if not spec_path.exists():
-        # Try looking in .claude/claudesprint/specs/
+        # Try looking in .claudesprint/specs/
         spec_path = Path(config.specs_dir) / spec
         if not spec_path.exists():
             # Try adding .md extension
@@ -268,8 +268,8 @@ def init_project(
         console.print(f"[red]Spec file not found: {spec}[/red]")
         console.print("Looked in:")
         console.print(f"  • {spec}")
-        console.print(f"  • .claude/claudesprint/specs/{spec}")
-        console.print(f"  • .claude/claudesprint/specs/{spec}.md")
+        console.print(f"  • .claudesprint/specs/{spec}")
+        console.print(f"  • .claudesprint/specs/{spec}.md")
         raise typer.Exit(1)
 
     sprint_service = SprintService(config.sprints_dir)
