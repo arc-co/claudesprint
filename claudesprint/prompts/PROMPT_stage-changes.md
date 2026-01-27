@@ -15,6 +15,15 @@ If NOT a git repo:
 - Add to `rationale`: "Skipped staging: not a git repository"
 - Exit
 
+## Check Baseline Dirty Files
+
+```bash
+cat .claudesprint/project/baseline_dirty.json 2>/dev/null || echo "No baseline"
+```
+
+If `baseline_dirty.json` exists, it contains files that were dirty BEFORE the workflow started.
+**NEVER stage files listed in baseline_dirty.json** - these belong to the user, not this workflow.
+
 ## Get Bearings
 
 ```bash
@@ -77,4 +86,5 @@ echo "  Staged: <file count>" >> .claudesprint/project/current_issue.log
 - Do NOT use `git add -A` or `git add .`
 - Do NOT commit
 - Do NOT stage sensitive files
-- Stage only files related to the issue
+- Do NOT stage files listed in `.claudesprint/project/baseline_dirty.json`
+- Stage only files related to the issue that were created/modified during this workflow

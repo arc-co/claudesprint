@@ -147,6 +147,37 @@ def _run_sprint_console(
         console.print(f"[red]Failed to parse sprint file: {sprint_path}[/red]")
         raise typer.Exit(1)
 
+    # Pre-flight git check: warn if working directory has uncommitted changes
+    git_service = GitService(project_root)
+    git_status = git_service.get_status()
+    baseline_dirty_path = config.project_dir / "baseline_dirty.json"
+
+    if git_status.is_repo and git_status.dirty:
+        dirty_files = git_service.get_dirty_files()
+        console.print("[yellow]Warning: Working directory has uncommitted changes:[/yellow]")
+        for f in sorted(dirty_files)[:10]:
+            console.print(f"  [dim]{f}[/dim]")
+        if len(dirty_files) > 10:
+            console.print(f"  [dim]... and {len(dirty_files) - 10} more[/dim]")
+        console.print("")
+        console.print("[yellow]These files will be excluded from agent commits.[/yellow]")
+        console.print("Recommended: stash or commit your changes first:")
+        console.print("  [dim]git stash push -m 'WIP before claudesprint'[/dim]")
+        console.print("")
+
+        if not typer.confirm("Continue anyway?", default=False):
+            console.print("[dim]Aborted. Commit or stash your changes and try again.[/dim]")
+            raise typer.Exit(0)
+
+        # Save baseline dirty files for agent to reference
+        git_service.save_baseline_dirty_files(baseline_dirty_path)
+        console.print(f"[dim]Baseline saved to {baseline_dirty_path}[/dim]")
+        console.print("")
+    else:
+        # Clean state - remove any stale baseline file
+        if baseline_dirty_path.exists():
+            baseline_dirty_path.unlink()
+
     # Create dashboard with initial sprint info
     dashboard = WorkflowDashboard()
     stats = sprint.get_stats()

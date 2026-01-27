@@ -2,6 +2,7 @@
 
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -83,6 +84,78 @@ class GitService:
 
         success, output, _ = self._run("diff", "--stat")
         return output if success else ""
+
+    def get_dirty_files(self) -> set[str]:
+        """Get set of files with uncommitted changes (staged or unstaged).
+
+        Returns file paths relative to repo root. Handles renamed files
+        by including both old and new paths.
+        """
+        if not self.is_repo():
+            return set()
+
+        # Run git status --porcelain directly without using _run to preserve
+        # leading whitespace which is significant in the output format
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0 or not result.stdout:
+                return set()
+            output = result.stdout
+        except (subprocess.TimeoutExpired, Exception):
+            return set()
+
+        dirty_files: set[str] = set()
+        for line in output.splitlines():
+            if not line or len(line) < 4:
+                continue
+            # Format: "XY filename" where XY is 2 chars followed by space
+            # Examples: " M README.md", "?? new.txt", "A  staged.txt"
+            # Position 0-1: status codes, position 2: space, position 3+: filename
+            file_part = line[3:]
+            # Handle quoted paths (git quotes paths with special chars)
+            if file_part.startswith('"') and file_part.endswith('"'):
+                file_part = file_part[1:-1]
+            # Handle renames: "old -> new"
+            if " -> " in file_part:
+                old, new = file_part.split(" -> ", 1)
+                dirty_files.add(old.strip().strip('"'))
+                dirty_files.add(new.strip().strip('"'))
+            else:
+                dirty_files.add(file_part)
+
+        return dirty_files
+
+    def save_baseline_dirty_files(self, output_path: Path) -> set[str]:
+        """Save current dirty files to a JSON file for later reference.
+
+        Args:
+            output_path: Path to write the baseline JSON file
+
+        Returns:
+            Set of dirty file paths that were saved
+        """
+        dirty_files = self.get_dirty_files()
+        import json
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            json.dump(
+                {
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "files": sorted(dirty_files),
+                    "description": "Files that were dirty before claudesprint started. "
+                    "These should NOT be staged or committed by the agent.",
+                },
+                f,
+                indent=2,
+            )
+        return dirty_files
 
     # Branch operations (new for sprint model)
 
