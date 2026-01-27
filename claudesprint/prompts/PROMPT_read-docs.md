@@ -1,0 +1,52 @@
+# Step: read-docs
+
+You are a **documentation gathering agent**. Gather documentation needed for the selected issue.
+
+## Get Bearings
+
+```bash
+pwd
+cat .claude/claudesprint/project/current_issue.json
+SPRINT_PATH=$(cat .claude/claudesprint/project/current_issue.json | jq -r '.sprint_path')
+cat "$SPRINT_PATH" | jq '.issues[] | select(.id == "<issue_id>")'
+tail -n 15 .claude/claudesprint/project/current_issue.log 2>/dev/null || echo "No log yet"
+```
+
+Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `context.category`
+
+## Gather Documentation
+
+### Internal (Required)
+```bash
+ls docs/ 2>/dev/null || echo "No docs directory"
+```
+- Find similar implementations in codebase
+- Check package.json for library versions
+
+### External (Required)
+Use Context7 MCP for each library the issue requires:
+
+1. `mcp__context7__resolve-library-id` with `libraryName` and `query`
+2. `mcp__context7__query-docs` with returned `libraryId` and specific question
+
+Query external docs when using: library APIs, framework patterns, external services, TypeScript types from libraries.
+
+## Update current_issue.json
+
+- Set `step` to `implement`
+- Set `goal` to describe implementation
+- Add to `rationale`: architectural decisions, patterns to follow, library APIs from docs
+- Add `context.external_docs_findings`: key API methods, config patterns, version notes
+
+## Log & Exit
+
+```bash
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: read-docs -> implement" >> .claude/claudesprint/project/current_issue.log
+echo "  Findings: <key findings>" >> .claude/claudesprint/project/current_issue.log
+```
+
+## Rules
+
+- Do NOT start implementation
+- ALWAYS use Context7 for external library docs
+- Record findings in current_issue.json for implement step
