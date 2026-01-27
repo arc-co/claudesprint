@@ -19,6 +19,7 @@ from claudesprint.models.sprint import Sprint, Issue, ResolvedConfig
 from claudesprint.services.git_service import GitService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.issue_service import IssueService
+from claudesprint.services.global_config_service import GlobalConfigService
 from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MODELS
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.ui import WorkflowDashboard
@@ -765,6 +766,113 @@ def reset_sprint(
         console.print("Run 'claudesprint run' to start fresh.")
     else:
         console.print("[yellow]No current issue to clear.[/yellow]")
+
+
+# Config command group for global configuration
+config_app = typer.Typer(
+    name="config",
+    help="Manage global user configuration",
+)
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("path")
+def config_path() -> None:
+    """Show the global config file location."""
+    service = GlobalConfigService()
+    console.print(f"[bold]Config file:[/bold] {service.config_path}")
+    if service.exists():
+        console.print("[green]✓ File exists[/green]")
+    else:
+        console.print("[dim]File does not exist. Run 'claudesprint config init' to create it.[/dim]")
+
+
+@config_app.command("init")
+def config_init(
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing config file"),
+    ] = False,
+) -> None:
+    """Create the default global config file."""
+    service = GlobalConfigService()
+
+    if service.exists() and not force:
+        console.print(f"[yellow]Config file already exists: {service.config_path}[/yellow]")
+        console.print("Use --force to overwrite.")
+        raise typer.Exit(1)
+
+    if service.init_config(overwrite=force):
+        console.print(f"[green]✓ Created config file: {service.config_path}[/green]")
+    else:
+        console.print("[red]✗ Failed to create config file[/red]")
+        raise typer.Exit(1)
+
+
+@config_app.command("show")
+def config_show() -> None:
+    """Display current global configuration."""
+    service = GlobalConfigService()
+
+    if not service.exists():
+        console.print(f"[yellow]Config file not found: {service.config_path}[/yellow]")
+        console.print("Run 'claudesprint config init' to create it.")
+        console.print("")
+        console.print("[dim]Using built-in defaults:[/dim]")
+
+    config = service.load()
+    console.print(Panel.fit("Global Configuration", style="bold blue"))
+    console.print("")
+
+    # Display as formatted sections
+    console.print("[bold]\\[defaults][/bold]")
+    console.print(f"  model = {config.defaults.model!r}")
+    console.print(f"  max_retry = {config.defaults.max_retry}")
+    console.print(f"  claude_timeout = {config.defaults.claude_timeout}")
+    console.print(f"  total_timeout = {config.defaults.total_timeout}")
+    console.print("")
+
+    console.print("[bold]\\[rate_limiting][/bold]")
+    console.print(f"  retries = {config.rate_limiting.retries}")
+    console.print(f"  base_wait = {config.rate_limiting.base_wait}")
+    console.print(f"  max_wait = {config.rate_limiting.max_wait}")
+    console.print("")
+
+    console.print("[bold]\\[heartbeat][/bold]")
+    console.print(f"  enabled = {str(config.heartbeat.enabled).lower()}")
+    console.print(f"  timeout = {config.heartbeat.timeout}")
+    console.print("")
+
+    console.print("[bold]\\[debug][/bold]")
+    console.print(f"  conversations = {str(config.debug.conversations).lower()}")
+    console.print(f"  max_rationale = {config.debug.max_rationale}")
+
+
+@config_app.command("edit")
+def config_edit() -> None:
+    """Open global config file in $EDITOR."""
+    import subprocess
+
+    service = GlobalConfigService()
+
+    if not service.exists():
+        console.print(f"[yellow]Config file not found: {service.config_path}[/yellow]")
+        console.print("Creating default config file...")
+        if not service.init_config():
+            console.print("[red]✗ Failed to create config file[/red]")
+            raise typer.Exit(1)
+        console.print(f"[green]✓ Created: {service.config_path}[/green]")
+
+    editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "vim"))
+    try:
+        subprocess.run([editor, str(service.config_path)], check=True)
+    except FileNotFoundError:
+        console.print(f"[red]Editor not found: {editor}[/red]")
+        console.print("Set the EDITOR environment variable to your preferred editor.")
+        raise typer.Exit(1)
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Editor exited with error: {e.returncode}[/red]")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

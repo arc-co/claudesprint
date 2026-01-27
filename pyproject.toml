@@ -33,6 +33,8 @@ dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.0.0",
     "httpx>=0.28.0",
+    "tomli>=2.0.0;python_version<'3.11'",  # TOML parser (backport for 3.10)
+    "tomli-w>=1.0.0",  # TOML writer
 ]
 
 [project.optional-dependencies]
