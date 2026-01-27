@@ -768,6 +768,59 @@ def reset_sprint(
         console.print("[yellow]No current issue to clear.[/yellow]")
 
 
+@app.command("initrepo")
+def init_repo(
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Reinitialize even if .claudesprint/ exists"),
+    ] = False,
+) -> None:
+    """Initialize .claudesprint/ directory in the current repository.
+
+    Creates the following structure:
+      .claudesprint/
+        state/          - Session state files
+        prompts/        - Custom prompt overrides
+          README.md     - Documentation for prompt overrides
+
+    Also adds .claudesprint/ to .gitignore.
+    """
+    from claudesprint.services.init_repo_service import InitRepoService
+
+    project_root = Path.cwd()
+    service = InitRepoService(project_root)
+
+    result = service.init(force=force)
+
+    # Show warnings first
+    for warning in result.warnings:
+        console.print(f"[yellow]Warning: {warning}[/yellow]")
+
+    if not result.success:
+        console.print(f"[red]Error: {result.error}[/red]")
+        raise typer.Exit(1)
+
+    # Show what was created
+    console.print("[green]✓ Initialized .claudesprint/ directory[/green]")
+    console.print("")
+
+    if result.created_dirs:
+        console.print("[bold]Created directories:[/bold]")
+        for dir_path in result.created_dirs:
+            console.print(f"  {dir_path}")
+
+    if result.created_files:
+        console.print("[bold]Created/updated files:[/bold]")
+        for file_path in result.created_files:
+            console.print(f"  {file_path}")
+
+    console.print("")
+    console.print("[bold]Next steps:[/bold]")
+    console.print("  1. Create a spec file in .claudesprint/specs/")
+    console.print("  2. Run: claudesprint init --spec <spec_file>")
+    console.print("  3. Run: claudesprint run")
+
+
 # Config command group for global configuration
 config_app = typer.Typer(
     name="config",
