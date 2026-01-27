@@ -23,6 +23,5 @@
       }
     }
   },
-  "postCreateCommand": "./setup.sh --no-venv",
   "remoteUser": "vscode"
 }

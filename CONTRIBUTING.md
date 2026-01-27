@@ -7,19 +7,19 @@ Thank you for your interest in contributing to ClaudeSprint. This guide explains
 ClaudeSprint has two distinct components:
 
 ```
-.claude/claudesprint/          # Core engine (the workflow system)
-.claude/claudesprint/specs/    # Example specifications
+.claudesprint/          # Core engine (the workflow system)
+.claudesprint/specs/    # Example specifications
 ```
 
-**Core Engine** (`/.claude/claudesprint/`): The Python package, prompts, schemas, and configuration that power the workflow.
+**Core Engine** (`/.claudesprint/`): The Python package, prompts, schemas, and configuration that power the workflow.
 
-**Example Specs** (`.claude/claudesprint/specs/examples/`): Sample specifications demonstrating how to use ClaudeSprint.
+**Example Specs** (`.claudesprint/specs/examples/`): Sample specifications demonstrating how to use ClaudeSprint.
 
 ## How to Contribute
 
 ### Contributing to the Core Engine
 
-The core engine lives in `.claude/claudesprint/`. If you want to improve the workflow system itself:
+The core engine lives in `.claudesprint/`. If you want to improve the workflow system itself:
 
 1. **Fork the repository** and create a feature branch
 2. **Make your changes** to the engine code
@@ -44,7 +44,7 @@ The core engine lives in `.claude/claudesprint/`. If you want to improve the wor
 
 Want to share a spec that demonstrates ClaudeSprint capabilities?
 
-1. Create your spec in `.claude/claudesprint/specs/examples/`
+1. Create your spec in `.claudesprint/specs/examples/`
 2. Ensure it follows the spec format (see existing examples)
 3. Test it with `claudesprint init` and `claudesprint run`
 4. Submit a PR with the spec and any supporting files
@@ -53,19 +53,19 @@ Want to share a spec that demonstrates ClaudeSprint capabilities?
 
 - Use GitHub Issues for bug reports and feature requests
 - Include ClaudeSprint version (`claudesprint --version`)
-- Include relevant logs from `.claude/claudesprint/project/current_issue.log`
+- Include relevant logs from `.claudesprint/project/current_issue.log`
 - Describe steps to reproduce
 
 ## Governance: Vendored vs. Modifiable Code
 
 ### For Users of ClaudeSprint
 
-The `.claude/claudesprint/` directory is designed as **vendored library code**. This means:
+The `.claudesprint/` directory is designed as **vendored library code**. This means:
 
 **Recommended approach:**
-- Treat `.claude/claudesprint/` as read-only in your projects
-- Configure behavior through `.claude/claudesprint/config/` files
-- Write your specs in `.claude/claudesprint/specs/`
+- Treat `.claudesprint/` as read-only in your projects
+- Configure behavior through `.claudesprint/config/` files
+- Write your specs in `.claudesprint/specs/`
 - Use the CLI interface (`claudesprint` commands)
 
 **When you might modify claudesprint:**
@@ -84,7 +84,7 @@ Since claudesprint is vendored, updates require manual effort:
 
 ```bash
 # Option 1: Replace entirely (loses local changes)
-rm -rf .claude/claudesprint
+rm -rf .claudesprint
 # Copy new version from upstream
 
 # Option 2: Merge updates (preserves local changes)
@@ -100,13 +100,15 @@ We recommend keeping claudesprint unmodified and submitting improvements as PRs.
 git clone https://github.com/your-org/claudesprint.git
 cd claudesprint
 
-# Run setup
-./setup.sh
-
-# Activate environment
+# Create virtual environment
+python3 -m venv .venv
 source .venv/bin/activate
 
+# Install package in development mode
+pip install -e ".[dev]"
+
 # Verify
+claudesprint doctor
 claudesprint status
 ```
 
@@ -114,7 +116,7 @@ claudesprint status
 
 ```bash
 # Run claudesprint's tests
-cd .claude/claudesprint
+cd .claudesprint
 pytest
 
 # Run with coverage

@@ -49,8 +49,8 @@ coverage/
 htmlcov/
 
 # ClaudeSprint workflow artifacts
-.claude/claudesprint/project/*.log
-.claude/claudesprint/project/*.tmp
+.claudesprint/project/*.log
+.claudesprint/project/*.tmp
 
 # MkDocs build output
-.claude/claudesprint/site/
+.claudesprint/site/
