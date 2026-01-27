@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - '.claude/claudesprint/docs/**'
-      - '.claude/claudesprint/mkdocs.yml'
+      - 'docs/**'
+      - 'mkdocs.yml'
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
@@ -25,6 +25,4 @@ jobs:
         run: pip install mkdocs mkdocs-material pymdown-extensions
 
       - name: Deploy to GitHub Pages
-        run: |
-          cd .claude/claudesprint
-          mkdocs gh-deploy --force
+        run: mkdocs gh-deploy --force
