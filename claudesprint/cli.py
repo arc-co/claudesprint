@@ -774,6 +774,10 @@ def init_repo(
         bool,
         typer.Option("--force", "-f", help="Reinitialize even if .claudesprint/ exists"),
     ] = False,
+    skip_hooks: Annotated[
+        bool,
+        typer.Option("--skip-hooks", help="Skip injecting Claude hooks into .claude/settings.json"),
+    ] = False,
 ) -> None:
     """Initialize .claudesprint/ directory in the current repository.
 
@@ -783,14 +787,15 @@ def init_repo(
         prompts/        - Custom prompt overrides
           README.md     - Documentation for prompt overrides
 
-    Also adds .claudesprint/ to .gitignore.
+    Also adds .claudesprint/ to .gitignore and injects ClaudeSprint hooks
+    into .claude/settings.json (unless --skip-hooks is specified).
     """
     from claudesprint.services.init_repo_service import InitRepoService
 
     project_root = Path.cwd()
     service = InitRepoService(project_root)
 
-    result = service.init(force=force)
+    result = service.init(force=force, inject_hooks=not skip_hooks)
 
     # Show warnings first
     for warning in result.warnings:
@@ -813,6 +818,16 @@ def init_repo(
         console.print("[bold]Created/updated files:[/bold]")
         for file_path in result.created_files:
             console.print(f"  {file_path}")
+
+    # Show hooks status
+    if not skip_hooks:
+        console.print("")
+        if result.hooks_injected:
+            console.print("[green]✓ Claude hooks injected into .claude/settings.json[/green]")
+            if result.hooks_backup_path:
+                console.print(f"  [dim]Backup created: {result.hooks_backup_path}[/dim]")
+        else:
+            console.print("[yellow]⚠ Claude hooks were not injected[/yellow]")
 
     console.print("")
     console.print("[bold]Next steps:[/bold]")
@@ -926,6 +941,49 @@ def config_edit() -> None:
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Editor exited with error: {e.returncode}[/red]")
         raise typer.Exit(1)
+
+
+@app.command("hook")
+def run_hook(
+    hook_type: Annotated[
+        str,
+        typer.Option("--type", "-t", help="Hook type: server-guard, browser-guard, autonomous-continue"),
+    ],
+) -> None:
+    """Execute a Claude hook handler.
+
+    This command is called by Claude Code hooks configured in .claude/settings.json.
+    It reads JSON input from stdin and exits with:
+    - 0: Allow the operation
+    - 2: Block the operation
+
+    Example:
+        echo '{"tool_input":{"command":"npm test"}}' | claudesprint hook --type server-guard
+    """
+    from claudesprint.services.claude_hook_service import (
+        ClaudeHookService,
+        HookInput,
+        HookType,
+    )
+
+    # Validate hook type
+    try:
+        hook_type_enum = HookType(hook_type)
+    except ValueError:
+        valid_types = ", ".join(t.value for t in list(HookType))
+        console.print(f"[red]Invalid hook type: {hook_type}[/red]", style="red")
+        console.print(f"Valid types: {valid_types}")
+        raise typer.Exit(1)
+
+    # Parse input from stdin
+    hook_input = HookInput.from_stdin()
+
+    # Execute hook
+    service = ClaudeHookService()
+    result = service.execute_hook(hook_type_enum, hook_input)
+
+    # Exit with appropriate code
+    raise typer.Exit(result.value)
 
 
 if __name__ == "__main__":

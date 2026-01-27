@@ -5,10 +5,7 @@ from pathlib import Path
 
 from claudesprint.services.constants import PROMPTS_README_CONTENT
 from claudesprint.services.git_service import GitService
-from claudesprint.services.project_config_service import (
-    DEFAULT_PROJECT_CONFIG_TOML,
-    ProjectConfigService,
-)
+from claudesprint.services.project_config_service import DEFAULT_PROJECT_CONFIG_TOML
 
 
 @dataclass
@@ -20,6 +17,8 @@ class InitRepoResult:
     created_files: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    hooks_injected: bool = False
+    hooks_backup_path: str | None = None
 
 
 class InitRepoService:
@@ -54,11 +53,12 @@ class InitRepoService:
         """
         return self.claudesprint_dir.exists()
 
-    def init(self, force: bool = False) -> InitRepoResult:
+    def init(self, force: bool = False, inject_hooks: bool = True) -> InitRepoResult:
         """Initialize the .claudesprint/ directory structure.
 
         Args:
             force: If True, overwrite existing README even if directory exists
+            inject_hooks: If True, inject ClaudeSprint hooks into .claude/settings.json
 
         Returns:
             InitRepoResult with details of what was created/modified
@@ -124,7 +124,49 @@ class InitRepoService:
                 error=f"Failed to create directory structure: {e}",
             )
 
+        # Inject hooks into .claude/settings.json
+        if inject_hooks:
+            hook_result = self._inject_hooks()
+            result.hooks_injected = hook_result.hooks_injected
+            result.hooks_backup_path = hook_result.hooks_backup_path
+            result.warnings.extend(hook_result.warnings)
+            if hook_result.settings_created:
+                result.created_files.append(".claude/settings.json")
+            elif hook_result.settings_updated:
+                result.created_files.append(".claude/settings.json (updated)")
+
         return result
+
+    def _inject_hooks(self) -> "HookInjectionInfo":
+        """Inject ClaudeSprint hooks into .claude/settings.json.
+
+        Returns:
+            HookInjectionInfo with operation details
+        """
+        from claudesprint.services.claude_settings_service import ClaudeSettingsService
+
+        info = HookInjectionInfo()
+        settings_service = ClaudeSettingsService(self.project_root)
+
+        # Check if settings.json already exists
+        settings_existed = settings_service.settings_exist()
+
+        # Inject hooks
+        hook_result = settings_service.inject_hooks()
+
+        if hook_result.success:
+            info.hooks_injected = True
+            info.hooks_backup_path = hook_result.backup_path
+            if settings_existed:
+                info.settings_updated = True
+            else:
+                info.settings_created = True
+        else:
+            if hook_result.error:
+                info.warnings.append(f"Hook injection failed: {hook_result.error}")
+            info.warnings.extend(hook_result.warnings)
+
+        return info
 
     def _update_gitignore(self) -> bool:
         """Update .gitignore to include .claudesprint/ entry.
@@ -154,3 +196,14 @@ class InitRepoService:
             # Create new .gitignore
             self.gitignore_path.write_text(f"{self.GITIGNORE_ENTRY}\n")
             return True
+
+
+@dataclass
+class HookInjectionInfo:
+    """Internal result of hook injection for InitRepoService."""
+
+    hooks_injected: bool = False
+    hooks_backup_path: str | None = None
+    settings_created: bool = False
+    settings_updated: bool = False
+    warnings: list[str] = field(default_factory=list)

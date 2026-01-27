@@ -1,0 +1,219 @@
+"""Tests for ClaudeHookService."""
+
+import io
+import sys
+from unittest.mock import patch
+
+import pytest
+
+from claudesprint.services.claude_hook_service import (
+    ClaudeHookService,
+    HookInput,
+    HookResult,
+    HookType,
+)
+
+
+class TestHookInput:
+    """Tests for HookInput parsing."""
+
+    def test_from_stdin_parses_valid_json(self) -> None:
+        """Test parsing valid JSON from stdin."""
+        json_input = '{"tool_name": "Bash", "tool_input": {"command": "npm test"}}'
+        with patch.object(sys, "stdin", io.StringIO(json_input)):
+            hook_input = HookInput.from_stdin()
+
+        assert hook_input.tool_name == "Bash"
+        assert hook_input.tool_input == {"command": "npm test"}
+
+    def test_from_stdin_handles_empty_input(self) -> None:
+        """Test handling empty stdin."""
+        with patch.object(sys, "stdin", io.StringIO("")):
+            hook_input = HookInput.from_stdin()
+
+        assert hook_input.tool_name is None
+        assert hook_input.tool_input is None
+
+    def test_from_stdin_handles_invalid_json(self) -> None:
+        """Test handling invalid JSON."""
+        with patch.object(sys, "stdin", io.StringIO("not valid json")):
+            hook_input = HookInput.from_stdin()
+
+        assert hook_input.tool_name is None
+        assert hook_input.tool_input is None
+
+    def test_from_stdin_handles_partial_data(self) -> None:
+        """Test handling JSON without all expected fields."""
+        json_input = '{"tool_name": "Bash"}'
+        with patch.object(sys, "stdin", io.StringIO(json_input)):
+            hook_input = HookInput.from_stdin()
+
+        assert hook_input.tool_name == "Bash"
+        assert hook_input.tool_input == {}
+
+
+class TestServerGuard:
+    """Tests for server-guard hook."""
+
+    def test_allows_normal_commands(self) -> None:
+        """Test that normal commands are allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "npm test"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_blocks_watch_flag(self) -> None:
+        """Test blocking commands with --watch flag."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "npm test --watch"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_blocks_watch_word(self) -> None:
+        """Test blocking commands with 'watch' keyword."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "npm run watch"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_blocks_interactive_git_rebase(self) -> None:
+        """Test blocking git rebase -i."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "git rebase -i HEAD~3"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_blocks_interactive_git_add(self) -> None:
+        """Test blocking git add -p."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "git add -p"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_allows_git_commit_with_message(self) -> None:
+        """Test allowing git commit with -m flag."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": 'git commit -m "fix: bug"'})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_blocks_git_commit_without_message(self) -> None:
+        """Test blocking git commit without -m (opens editor)."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "git commit"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_allows_empty_command(self) -> None:
+        """Test allowing empty command."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": ""})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_missing_command(self) -> None:
+        """Test allowing when command is missing."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_blocks_tail_follow(self) -> None:
+        """Test blocking tail -f commands."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "tail -f /var/log/syslog"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+
+class TestBrowserGuard:
+    """Tests for browser-guard hook."""
+
+    def test_allows_by_default(self) -> None:
+        """Test that browser-guard allows operations by default."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"skill": "agent-browser"})
+
+        result = service.execute_hook(HookType.BROWSER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+
+class TestAutonomousContinue:
+    """Tests for autonomous-continue hook."""
+
+    def test_allows_by_default(self) -> None:
+        """Test that autonomous-continue allows stop by default."""
+        service = ClaudeHookService()
+        hook_input = HookInput()
+
+        result = service.execute_hook(HookType.AUTONOMOUS_CONTINUE, hook_input)
+
+        assert result == HookResult.ALLOW
+
+
+class TestHelperMethods:
+    """Tests for helper methods."""
+
+    def test_is_watch_command(self) -> None:
+        """Test is_watch_command detection."""
+        service = ClaudeHookService()
+
+        assert service.is_watch_command("npm test --watch") is True
+        assert service.is_watch_command("npm run watch") is True
+        assert service.is_watch_command("npm test") is False
+
+    def test_is_interactive_git_command(self) -> None:
+        """Test is_interactive_git_command detection."""
+        service = ClaudeHookService()
+
+        assert service.is_interactive_git_command("git rebase -i main") is True
+        assert service.is_interactive_git_command("git add -p") is True
+        assert service.is_interactive_git_command("git add file.txt") is False
+
+    def test_is_server_command(self) -> None:
+        """Test is_server_command detection."""
+        service = ClaudeHookService()
+
+        assert service.is_server_command("npm run dev") is True
+        assert service.is_server_command("yarn start") is True
+        assert service.is_server_command("npm test") is False
+
+
+class TestHookTypes:
+    """Tests for HookType enum."""
+
+    def test_hook_type_values(self) -> None:
+        """Test hook type string values."""
+        assert HookType.SERVER_GUARD.value == "server-guard"
+        assert HookType.BROWSER_GUARD.value == "browser-guard"
+        assert HookType.AUTONOMOUS_CONTINUE.value == "autonomous-continue"
+
+
+class TestHookResult:
+    """Tests for HookResult enum."""
+
+    def test_hook_result_values(self) -> None:
+        """Test hook result exit code values."""
+        assert HookResult.ALLOW.value == 0
+        assert HookResult.BLOCK.value == 2
