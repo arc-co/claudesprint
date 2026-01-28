@@ -187,18 +187,18 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: my-custom-step -> next-step" >> .cl
 - [Important constraint]
 ```
 
-### Termination Tokens
+### Termination Tags
 
-Some steps use termination tokens to signal outcomes:
+Some steps use XML status tags to signal outcomes:
 
-| Token | Meaning |
-|-------|---------|
-| `STATUS: PASS` | Step completed successfully |
-| `STATUS: FAIL` | Step failed (generic) |
-| `STATUS: FAIL_CODE` | Code bug detected |
-| `STATUS: FAIL_TEST` | Test bug detected |
-| `STATUS: SKIP` | Step skipped (not applicable) |
-| `STATUS: ISSUES` | Issues found requiring fixes |
+| Tag | Meaning |
+|-----|---------|
+| `<status>pass</status>` | Step completed successfully |
+| `<status>fail</status>` | Step failed (generic) |
+| `<status>fail_code</status>` | Code bug detected |
+| `<status>fail_test</status>` | Test bug detected |
+| `<status>skip</status>` | Step skipped (not applicable) |
+| `<status>issues</status>` | Issues found requiring fixes |
 
 ## Common Customizations
 

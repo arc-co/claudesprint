@@ -61,8 +61,8 @@ echo "  Decision: <Fixed test: what was wrong OR Re-routing: test expects X, imp
 - Do NOT weaken tests to make them pass
 - If implementation wrong, re-route to `implement`
 
-## Termination Token (REQUIRED)
+## Termination Tag (REQUIRED)
 
-Last line must be exactly one of:
-- `STATUS: TEST_FIXED`
-- `STATUS: CODE_WRONG`
+End your response with exactly one of:
+- `<status>test_fixed</status>` - test was fixed, ready to re-run
+- `<status>code_wrong</status>` - code needs fixing, not the test

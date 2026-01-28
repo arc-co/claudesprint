@@ -65,8 +65,8 @@ echo "  Decision: <Code review passed: all AC verified OR blocking issues found>
 - Be objective - don't approve just to move forward
 - List ALL blocking issues
 
-## Termination Token (REQUIRED)
+## Termination Tag (REQUIRED)
 
-Last line must be exactly one of:
-- `STATUS: PASS`
-- `STATUS: ISSUES`
+End your response with exactly one of:
+- `<status>pass</status>` - code review passed
+- `<status>issues</status>` - blocking issues found

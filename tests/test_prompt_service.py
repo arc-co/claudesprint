@@ -301,7 +301,7 @@ class TestPromptServiceTemplateRendering:
 ## SKIP Section
 
 This is a multiline skip notice.
-STATUS: SKIP
+<status>skip</status>
 {% endif %}
 
 ## Main Content
@@ -314,7 +314,7 @@ Rest of prompt."""
 
         content = service.get_prompt_content("test")
         assert "## SKIP Section" in content
-        assert "STATUS: SKIP" in content
+        assert "<status>skip</status>" in content
         assert "## Main Content" in content
 
     def test_render_false_returns_raw(
