@@ -24,6 +24,32 @@ git diff 2>/dev/null
             ]]></commands>
         </phase>
 
+        <phase name="analyze_changes" required="true">
+            <description>CRITICAL: Output analysis BEFORE making any decisions:</description>
+            <format><![CDATA[
+<analysis>
+Issue: [issue_id] - [title]
+
+Changes Summary:
+- [file1]: [what changed]
+- [file2]: [what changed]
+
+Acceptance Criteria Check:
+- [AC1]: [IMPLEMENTED | MISSING | PARTIAL]
+- [AC2]: [IMPLEMENTED | MISSING | PARTIAL]
+
+Code Quality Assessment:
+- Follows existing patterns: [YES | NO - reason]
+- Error handling: [ADEQUATE | MISSING - where]
+- Security concerns: [NONE | FOUND - details]
+
+Test Coverage:
+- [test file]: covers [which AC]
+</analysis>
+            ]]></format>
+            <enforcement>Do NOT make pass/fail decision until analysis is output.</enforcement>
+        </phase>
+
         <phase name="review_checklist">
             <section name="acceptance_criteria">
                 <description>For each criterion:</description>

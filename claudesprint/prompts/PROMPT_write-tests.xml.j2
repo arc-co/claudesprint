@@ -42,10 +42,15 @@ git diff --stat 2>/dev/null
             </guidelines>
         </phase>
 
-        <phase name="update_current_issue_json">
-            <update field="step">run-tests</update>
-            <update field="goal">Describe test execution</update>
-            <update field="changes">Add: {"path": "&lt;test file&gt;", "summary": "&lt;tests added&gt;"}</update>
+        <phase name="update_state">
+            <description>Update state via CLI tools:</description>
+            <commands><![CDATA[
+# Record all test files created/modified
+claudesprint-tools issue change "<test_file>" "<tests added>"
+
+# Transition to next step
+claudesprint-tools issue step run-tests --goal="Run test suite to verify implementation"
+            ]]></commands>
         </phase>
 
         <phase name="log_and_exit">

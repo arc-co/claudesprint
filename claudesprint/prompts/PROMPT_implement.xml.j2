@@ -9,6 +9,28 @@
 {% endblock %}
 
 {% block instructions %}
+        <phase name="analyze_first" required="true">
+            <description>BEFORE any implementation, output your analysis:</description>
+            <format><![CDATA[
+<analysis>
+Issue: [issue_id] - [title]
+
+Acceptance Criteria:
+- [AC1]
+- [AC2]
+
+Current State:
+- [what exists]
+- [what's missing]
+
+Approach:
+- [implementation strategy]
+- [files to modify]
+</analysis>
+            ]]></format>
+            <enforcement>Do NOT write any code until analysis is complete.</enforcement>
+        </phase>
+
         <phase name="get_bearings">
             <commands><![CDATA[
 pwd
@@ -39,11 +61,16 @@ git log --oneline -5 2>/dev/null || echo "Not a git repo"
             </tasks>
         </phase>
 
-        <phase name="update_current_issue_json">
-            <update field="step">write-tests</update>
-            <update field="goal">Describe test writing objectives</update>
-            <update field="changes">Add: {"path": "&lt;file&gt;", "summary": "&lt;what changed&gt;"}</update>
-            <update field="current_failures">Clear if fixed</update>
+        <phase name="update_state">
+            <description>Update state via CLI tools:</description>
+            <commands><![CDATA[
+# Record all changed files
+claudesprint-tools issue change "<file1>" "<summary1>"
+claudesprint-tools issue change "<file2>" "<summary2>"
+
+# Transition to next step
+claudesprint-tools issue step write-tests --goal="Write tests for <feature>"
+            ]]></commands>
         </phase>
 
         <phase name="log_and_exit">

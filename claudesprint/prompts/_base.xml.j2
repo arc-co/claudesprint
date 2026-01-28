@@ -7,12 +7,24 @@
     <constraints>
         <rule priority="critical">Do NOT emit markdown chatter or unnecessary commentary.</rule>
         <rule priority="critical">Do NOT hallucinate file paths - verify paths exist before using them.</rule>
-        <rule priority="critical">Use claudesprint-tools for state updates when available.</rule>
+        <rule priority="critical">Use claudesprint-tools CLI for ALL state updates - never manually edit JSON.</rule>
         <rule priority="critical">ONLY use current_issue.json and sprint.json as context sources.</rule>
         <rule priority="high">Fail fast if required fields are missing.</rule>
         <rule priority="high">Execute one step completely, then update current_issue.json.</rule>
         {% block extra_constraints %}{% endblock %}
     </constraints>
+
+    <protocol name="analysis_first">
+        <description>Before taking ANY action, output your reasoning in analysis tags.</description>
+        <format><![CDATA[
+<analysis>
+1. Current state: [what you observe]
+2. Goal: [acceptance criteria being addressed]
+3. Approach: [how you will accomplish this]
+</analysis>
+        ]]></format>
+        <enforcement>Analysis MUST appear BEFORE any tool calls or code changes.</enforcement>
+    </protocol>
 
     <context>
         {% if sprint_json %}

@@ -34,33 +34,19 @@ git status --short 2>/dev/null | head -n 10
 
         <phase name="update_sprint_json">
             <description>For selected issue:</description>
-            <update field="status">Change to "in_progress"</update>
-            <update field="history">Add: {"timestamp": "&lt;ISO&gt;", "action": "started", "session_id": "&lt;id&gt;"}</update>
+            <commands><![CDATA[
+# Start the issue (updates sprint.json status to in_progress)
+claudesprint-tools sprint start <issue_id>
+            ]]></commands>
         </phase>
 
-        <phase name="update_current_issue_json">
-            <template><![CDATA[
-{
-  "schema_version": "2.0",
-  "session_id": "<ISO>/select-issue",
-  "timestamp": "<ISO>",
-  "sprint_path": "<path>",
-  "issue_id": "<id>",
-  "issue_title": "<title>",
-  "step": "read-docs",
-  "goal": "Gather documentation for: <title>",
-  "next_action": "Research requirements for: <title>",
-  "repo_state": {"git_head": "<SHA>", "dirty": <bool>},
-  "changes": [],
-  "commands_run": [],
-  "current_failures": "",
-  "retry_count": 0,
-  "context": {
-    "acceptance_criteria": "<from details>",
-    "category": "<category>"
-  }
-}
-            ]]></template>
+        <phase name="update_state">
+            <description>Initialize current_issue.json via CLI:</description>
+            <commands><![CDATA[
+# Initialize issue state for selected issue
+claudesprint-tools issue init <issue_id> --step=read-docs --goal="Gather documentation for: <title>"
+            ]]></commands>
+            <note>The init command creates the current_issue.json with proper schema.</note>
         </phase>
 
         <phase name="log_and_exit">

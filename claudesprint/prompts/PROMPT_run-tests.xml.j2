@@ -23,6 +23,29 @@ $VALIDATE_CMD
             <action>Capture output. If failures, record exact error messages and identify if failures are in implementation or tests.</action>
         </phase>
 
+        <phase name="analyze_results" required="true">
+            <description>CRITICAL: Output analysis BEFORE updating state:</description>
+            <format><![CDATA[
+<analysis>
+Test Result: [PASS | FAIL]
+
+{% if failures %}
+Failure Summary: [number of failures]
+Error Messages: [key error messages]
+
+Root Cause Assessment:
+- [code bug indicators OR test bug indicators]
+
+Verdict: [FAIL_CODE | FAIL_TEST]
+Reasoning: [evidence for this verdict]
+{% endif %}
+
+Next Step: [browser-validation | implement | fix-tests]
+</analysis>
+            ]]></format>
+            <enforcement>Do NOT update state until analysis is output.</enforcement>
+        </phase>
+
         <phase name="update_current_issue_json_pass" condition="tests pass">
             <update field="step">browser-validation</update>
             <update field="current_failures">Clear</update>

@@ -11,16 +11,6 @@ git log --oneline -5 2>/dev/null || echo "Not a git repo"
         <note>The full session log is automatically injected into the context. Do NOT read it manually.</note>
     </pattern>
 
-    <pattern name="atomic_write">
-        <description>Safe file write pattern using temp file and mv</description>
-        <commands><![CDATA[
-cat > .claudesprint/project/current_issue.json.tmp << 'EOF'
-{...updated content...}
-EOF
-mv .claudesprint/project/current_issue.json.tmp .claudesprint/project/current_issue.json
-        ]]></commands>
-    </pattern>
-
     <pattern name="log_progress">
         <description>Append structured log entries to session log</description>
         <commands><![CDATA[
@@ -30,17 +20,41 @@ echo "  <summary>" >> .claudesprint/project/current_issue.log
     </pattern>
 
     <pattern name="update_current_issue">
-        <description>Required fields to update in current_issue.json</description>
-        <fields>
-            <field name="step" required="true">Next workflow step</field>
-            <field name="goal" required="true">1-2 sentence goal description</field>
-            <field name="next_action" required="true">Specific action for next session</field>
-            <field name="changes" required="false">Array of {path, summary} for modified files</field>
-            <field name="commands_run" required="false">Array of commands executed</field>
-        </fields>
-        <note>Log key decisions to current_issue.log using the log_progress pattern.</note>
+        <description>Use CLI tools for state updates (see state_management section)</description>
+        <note>All updates MUST go through claudesprint-tools CLI for schema validation.</note>
     </pattern>
 </patterns>
+
+<state_management>
+    <rule>NEVER write to current_issue.json directly using bash/cat/jq.</rule>
+    <rule>ALWAYS use the provided CLI tools:</rule>
+
+    <command name="step-transition" primary="true">
+        <syntax>claudesprint-tools issue step &lt;next_step&gt; [--goal="..."] [--next-action="..."] [--clear-failures]</syntax>
+        <example>claudesprint-tools issue step write-tests --goal="Write unit tests for auth"</example>
+    </command>
+
+    <command name="update-fields">
+        <syntax>claudesprint-tools issue update [--goal="..."] [--next-action="..."]</syntax>
+        <example>claudesprint-tools issue update --next-action="Fix validation bug"</example>
+    </command>
+
+    <command name="record-change">
+        <syntax>claudesprint-tools issue change &lt;path&gt; &lt;summary&gt;</syntax>
+        <example>claudesprint-tools issue change src/auth.py "Added login validation"</example>
+    </command>
+
+    <command name="record-failure">
+        <syntax>claudesprint-tools issue failure &lt;message&gt;</syntax>
+        <example>claudesprint-tools issue failure "AssertionError: expected 200"</example>
+    </command>
+
+    <forbidden>
+        <action>cat > .claudesprint/...</action>
+        <action>jq ... > tmp && mv tmp ...</action>
+        <action>echo '{"..."}' > current_issue.json</action>
+    </forbidden>
+</state_management>
 
 <termination_tags>
     <description>Status tags that may be required as final output for certain steps</description>

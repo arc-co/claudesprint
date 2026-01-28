@@ -659,6 +659,158 @@ class TestPromptServiceDirectoryPaths:
         assert "claudesprint" in str(service.global_prompts_dir)
 
 
+class TestStateManagementEnforcement:
+    """Tests for state management enforcement (Issue 3)."""
+
+    def test_no_atomic_write_pattern(self, tmp_path: Path) -> None:
+        """Ensure atomic_write pattern is removed."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_common_prompt_content(render=False)
+        assert "atomic_write" not in content
+        assert "cat > .claudesprint/project/current_issue.json.tmp" not in content
+
+    def test_state_management_section_exists(self, tmp_path: Path) -> None:
+        """Ensure state_management section exists."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_common_prompt_content(render=False)
+        assert "<state_management>" in content
+        assert "claudesprint-tools issue step" in content
+        assert "claudesprint-tools issue change" in content
+        assert "claudesprint-tools issue update" in content
+        assert "claudesprint-tools issue failure" in content
+
+    def test_forbidden_actions_documented(self, tmp_path: Path) -> None:
+        """Ensure forbidden actions are documented."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_common_prompt_content(render=False)
+        assert "<forbidden>" in content
+        assert "cat > .claudesprint/" in content
+        assert "jq" in content
+
+    def test_update_current_issue_references_cli(self, tmp_path: Path) -> None:
+        """Ensure update_current_issue pattern references CLI."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_common_prompt_content(render=False)
+        # The update_current_issue pattern should reference CLI
+        assert "Use CLI tools for state updates" in content
+        assert "claudesprint-tools CLI for schema validation" in content
+
+
+class TestAnalysisProtocol:
+    """Tests for analysis protocol enforcement (Issue 4)."""
+
+    def test_protocol_section_in_base(self, tmp_path: Path) -> None:
+        """Ensure protocol section in base template."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        # Read the base template directly
+        from importlib.resources import files
+
+        base_content = (
+            files("claudesprint.prompts").joinpath("_base.xml.j2").read_text()
+        )
+        assert '<protocol name="analysis_first">' in base_content
+        assert "<analysis>" in base_content
+        assert "Analysis MUST appear BEFORE any tool calls" in base_content
+
+    def test_implement_has_analyze_first(self, tmp_path: Path) -> None:
+        """Ensure implement prompt requires analysis."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("implement", render=False)
+        assert 'name="analyze_first"' in content
+        assert "BEFORE any implementation" in content
+        assert "Do NOT write any code until analysis is complete" in content
+
+    def test_fix_tests_has_analysis_format(self, tmp_path: Path) -> None:
+        """Ensure fix-tests prompt has explicit analysis format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("fix-tests", render=False)
+        assert "Verdict: [TEST_WRONG | CODE_WRONG]" in content
+        assert "Do NOT make changes until analysis is output" in content
+
+    def test_run_tests_has_analyze_results(self, tmp_path: Path) -> None:
+        """Ensure run-tests prompt has analyze_results phase."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("run-tests", render=False)
+        assert 'name="analyze_results"' in content
+        assert "CRITICAL: Output analysis BEFORE updating state" in content
+
+    def test_code_review_has_analyze_changes(self, tmp_path: Path) -> None:
+        """Ensure code-review prompt has analyze_changes phase."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("code-review", render=False)
+        assert 'name="analyze_changes"' in content
+        assert "CRITICAL: Output analysis BEFORE making any decisions" in content
+
+    def test_base_cli_constraint_strengthened(self, tmp_path: Path) -> None:
+        """Ensure base template has strengthened CLI constraint."""
+        from importlib.resources import files
+
+        base_content = (
+            files("claudesprint.prompts").joinpath("_base.xml.j2").read_text()
+        )
+        assert "Use claudesprint-tools CLI for ALL state updates" in base_content
+        assert "never manually edit JSON" in base_content
+
+
+class TestCLIStateUpdatesInPrompts:
+    """Tests to verify prompts use CLI for state updates."""
+
+    def test_implement_uses_cli_for_state(self, tmp_path: Path) -> None:
+        """Ensure implement prompt uses CLI for state updates."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("implement", render=False)
+        assert "claudesprint-tools issue change" in content
+        assert "claudesprint-tools issue step write-tests" in content
+
+    def test_write_tests_uses_cli_for_state(self, tmp_path: Path) -> None:
+        """Ensure write-tests prompt uses CLI for state updates."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("write-tests", render=False)
+        assert "claudesprint-tools issue change" in content
+        assert "claudesprint-tools issue step run-tests" in content
+
+    def test_fix_code_review_uses_cli_for_state(self, tmp_path: Path) -> None:
+        """Ensure fix-code-review-issues prompt uses CLI for state updates."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("fix-code-review-issues", render=False)
+        assert "claudesprint-tools issue change" in content
+        assert "claudesprint-tools issue step run-tests" in content
+        assert "--clear-failures" in content
+
+    def test_select_issue_uses_cli_for_state(self, tmp_path: Path) -> None:
+        """Ensure select-issue prompt uses CLI for state updates."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("select-issue", render=False)
+        assert "claudesprint-tools sprint start" in content
+        assert "claudesprint-tools issue init" in content
+
+
 class TestPromptServiceIntegration:
     """Integration tests for PromptService with actual package prompts."""
 

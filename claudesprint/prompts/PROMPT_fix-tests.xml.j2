@@ -24,22 +24,32 @@ git diff --stat 2>/dev/null
             ]]></commands>
         </phase>
 
-        <phase name="analyze_failures">
-            <description>CRITICAL: Before ANY changes:</description>
-            <steps>
-                <step>Read failing test code - understand what it asserts</step>
-                <step>Read acceptance criteria - understand expected behavior</step>
-                <step>Determine if test expectation is correct</step>
-            </steps>
-            <decision name="test_is_wrong" action="fix_test">
-                <indicator>Test asserts behavior not in acceptance criteria</indicator>
-                <indicator>Test has incorrect expected values</indicator>
-                <indicator>Test setup doesn't match real usage</indicator>
-            </decision>
-            <decision name="test_is_correct" action="reroute_to_implement">
-                <indicator>Test correctly asserts acceptance criteria</indicator>
-                <indicator>Implementation produces wrong result</indicator>
-            </decision>
+        <phase name="analyze_failures" required="true">
+            <description>CRITICAL: Output analysis BEFORE any changes:</description>
+            <format><![CDATA[
+<analysis>
+Failure: [exact error message]
+
+Test Expectation: [what the test asserts]
+Acceptance Criteria: [relevant AC from sprint.json]
+
+Verdict: [TEST_WRONG | CODE_WRONG]
+Reasoning: [evidence for this verdict]
+
+Action: [what I will do next]
+</analysis>
+            ]]></format>
+            <decisions>
+                <decision verdict="TEST_WRONG">
+                    <indicator>Test asserts behavior not in acceptance criteria</indicator>
+                    <indicator>Test has incorrect expected values</indicator>
+                </decision>
+                <decision verdict="CODE_WRONG">
+                    <indicator>Test correctly asserts acceptance criteria</indicator>
+                    <indicator>Implementation produces wrong result</indicator>
+                </decision>
+            </decisions>
+            <enforcement>Do NOT make changes until analysis is output.</enforcement>
         </phase>
 
         <phase name="update_current_issue_json_fixing_test">
