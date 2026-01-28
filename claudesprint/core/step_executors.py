@@ -108,12 +108,41 @@ class LlmStepExecutor(StepExecutor):
         step_goal = current_issue.goal or f"Execute the {prompt_name} workflow step"
 
         # Load sprint.json content if available
+        # Optimization: For select-issue, inject full sprint (needs all issues)
+        # For other steps, inject minimal sprint with only current issue's data
         sprint_json = ""
         if current_issue.sprint_path:
             sprint_path = Path(current_issue.sprint_path)
             if sprint_path.exists():
                 try:
                     sprint_data = json.loads(sprint_path.read_text())
+
+                    # For non-select-issue steps, filter to only current issue
+                    if step != IssueStep.SELECT_ISSUE and current_issue.issue_id:
+                        # Find current issue in sprint
+                        current_issue_data = None
+                        for issue in sprint_data.get("issues", []):
+                            if issue.get("id") == current_issue.issue_id:
+                                current_issue_data = issue
+                                break
+
+                        # Create minimal sprint with only current issue
+                        if current_issue_data:
+                            sprint_data = {
+                                "spec_id": sprint_data.get("spec_id", ""),
+                                "spec_file": sprint_data.get("spec_file", ""),
+                                "description": sprint_data.get("description", ""),
+                                "config": sprint_data.get("config", {}),
+                                "git_branch": sprint_data.get("git_branch"),
+                                "issues": [current_issue_data],
+                                "metadata": {
+                                    "total_issues": sprint_data.get("metadata", {}).get(
+                                        "total_issues", 0
+                                    ),
+                                    "note": "Filtered to current issue only",
+                                },
+                            }
+
                     sprint_json = json.dumps(sprint_data, indent=2)
                 except (json.JSONDecodeError, OSError):
                     pass

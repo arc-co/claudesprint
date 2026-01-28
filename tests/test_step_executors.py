@@ -783,3 +783,280 @@ class TestEdgeCases:
         assert len(step_starts) == 1
         assert step_starts[0][0] == IssueStep.IMPLEMENT
         assert step_starts[0][1] == "sonnet"  # From mock_models_service
+
+
+# --- Sprint Filtering Tests ---
+
+
+class TestSprintFiltering:
+    """Tests for sprint.json filtering optimization.
+
+    For select-issue step: full sprint is injected (needs all issues).
+    For other steps: minimal sprint with only current issue's data.
+    """
+
+    def test_full_sprint_injected_for_select_issue(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        tmp_path: Path,
+    ) -> None:
+        """Test that full sprint.json is injected for select-issue step."""
+        import json
+
+        # Create a sprint with multiple issues
+        sprint_data = {
+            "spec_id": "TEST_01",
+            "spec_file": ".claudesprint/specs/TEST_01.md",
+            "description": "Test sprint",
+            "config": {"require_testing": True},
+            "git_branch": "sprint/TEST_01",
+            "issues": [
+                {"id": "issue-1", "title": "First issue", "acceptance_criteria": ["AC1"]},
+                {"id": "issue-2", "title": "Second issue", "acceptance_criteria": ["AC2"]},
+                {"id": "issue-3", "title": "Third issue", "acceptance_criteria": ["AC3"]},
+            ],
+            "metadata": {"total_issues": 3},
+        }
+        sprint_path = tmp_path / "sprint.json"
+        sprint_path.write_text(json.dumps(sprint_data))
+
+        # Create CurrentIssue for select-issue step (no issue_id yet)
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/select-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path=str(sprint_path),
+            issue_id="",  # No issue selected yet
+            issue_title="",
+            step=IssueStep.SELECT_ISSUE,
+            goal="Select next issue",
+            next_action="Review issues",
+        )
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+        )
+
+        # Build template context
+        context = executor._build_template_context(current_issue)
+
+        # Verify full sprint is injected (all 3 issues)
+        sprint_json = json.loads(context.sprint_json)
+        assert len(sprint_json["issues"]) == 3
+        assert sprint_json["issues"][0]["id"] == "issue-1"
+        assert sprint_json["issues"][1]["id"] == "issue-2"
+        assert sprint_json["issues"][2]["id"] == "issue-3"
+
+    def test_minimal_sprint_injected_for_implement_step(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        tmp_path: Path,
+    ) -> None:
+        """Test that minimal sprint (only current issue) is injected for implement step."""
+        import json
+
+        # Create a sprint with multiple issues
+        sprint_data = {
+            "spec_id": "TEST_01",
+            "spec_file": ".claudesprint/specs/TEST_01.md",
+            "description": "Test sprint",
+            "config": {"require_testing": True, "require_browser_qa": False},
+            "git_branch": "sprint/TEST_01",
+            "issues": [
+                {
+                    "id": "issue-1",
+                    "title": "First issue",
+                    "acceptance_criteria": ["AC1"],
+                    "priority": "high",
+                },
+                {
+                    "id": "issue-2",
+                    "title": "Second issue",
+                    "acceptance_criteria": ["AC2", "AC2b"],
+                    "priority": "medium",
+                },
+                {
+                    "id": "issue-3",
+                    "title": "Third issue",
+                    "acceptance_criteria": ["AC3"],
+                    "priority": "low",
+                },
+            ],
+            "metadata": {"total_issues": 3, "pending": 2, "in_progress": 1},
+        }
+        sprint_path = tmp_path / "sprint.json"
+        sprint_path.write_text(json.dumps(sprint_data))
+
+        # Create CurrentIssue for implement step (issue-2 selected)
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/implement",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path=str(sprint_path),
+            issue_id="issue-2",
+            issue_title="Second issue",
+            step=IssueStep.IMPLEMENT,
+            goal="Implement the feature",
+            next_action="Write code",
+        )
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+        )
+
+        # Build template context
+        context = executor._build_template_context(current_issue)
+
+        # Verify minimal sprint is injected (only current issue)
+        sprint_json = json.loads(context.sprint_json)
+        assert len(sprint_json["issues"]) == 1
+        assert sprint_json["issues"][0]["id"] == "issue-2"
+        assert sprint_json["issues"][0]["title"] == "Second issue"
+        assert sprint_json["issues"][0]["acceptance_criteria"] == ["AC2", "AC2b"]
+
+        # Verify sprint-level metadata is preserved
+        assert sprint_json["spec_id"] == "TEST_01"
+        assert sprint_json["config"]["require_testing"] is True
+        assert sprint_json["git_branch"] == "sprint/TEST_01"
+        assert sprint_json["metadata"]["total_issues"] == 3
+        assert sprint_json["metadata"]["note"] == "Filtered to current issue only"
+
+    def test_minimal_sprint_for_all_non_select_steps(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        tmp_path: Path,
+    ) -> None:
+        """Test that minimal sprint is used for various non-select-issue steps."""
+        import json
+
+        sprint_data = {
+            "spec_id": "TEST_01",
+            "spec_file": ".claudesprint/specs/TEST_01.md",
+            "description": "Test sprint",
+            "config": {},
+            "issues": [
+                {"id": "issue-1", "title": "First", "acceptance_criteria": ["AC1"]},
+                {"id": "issue-2", "title": "Second", "acceptance_criteria": ["AC2"]},
+            ],
+            "metadata": {"total_issues": 2},
+        }
+        sprint_path = tmp_path / "sprint.json"
+        sprint_path.write_text(json.dumps(sprint_data))
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+        )
+
+        # Test various non-select-issue steps
+        steps_to_test = [
+            IssueStep.IMPLEMENT,
+            IssueStep.WRITE_TESTS,
+            IssueStep.RUN_TESTS,
+            IssueStep.FIX_TESTS,
+            IssueStep.CODE_REVIEW,
+            IssueStep.COMMIT_CHANGES,
+        ]
+
+        for step in steps_to_test:
+            current_issue = CurrentIssue(
+                schema_version="2.0",
+                session_id=f"2026-01-28T12:00:00Z/{step.value}",
+                timestamp="2026-01-28T12:00:00Z",
+                sprint_path=str(sprint_path),
+                issue_id="issue-1",
+                issue_title="First",
+                step=step,
+                goal="Test goal",
+                next_action="Test action",
+            )
+
+            context = executor._build_template_context(current_issue)
+            sprint_json = json.loads(context.sprint_json)
+
+            assert len(sprint_json["issues"]) == 1, f"Step {step} should have 1 issue"
+            assert sprint_json["issues"][0]["id"] == "issue-1"
+
+    def test_fallback_to_full_sprint_if_issue_not_found(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        tmp_path: Path,
+    ) -> None:
+        """Test that full sprint is used if current issue_id is not found in sprint."""
+        import json
+
+        sprint_data = {
+            "spec_id": "TEST_01",
+            "spec_file": ".claudesprint/specs/TEST_01.md",
+            "description": "Test sprint",
+            "config": {},
+            "issues": [
+                {"id": "issue-1", "title": "First", "acceptance_criteria": ["AC1"]},
+                {"id": "issue-2", "title": "Second", "acceptance_criteria": ["AC2"]},
+            ],
+            "metadata": {"total_issues": 2},
+        }
+        sprint_path = tmp_path / "sprint.json"
+        sprint_path.write_text(json.dumps(sprint_data))
+
+        # Create CurrentIssue with an issue_id that doesn't exist in sprint
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/implement",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path=str(sprint_path),
+            issue_id="nonexistent-issue",
+            issue_title="Nonexistent",
+            step=IssueStep.IMPLEMENT,
+            goal="Test goal",
+            next_action="Test action",
+        )
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+        )
+
+        context = executor._build_template_context(current_issue)
+        sprint_json = json.loads(context.sprint_json)
+
+        # Should fall back to full sprint since issue wasn't found
+        assert len(sprint_json["issues"]) == 2
