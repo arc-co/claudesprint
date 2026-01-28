@@ -22,6 +22,13 @@ class TestPromptContext:
         assert ctx.browser_validation_enabled is False
         assert ctx.context7_available is False
         assert ctx.custom_vars == {}
+        # New XML context fields
+        assert ctx.step_name == ""
+        assert ctx.step_goal == ""
+        assert ctx.sprint_json == ""
+        assert ctx.current_issue_json == ""
+        assert ctx.log_tail == ""
+        assert ctx.current_failures == ""
 
     def test_custom_values(self) -> None:
         """Test context with custom values."""
@@ -29,10 +36,14 @@ class TestPromptContext:
             browser_validation_enabled=False,
             context7_available=True,
             custom_vars={"foo": "bar"},
+            step_name="implement",
+            step_goal="Implement the feature",
         )
         assert ctx.browser_validation_enabled is False
         assert ctx.context7_available is True
         assert ctx.custom_vars == {"foo": "bar"}
+        assert ctx.step_name == "implement"
+        assert ctx.step_goal == "Implement the feature"
 
     def test_to_dict(self) -> None:
         """Test converting context to dictionary."""
@@ -40,13 +51,15 @@ class TestPromptContext:
             browser_validation_enabled=True,
             context7_available=False,
             custom_vars={"project_name": "test"},
+            step_name="run-tests",
+            step_goal="Run the test suite",
         )
         result = ctx.to_dict()
-        assert result == {
-            "browser_validation_enabled": True,
-            "context7_available": False,
-            "project_name": "test",
-        }
+        assert result["browser_validation_enabled"] is True
+        assert result["context7_available"] is False
+        assert result["project_name"] == "test"
+        assert result["step_name"] == "run-tests"
+        assert result["step_goal"] == "Run the test suite"
 
     def test_to_dict_custom_vars_override(self) -> None:
         """Test that custom_vars can override default keys."""
@@ -91,6 +104,24 @@ class TestPromptContext:
         assert result["another_key"] == 123
         assert "custom_vars contains reserved keys" not in caplog.text
 
+    def test_xml_context_fields_in_to_dict(self) -> None:
+        """Test that XML context fields are included in to_dict."""
+        ctx = PromptContext(
+            step_name="code-review",
+            step_goal="Review code changes",
+            sprint_json='{"spec_id": "SPEC_01"}',
+            current_issue_json='{"issue_id": "auth-001"}',
+            log_tail="[2024-01-01] Started",
+            current_failures="Test failed",
+        )
+        result = ctx.to_dict()
+        assert result["step_name"] == "code-review"
+        assert result["step_goal"] == "Review code changes"
+        assert result["sprint_json"] == '{"spec_id": "SPEC_01"}'
+        assert result["current_issue_json"] == '{"issue_id": "auth-001"}'
+        assert result["log_tail"] == "[2024-01-01] Started"
+        assert result["current_failures"] == "Test failed"
+
 
 class TestPromptServiceHierarchy:
     """Tests for hierarchical prompt loading."""
@@ -114,10 +145,10 @@ class TestPromptServiceHierarchy:
         self, mock_path_service: PathService, tmp_path: Path
     ) -> None:
         """Test that project-level prompts override package defaults."""
-        # Create project-level prompt
+        # Create project-level prompt (must be valid Jinja2 for XML)
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_implement.md").write_text("# Project Override")
+        (project_prompts / "PROMPT_implement.xml.j2").write_text("<prompt>Project Override</prompt>")
 
         service = PromptService(mock_path_service, project_root=tmp_path)
 
@@ -125,7 +156,7 @@ class TestPromptServiceHierarchy:
         assert source == "project"
 
         content = service.get_prompt_content("implement", render=False)
-        assert content == "# Project Override"
+        assert content == "<prompt>Project Override</prompt>"
 
     def test_global_overrides_package(
         self, mock_path_service: PathService, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -134,7 +165,7 @@ class TestPromptServiceHierarchy:
         # Create global-level prompt using env var
         global_prompts = tmp_path / "global_config" / "prompts"
         global_prompts.mkdir(parents=True)
-        (global_prompts / "PROMPT_implement.md").write_text("# Global Override")
+        (global_prompts / "PROMPT_implement.xml.j2").write_text("<prompt>Global Override</prompt>")
 
         monkeypatch.setenv("CLAUDESPRINT_CONFIG_HOME", str(tmp_path / "global_config"))
 
@@ -144,7 +175,7 @@ class TestPromptServiceHierarchy:
         assert source == "global"
 
         content = service.get_prompt_content("implement", render=False)
-        assert content == "# Global Override"
+        assert content == "<prompt>Global Override</prompt>"
 
     def test_project_overrides_global(
         self, mock_path_service: PathService, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -153,14 +184,14 @@ class TestPromptServiceHierarchy:
         # Create global-level prompt
         global_prompts = tmp_path / "global_config" / "prompts"
         global_prompts.mkdir(parents=True)
-        (global_prompts / "PROMPT_implement.md").write_text("# Global Override")
+        (global_prompts / "PROMPT_implement.xml.j2").write_text("<prompt>Global Override</prompt>")
 
         monkeypatch.setenv("CLAUDESPRINT_CONFIG_HOME", str(tmp_path / "global_config"))
 
         # Create project-level prompt
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_implement.md").write_text("# Project Override")
+        (project_prompts / "PROMPT_implement.xml.j2").write_text("<prompt>Project Override</prompt>")
 
         service = PromptService(mock_path_service, project_root=tmp_path)
 
@@ -168,21 +199,21 @@ class TestPromptServiceHierarchy:
         assert source == "project"
 
         content = service.get_prompt_content("implement", render=False)
-        assert content == "# Project Override"
+        assert content == "<prompt>Project Override</prompt>"
 
     def test_common_prompt_hierarchy(
         self, mock_path_service: PathService, tmp_path: Path
     ) -> None:
-        """Test that _common.md follows the same hierarchy."""
+        """Test that _common.xml.j2 follows the same hierarchy."""
         # Create project-level common prompt
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "_common.md").write_text("# Project Common")
+        (project_prompts / "_common.xml.j2").write_text("<patterns>Project Common</patterns>")
 
         service = PromptService(mock_path_service, project_root=tmp_path)
 
         content = service.get_common_prompt_content(render=False)
-        assert content == "# Project Common"
+        assert content == "<patterns>Project Common</patterns>"
 
     def test_prompt_not_found(
         self, mock_path_service: PathService, tmp_path: Path
@@ -190,10 +221,10 @@ class TestPromptServiceHierarchy:
         """Test FileNotFoundError for non-existent prompts."""
         service = PromptService(mock_path_service, project_root=tmp_path)
 
-        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.md"):
+        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.xml.j2"):
             service.get_prompt_content("nonexistent")
 
-        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.md"):
+        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.xml.j2"):
             service.prompt_source("nonexistent")
 
     def test_prompt_exists(
@@ -211,7 +242,7 @@ class TestPromptServiceHierarchy:
         # Create project-level prompt for custom step
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_custom-step.md").write_text("# Custom")
+        (project_prompts / "PROMPT_custom-step.xml.j2").write_text("<prompt>Custom</prompt>")
 
         assert service.prompt_exists("custom-step") is True
 
@@ -230,8 +261,8 @@ class TestPromptServiceTemplateRendering:
         """Test {{ variable }} interpolation."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            "Browser enabled: {{ browser_validation_enabled }}"
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            "<prompt>Browser enabled: {{ browser_validation_enabled }}</prompt>"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
@@ -239,7 +270,7 @@ class TestPromptServiceTemplateRendering:
         service.set_context(PromptContext(browser_validation_enabled=True))
 
         content = service.get_prompt_content("test")
-        assert content == "Browser enabled: True"
+        assert content == "<prompt>Browser enabled: True</prompt>"
 
     def test_conditional_if(
         self, mock_path_service: PathService, tmp_path: Path
@@ -247,15 +278,15 @@ class TestPromptServiceTemplateRendering:
         """Test {% if %} conditionals."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            "{% if browser_validation_enabled %}Browser available{% endif %}"
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            "{% if browser_validation_enabled %}<available>Browser available</available>{% endif %}"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
         service.set_context(PromptContext(browser_validation_enabled=True))
 
         content = service.get_prompt_content("test")
-        assert content == "Browser available"
+        assert content == "<available>Browser available</available>"
 
     def test_conditional_if_not(
         self, mock_path_service: PathService, tmp_path: Path
@@ -263,8 +294,8 @@ class TestPromptServiceTemplateRendering:
         """Test {% if not %} conditionals."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            "{% if not browser_validation_enabled %}SKIP{% endif %}Continue"
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            "{% if not browser_validation_enabled %}<skip>SKIP</skip>{% endif %}<continue>Continue</continue>"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
@@ -280,15 +311,15 @@ class TestPromptServiceTemplateRendering:
         """Test {% if %}...{% else %} conditionals."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            "{% if context7_available %}Use context7{% else %}Use default{% endif %}"
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            "{% if context7_available %}<use>context7</use>{% else %}<use>default</use>{% endif %}"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
         service.set_context(PromptContext(context7_available=False))
 
         content = service.get_prompt_content("test")
-        assert content == "Use default"
+        assert content == "<use>default</use>"
 
     def test_multiline_conditional(
         self, mock_path_service: PathService, tmp_path: Path
@@ -296,26 +327,29 @@ class TestPromptServiceTemplateRendering:
         """Test multiline conditionals are handled properly."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            """{% if not browser_validation_enabled %}
-## SKIP Section
-
-This is a multiline skip notice.
-<status>skip</status>
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            """<prompt>
+{% if not browser_validation_enabled %}
+<skip>
+    <title>SKIP Section</title>
+    <note>This is a multiline skip notice.</note>
+    <status>skip</status>
+</skip>
 {% endif %}
-
-## Main Content
-
-Rest of prompt."""
+<main>
+    <title>Main Content</title>
+    <body>Rest of prompt.</body>
+</main>
+</prompt>"""
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
         service.set_context(PromptContext(browser_validation_enabled=False))
 
         content = service.get_prompt_content("test")
-        assert "## SKIP Section" in content
+        assert "SKIP Section" in content
         assert "<status>skip</status>" in content
-        assert "## Main Content" in content
+        assert "Main Content" in content
 
     def test_render_false_returns_raw(
         self, mock_path_service: PathService, tmp_path: Path
@@ -323,30 +357,30 @@ Rest of prompt."""
         """Test render=False returns raw template content."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
-            "{{ browser_validation_enabled }}"
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            "<prompt>{{ browser_validation_enabled }}</prompt>"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
 
         content = service.get_prompt_content("test", render=False)
-        assert content == "{{ browser_validation_enabled }}"
+        assert content == "<prompt>{{ browser_validation_enabled }}</prompt>"
 
-    def test_invalid_template_returns_raw(
+    def test_invalid_template_raises_error(
         self, mock_path_service: PathService, tmp_path: Path
     ) -> None:
-        """Test invalid Jinja2 template returns raw content."""
+        """Test invalid Jinja2 template raises FileNotFoundError."""
         project_prompts = tmp_path / ".claudesprint" / "prompts"
         project_prompts.mkdir(parents=True)
-        (project_prompts / "PROMPT_test.md").write_text(
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
             "{% if unclosed"
         )
 
         service = PromptService(mock_path_service, project_root=tmp_path)
 
-        # Should not raise, should return raw content
-        content = service.get_prompt_content("test")
-        assert content == "{% if unclosed"
+        # For XML templates loaded via get_template, invalid templates raise error
+        with pytest.raises(FileNotFoundError, match="Template not found or invalid"):
+            service.get_prompt_content("test")
 
     def test_render_with_extra_context(
         self, mock_path_service: PathService, tmp_path: Path
@@ -356,10 +390,39 @@ Rest of prompt."""
         service.set_context(PromptContext(browser_validation_enabled=True))
 
         content = service.render_with_context(
-            "{{ project_name }} - {{ browser_validation_enabled }}",
+            "<data>{{ project_name }} - {{ browser_validation_enabled }}</data>",
             extra_context={"project_name": "MyProject"},
         )
-        assert content == "MyProject - True"
+        assert content == "<data>MyProject - True</data>"
+
+    def test_xml_context_fields_render(
+        self, mock_path_service: PathService, tmp_path: Path
+    ) -> None:
+        """Test that XML context fields render correctly in templates."""
+        project_prompts = tmp_path / ".claudesprint" / "prompts"
+        project_prompts.mkdir(parents=True)
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            """<prompt>
+<role>{{ step_name }} agent</role>
+<goal>{{ step_goal }}</goal>
+{% if sprint_json %}<sprint>{{ sprint_json }}</sprint>{% endif %}
+{% if current_failures %}<failures>{{ current_failures }}</failures>{% endif %}
+</prompt>"""
+        )
+
+        service = PromptService(mock_path_service, project_root=tmp_path)
+        service.set_context(PromptContext(
+            step_name="implement",
+            step_goal="Implement the feature",
+            sprint_json='{"spec_id": "SPEC_01"}',
+            current_failures="",
+        ))
+
+        content = service.get_prompt_content("test")
+        assert "<role>implement agent</role>" in content
+        assert "<goal>Implement the feature</goal>" in content
+        assert '<sprint>{"spec_id": "SPEC_01"}</sprint>' in content
+        assert "<failures>" not in content  # Empty, so not rendered
 
 
 class TestPromptServiceDependencyDetection:
@@ -607,7 +670,8 @@ class TestPromptServiceIntegration:
         # This should work if the package has an "implement" prompt
         content = service.get_prompt_content("implement", render=False)
         assert len(content) > 0
-        assert "implement" in content.lower() or "#" in content
+        # XML templates use extends and have prompt tags
+        assert "{% extends" in content or "<prompt" in content
 
     def test_browser_validation_prompt_with_context(self, tmp_path: Path) -> None:
         """Test browser-validation prompt renders conditionally."""
@@ -618,8 +682,8 @@ class TestPromptServiceIntegration:
         service.set_context(PromptContext(browser_validation_enabled=False))
 
         content = service.get_prompt_content("browser-validation")
-        # Should contain the SKIP section
-        assert "SKIP" in content
+        # Should contain the skip section
+        assert "skip" in content.lower()
         assert "agent-browser" in content.lower()
 
     def test_browser_validation_prompt_enabled(self, tmp_path: Path) -> None:
@@ -631,5 +695,22 @@ class TestPromptServiceIntegration:
         service.set_context(PromptContext(browser_validation_enabled=True))
 
         content = service.get_prompt_content("browser-validation")
-        # Should NOT start with SKIP section (but may still mention SKIP status)
-        assert not content.startswith("# Step: browser-validation\n\n## SKIP")
+        # Should contain the main browser validation instructions
+        assert "prerequisites" in content.lower() or "validate" in content.lower()
+
+    def test_template_inheritance(self, tmp_path: Path) -> None:
+        """Test that XML templates properly inherit from _base.xml.j2."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        # Set context with XML fields
+        service.set_context(PromptContext(
+            step_name="implement",
+            step_goal="Implement the feature",
+        ))
+
+        content = service.get_prompt_content("implement")
+        # Should have rendered role from base template
+        assert "implement" in content.lower()
+        # Should have constraint rules from base template
+        assert "rule" in content.lower() or "constraint" in content.lower()

@@ -1,0 +1,109 @@
+<patterns>
+    <pattern name="get_bearings">
+        <description>Commands to understand current state</description>
+        <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
+git log --oneline -5 2>/dev/null || echo "Not a git repo"
+        ]]></commands>
+        <note>The full session log is automatically injected into the context. Do NOT read it manually.</note>
+    </pattern>
+
+    <pattern name="atomic_write">
+        <description>Safe file write pattern using temp file and mv</description>
+        <commands><![CDATA[
+cat > .claudesprint/project/current_issue.json.tmp << 'EOF'
+{...updated content...}
+EOF
+mv .claudesprint/project/current_issue.json.tmp .claudesprint/project/current_issue.json
+        ]]></commands>
+    </pattern>
+
+    <pattern name="log_progress">
+        <description>Append structured log entries to session log</description>
+        <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: <from> -> <to>" >> .claudesprint/project/current_issue.log
+echo "  <summary>" >> .claudesprint/project/current_issue.log
+        ]]></commands>
+    </pattern>
+
+    <pattern name="update_current_issue">
+        <description>Required fields to update in current_issue.json</description>
+        <fields>
+            <field name="step" required="true">Next workflow step</field>
+            <field name="goal" required="true">1-2 sentence goal description</field>
+            <field name="next_action" required="true">Specific action for next session</field>
+            <field name="changes" required="false">Array of {path, summary} for modified files</field>
+            <field name="commands_run" required="false">Array of commands executed</field>
+        </fields>
+        <note>Log key decisions to current_issue.log using the log_progress pattern.</note>
+    </pattern>
+</patterns>
+
+<termination_tags>
+    <description>Status tags that may be required as final output for certain steps</description>
+    <tag name="pass">Step succeeded</tag>
+    <tag name="fail">Step failed (generic)</tag>
+    <tag name="fail_code">Step failed due to code bug</tag>
+    <tag name="fail_test">Step failed due to test bug</tag>
+    <tag name="skip">Step skipped (not applicable)</tag>
+    <tag name="issues">Issues found (code review)</tag>
+    <tag name="test_fixed">Test was fixed, ready to re-run</tag>
+    <tag name="code_wrong">Code needs fixing, not the test</tag>
+    <example><![CDATA[<status>pass</status>]]></example>
+</termination_tags>
+
+<session_rules>
+    <rule priority="1">ONLY use current_issue.json + sprint.json as context - no other context sources</rule>
+    <rule priority="2">Fail fast if required fields missing - stop and report</rule>
+    <rule priority="3">Execute one step completely, then update current_issue.json</rule>
+    <rule priority="4">Log progress to current_issue.log using the log_progress pattern</rule>
+    <rule priority="5">Validate before exit - run claudesprint validate when applicable</rule>
+</session_rules>
+
+<critical_rules>
+    <section name="commit">
+        <rule>Do NOT commit unless: implementation complete, tests pass, code review clean</rule>
+        <rule>Use explicit file staging (not git add -A or git add .)</rule>
+    </section>
+    <section name="sprint">
+        <rule>sprint.json issues are immutable contracts</rule>
+        <rule>Only change status and history fields during implementation</rule>
+    </section>
+    <section name="scope">
+        <rule>ONE issue per workflow cycle</rule>
+        <rule>Exit after completing one issue for fresh context</rule>
+    </section>
+</critical_rules>
+
+<implementation_guidelines>
+    <do>
+        <item>Exactly what acceptance criteria specify</item>
+        <item>Error handling for edge cases</item>
+        <item>Tests that verify acceptance criteria</item>
+    </do>
+    <dont>
+        <item>Features not in acceptance criteria</item>
+        <item>Optimizations not requested</item>
+        <item>Refactoring unrelated code</item>
+        <item>Extra configurability beyond requirements</item>
+        <item>Unnecessary documentation</item>
+    </dont>
+</implementation_guidelines>
+
+<valid_steps>
+    <step>select-issue</step>
+    <step>read-docs</step>
+    <step>implement</step>
+    <step>write-tests</step>
+    <step>run-tests</step>
+    <step>fix-tests</step>
+    <step>browser-validation</step>
+    <step>code-review</step>
+    <step>fix-code-review-issues</step>
+    <step>update-docs</step>
+    <step>stage-changes</step>
+    <step>commit-changes</step>
+</valid_steps>

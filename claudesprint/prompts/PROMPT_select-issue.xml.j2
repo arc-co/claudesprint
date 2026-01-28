@@ -1,0 +1,83 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="high">Select exactly ONE issue per invocation.</rule>
+        <rule priority="high">Do NOT start implementation - only select and set up context.</rule>
+        <rule priority="medium">Provide clear selection rationale.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json 2>/dev/null || echo "No current issue"
+claudesprint-tools sprint available
+git log --oneline -5 2>/dev/null || echo "Not a git repo"
+git status --short 2>/dev/null | head -n 10
+            ]]></commands>
+        </phase>
+
+        <phase name="decision_flow">
+            <decision condition="in_progress_issues exists">Resume that issue, skip to Phase 3</decision>
+            <decision condition="message: SPRINT_COMPLETE">Output "SPRINT_COMPLETE" and exit</decision>
+            <decision condition="available_issues exists">Continue to selection</decision>
+            <decision condition="only blocked_issues">Report blocking situation</decision>
+        </phase>
+
+        <phase name="selection_criteria">
+            <description>The available_issues array is priority-sorted. Within top priority tier, consider:</description>
+            <criterion>Context continuity with recent work</criterion>
+            <criterion>Unblocker impact (issues that unblock others)</criterion>
+            <criterion>Category sequencing (setup/infra before features)</criterion>
+            <action>Select ONE issue, then run: claudesprint-tools sprint details &lt;issue_id&gt;</action>
+        </phase>
+
+        <phase name="update_sprint_json">
+            <description>For selected issue:</description>
+            <update field="status">Change to "in_progress"</update>
+            <update field="history">Add: {"timestamp": "&lt;ISO&gt;", "action": "started", "session_id": "&lt;id&gt;"}</update>
+        </phase>
+
+        <phase name="update_current_issue_json">
+            <template><![CDATA[
+{
+  "schema_version": "2.0",
+  "session_id": "<ISO>/select-issue",
+  "timestamp": "<ISO>",
+  "sprint_path": "<path>",
+  "issue_id": "<id>",
+  "issue_title": "<title>",
+  "step": "read-docs",
+  "goal": "Gather documentation for: <title>",
+  "next_action": "Research requirements for: <title>",
+  "repo_state": {"git_head": "<SHA>", "dirty": <bool>},
+  "changes": [],
+  "commands_run": [],
+  "current_failures": "",
+  "retry_count": 0,
+  "context": {
+    "acceptance_criteria": "<from details>",
+    "category": "<category>"
+  }
+}
+            ]]></template>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[<ISO>] SELECTED: <id> - <title>" >> .claudesprint/project/current_issue.log
+echo "  Rationale: <why chosen>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+            <output_format><![CDATA[
+=== Issue Selected ===
+ID: <id> | Title: <title> | Priority: <p> | Category: <c>
+Acceptance Criteria: <list>
+Rationale: <why chosen>
+Next step: read-docs
+            ]]></output_format>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <note>No termination tag required for this step.</note>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="high">Do NOT start implementation - only gather documentation.</rule>
+        <rule priority="high">ALWAYS use Context7 for external library docs when available.</rule>
+        <rule priority="medium">Record findings in current_issue.json for implement step.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
+            ]]></commands>
+            <extract>issue_id, issue_title, context.acceptance_criteria, context.category</extract>
+        </phase>
+
+        <phase name="gather_internal_docs">
+            <description>Required: Search for internal documentation and patterns</description>
+            <commands><![CDATA[
+ls docs/ 2>/dev/null || echo "No docs directory"
+            ]]></commands>
+            <tasks>
+                <task>Find similar implementations in codebase</task>
+                <task>Check package.json for library versions</task>
+            </tasks>
+        </phase>
+
+        {% if context7_available %}
+        <phase name="gather_external_docs">
+            <description>Required: Use Context7 MCP for each library the issue requires</description>
+            <steps>
+                <step>Use mcp__context7__resolve-library-id with libraryName and query</step>
+                <step>Use mcp__context7__query-docs with returned libraryId and specific question</step>
+            </steps>
+            <when_to_query>
+                <case>Library APIs</case>
+                <case>Framework patterns</case>
+                <case>External services</case>
+                <case>TypeScript types from libraries</case>
+            </when_to_query>
+        </phase>
+        {% else %}
+        <phase name="gather_external_docs">
+            <description>Context7 not available - use web search or existing knowledge for external docs</description>
+        </phase>
+        {% endif %}
+
+        <phase name="update_current_issue_json">
+            <update field="step">implement</update>
+            <update field="goal">Describe implementation approach</update>
+            <update field="context.external_docs_findings">Key API methods, config patterns, version notes</update>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: read-docs -> implement" >> .claudesprint/project/current_issue.log
+echo "  Findings: <key findings>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <architectural decisions, patterns to follow, library APIs>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <note>No termination tag required for this step.</note>
+{% endblock %}

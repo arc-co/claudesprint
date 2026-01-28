@@ -1,0 +1,87 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">All NEW issues start with status: pending</rule>
+        <rule priority="critical">Don't change status of existing issues</rule>
+        <rule priority="critical">Every issue MUST have acceptance criteria</rule>
+        <rule priority="high">Don't change issue IDs - referenced in git history</rule>
+        <rule priority="high">Update last_modified timestamp</rule>
+{% endblock %}
+
+{% block extra_context %}
+        <note>This is the planning step - performs gap analysis and updates an existing sprint.</note>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="tasks">
+            <description>Perform gap analysis and update an existing sprint.</description>
+            <command>claudesprint plan --spec SPEC_01.md</command>
+            <steps>
+                <step>Read specs from .claudesprint/specs/</step>
+                <step>Read existing sprint from sprints/&lt;spec_id&gt;/sprint.json</step>
+                <step>Analyze codebase to understand current implementation</step>
+                <step>Identify gaps between spec and implementation</step>
+                <step>Update sprint with new/updated issues</step>
+            </steps>
+        </phase>
+
+        <phase name="gap_analysis">
+            <steps>
+                <step>Read spec requirements and acceptance criteria</step>
+                <step>Search codebase for existing implementations</step>
+                <step>Check .gitignore health</step>
+                <step>Identify gaps, partial implementations, bugs</step>
+            </steps>
+            <gitignore_check><![CDATA[
+git status --porcelain 2>/dev/null | head -n 20
+            ]]></gitignore_check>
+            <note>If artifacts untracked (node_modules/, dist/, etc.), create a setup-xxx issue to fix</note>
+        </phase>
+
+        <phase name="issue_prioritization">
+            <description>Order by:</description>
+            <order>
+                <priority rank="1">Dependencies (prerequisites first)</priority>
+                <priority rank="2">Foundation (infrastructure before features)</priority>
+                <priority rank="3">Bugs (fix broken before adding new)</priority>
+                <priority rank="4">Value (high-impact prioritized)</priority>
+                <priority rank="5">Complexity (simpler unblockers first)</priority>
+            </order>
+        </phase>
+
+        <phase name="handling_existing_issues">
+            <rule>Keep completed issues - don't remove or modify</rule>
+            <rule>Keep in_progress issues - may be mid-workflow</rule>
+            <rule>Add new issues for identified gaps</rule>
+            <rule>Update pending issues if AC needs refinement</rule>
+            <rule>Don't change issue IDs - referenced in git history</rule>
+        </phase>
+
+        <phase name="sprint_updates">
+            <reference>See .claudesprint/schemas/sprint.schema.json for full schema.</reference>
+            <update field="last_modified">Update timestamp</update>
+            <update field="metadata">Update counts</update>
+        </phase>
+
+        <phase name="validation">
+            <commands><![CDATA[
+claudesprint validate --sprint sprints/<spec_id>/sprint.json
+            ]]></commands>
+        </phase>
+
+        <phase name="exit_output">
+            <format><![CDATA[
+=== Planning Complete ===
+Spec: <spec_id>
+Sprint: sprints/<spec_id>/sprint.json
+Total: X (Pending: X, In Progress: X, Completed: X, Blocked: X)
+New issues added: X
+Issues updated: X
+Next: Run 'claudesprint run --sprint sprints/<spec_id>/sprint.json'
+            ]]></format>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <note>No termination tag required for this step.</note>
+{% endblock %}

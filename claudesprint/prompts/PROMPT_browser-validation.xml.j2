@@ -1,0 +1,104 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">Do NOT fix failures yourself - route to implement.</rule>
+        <rule priority="high">Always close browser session.</rule>
+        <rule priority="medium">Take screenshots as evidence.</rule>
+{% endblock %}
+
+{% block instructions %}
+        {% if not browser_validation_enabled %}
+        <phase name="skip_not_available">
+            <description>agent-browser tool is not installed globally. Skip this step.</description>
+            <update field="step">code-review</update>
+            <log>Skipped browser validation: agent-browser not available</log>
+        </phase>
+        {% else %}
+        <phase name="prerequisites">
+            <description>Verify prerequisites before browser validation:</description>
+            <checks>
+                <check>Unit tests passed</check>
+                <check>Issue has UI components (check acceptance criteria for: "displays", "shows", "UI", "form", "button", "page", "screen", "navigates", "renders", "visible", "click", "input")</check>
+            </checks>
+            <fallback>If NO UI components, skip to code-review:
+                - Set step to code-review
+                - Log: "Skipped browser validation: no UI keywords in acceptance criteria"
+                - Exit</fallback>
+        </phase>
+
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
+cat .claudesprint/config/project.json
+            ]]></commands>
+        </phase>
+
+        <phase name="start_dev_server">
+            <commands><![CDATA[
+DEV_URL=$(cat .claudesprint/config/project.json | jq -r '.dev_server.url')
+curl -s "$DEV_URL" > /dev/null 2>&1 && echo "Server running" || echo "Server not running"
+            ]]></commands>
+            <fallback><![CDATA[
+START_CMD=$(cat .claudesprint/config/project.json | jq -r '.dev_server.start_command')
+WAIT_SECS=$(cat .claudesprint/config/project.json | jq -r '.dev_server.wait_seconds')
+$START_CMD &
+sleep $WAIT_SECS
+            ]]></fallback>
+        </phase>
+
+        <phase name="validate">
+            <commands><![CDATA[
+agent-browser open "$DEV_URL/<path>"
+agent-browser snapshot -i
+# Interact as user would
+agent-browser fill @e1 "input"
+agent-browser click @e2
+agent-browser wait --load networkidle
+agent-browser screenshot .claude/validation/evidence.png
+agent-browser errors
+agent-browser close
+            ]]></commands>
+            <verification>For each UI acceptance criterion verify:</verification>
+            <criteria>
+                <criterion>Element visible and accessible</criterion>
+                <criterion>Interaction works as expected</criterion>
+                <criterion>State changes correctly</criterion>
+                <criterion>No JavaScript errors</criterion>
+            </criteria>
+        </phase>
+
+        <phase name="update_current_issue_json_pass" condition="validation passes">
+            <update field="step">code-review</update>
+            <update field="current_failures">Clear</update>
+        </phase>
+
+        <phase name="update_current_issue_json_fail" condition="validation fails">
+            <update field="step">implement</update>
+            <update field="current_failures">Failure description</update>
+            <update field="retry_count">Increment</update>
+        </phase>
+
+        <phase name="update_current_issue_json_skip" condition="no UI components">
+            <update field="step">code-review</update>
+            <log>Skipped browser validation: no UI in acceptance criteria</log>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: browser-validation -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Result: <PASS/FAIL/SKIP>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+        {% endif %}
+{% endblock %}
+
+{% block termination %}
+        <required>true</required>
+        <description>End your response with exactly one of:</description>
+        <tag value="pass">All UI validations passed</tag>
+        <tag value="fail">UI validation failed</tag>
+        <tag value="skip">No UI components to validate (or agent-browser not available)</tag>
+{% endblock %}

@@ -22,7 +22,7 @@ class TestPathServicePackageAssets:
     def test_get_prompt_content_not_found(self) -> None:
         """Test loading a non-existent prompt raises FileNotFoundError."""
         paths = PathService()
-        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.md"):
+        with pytest.raises(FileNotFoundError, match="PROMPT_nonexistent.xml.j2"):
             paths.get_prompt_content("nonexistent")
 
     def test_get_common_prompt_content(self) -> None:

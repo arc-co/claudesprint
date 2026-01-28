@@ -1,0 +1,89 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">Do NOT use git add -A or git add .</rule>
+        <rule priority="critical">Do NOT commit.</rule>
+        <rule priority="critical">Do NOT stage sensitive files.</rule>
+        <rule priority="critical">Do NOT stage files listed in .claudesprint/project/baseline_dirty.json</rule>
+        <rule priority="high">Stage only files related to the issue that were created/modified during this workflow.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="prerequisites">
+            <check>If current_failures non-empty, set step to fix-code-review-issues and exit.</check>
+            <commands><![CDATA[
+git status 2>/dev/null || echo "Not a git repo"
+            ]]></commands>
+            <fallback>If NOT a git repo:
+                - Set step to commit-changes (will skip to complete)
+                - Log: "Skipped staging: not a git repository"
+                - Exit</fallback>
+        </phase>
+
+        <phase name="check_baseline_dirty">
+            <commands><![CDATA[
+cat .claudesprint/project/baseline_dirty.json 2>/dev/null || echo "No baseline"
+            ]]></commands>
+            <description>If baseline_dirty.json exists, it contains files that were dirty BEFORE the workflow started.</description>
+            <rule>NEVER stage files listed in baseline_dirty.json - these belong to the user, not this workflow.</rule>
+        </phase>
+
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json
+git diff --stat 2>/dev/null
+            ]]></commands>
+        </phase>
+
+        <phase name="safety_check">
+            <commands><![CDATA[
+UNTRACKED_COUNT=$(git status --porcelain 2>/dev/null | grep '^??' | wc -l)
+echo "Untracked files: $UNTRACKED_COUNT"
+            ]]></commands>
+            <condition when="more than 50 untracked files">
+                <commands><![CDATA[
+git status --porcelain | grep '^??' | head -n 50
+                ]]></commands>
+                <block_if_detected>node_modules/, dist/, build/, coverage/, __pycache__/</block_if_detected>
+                <block_action>
+                    - Set step to implement
+                    - Set next_action to "Update .gitignore to exclude build artifacts"
+                    - Exit</block_action>
+                <allow_if>Only source/config files (normal for scaffolding issues)</allow_if>
+            </condition>
+            <also_check>
+                <item>.env files, credentials, API keys</item>
+                <item>Large binary files</item>
+                <item>Debug code (console.log, commented code)</item>
+            </also_check>
+        </phase>
+
+        <phase name="stage_changes">
+            <description>Stage explicitly (not git add -A):</description>
+            <commands><![CDATA[
+git add <specific-file-1>
+git add <specific-file-2>
+git status
+git diff --staged --stat
+            ]]></commands>
+        </phase>
+
+        <phase name="update_current_issue_json">
+            <update field="step">commit-changes</update>
+            <update field="next_action">Commit with message: &lt;suggested message&gt;</update>
+            <update field="commands_run">Add: staging commands</update>
+            <important>Preserve existing changes array.</important>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: stage-changes -> commit-changes" >> .claudesprint/project/current_issue.log
+echo "  Staged: <file count>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <note>No termination tag required for this step.</note>
+{% endblock %}

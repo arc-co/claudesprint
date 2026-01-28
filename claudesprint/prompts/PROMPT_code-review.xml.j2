@@ -1,0 +1,85 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">Do NOT fix issues yourself.</rule>
+        <rule priority="high">Be objective - don't approve just to move forward.</rule>
+        <rule priority="high">List ALL blocking issues found.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="prerequisites">
+            <commands><![CDATA[
+cat .claudesprint/project/current_issue.json
+            ]]></commands>
+            <check>If current_failures non-empty (tests failing), set step to run-tests and exit.</check>
+        </phase>
+
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
+git diff --stat 2>/dev/null
+git diff 2>/dev/null
+            ]]></commands>
+        </phase>
+
+        <phase name="review_checklist">
+            <section name="acceptance_criteria">
+                <description>For each criterion:</description>
+                <check>Is it implemented?</check>
+                <check>Is it tested?</check>
+                <check>Does it work?</check>
+            </section>
+            <section name="code_quality">
+                <check>Follows existing patterns</check>
+                <check>No unnecessary changes outside scope</check>
+                <check>No hardcoded values that should be configurable</check>
+                <check>Appropriate error handling</check>
+                <check>No security vulnerabilities (XSS, injection)</check>
+            </section>
+            <section name="test_coverage">
+                <check>Tests exist for new functionality</check>
+                <check>Edge cases covered</check>
+            </section>
+        </phase>
+
+        <phase name="categorize_findings">
+            <category name="blocking" must_fix="true">
+                <finding>Security vulnerabilities</finding>
+                <finding>Broken functionality</finding>
+                <finding>Missing error handling</finding>
+                <finding>Type errors</finding>
+                <finding>Missing tests for AC</finding>
+            </category>
+            <category name="non_blocking" must_fix="false">
+                <finding>Style inconsistencies</finding>
+                <finding>Minor improvements</finding>
+                <finding>Documentation gaps</finding>
+            </category>
+        </phase>
+
+        <phase name="update_current_issue_json_clean" condition="no blocking issues">
+            <update field="step">update-docs</update>
+        </phase>
+
+        <phase name="update_current_issue_json_issues" condition="blocking issues found">
+            <update field="step">fix-code-review-issues</update>
+            <update field="current_failures">BLOCKING: 1. &lt;issue&gt; 2. &lt;issue&gt;</update>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: code-review -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Result: <PASS/ISSUES>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <Code review passed: all AC verified OR blocking issues found>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <required>true</required>
+        <description>End your response with exactly one of:</description>
+        <tag value="pass">Code review passed</tag>
+        <tag value="issues">Blocking issues found</tag>
+{% endblock %}

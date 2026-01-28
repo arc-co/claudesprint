@@ -39,9 +39,12 @@ def sample_current_issue() -> CurrentIssue:
 @pytest.fixture
 def mock_prompt_service() -> MagicMock:
     """Create a mock prompt service."""
+    from claudesprint.services.prompt_service import PromptContext
     mock = MagicMock()
     mock.get_prompt_content.return_value = "Test prompt content for step"
     mock.get_common_prompt_content.return_value = "Common prompt prefix"
+    # For XML templates, provide a context property
+    mock.context = PromptContext()
     return mock
 
 
@@ -67,6 +70,7 @@ def mock_issue_service() -> MagicMock:
     mock = MagicMock()
     mock.backup_current_issue.return_value = True
     mock.read_full_log.return_value = ""
+    mock.read_log_tail.return_value = ""
     mock.read_current_issue.return_value = None
     mock.log_issue_completion.return_value = True
     return mock
@@ -257,7 +261,7 @@ class TestLlmStepExecutor:
         assert result.success is False
         assert result.next_step is None
         assert "Prompt not found" in result.error
-        assert "PROMPT_implement.md" in result.error
+        assert "PROMPT_implement.xml.j2" in result.error
 
     def test_explicit_signal_requirement_failure(
         self,
@@ -360,26 +364,29 @@ class TestLlmStepExecutor:
         assert llm_executor._get_prompt_name(IssueStep.COMMIT_CHANGES) == "commit-changes"
         assert llm_executor._get_prompt_name(IssueStep.COMPLETE_ISSUE) == "complete-issue"
 
-    def test_common_prompt_prepended(
+    def test_common_prompt_included_via_template(
         self,
         llm_executor: LlmStepExecutor,
         sample_current_issue: CurrentIssue,
         mock_prompt_service: MagicMock,
         mock_claude_runner: MagicMock,
     ) -> None:
-        """Test that common prompt content is prepended to step prompts."""
+        """Test that common prompt is included via XML template inheritance.
+
+        For XML templates, common content is included via {% include '_common.xml.j2' %}
+        in the _base.xml.j2 template, so get_common_prompt_content is not called separately.
+        """
         # Execute the step
         llm_executor.execute(sample_current_issue)
 
-        # Verify get_common_prompt_content was called
-        mock_prompt_service.get_common_prompt_content.assert_called_once()
+        # Verify get_prompt_content was called (which renders the template with includes)
+        mock_prompt_service.get_prompt_content.assert_called_once()
 
-        # Verify the combined prompt was passed to claude_runner
+        # Verify the prompt was passed to claude_runner
         call_args = mock_claude_runner.run_with_content.call_args
         prompt_content = call_args.args[0]
 
-        # Common content should be at the start
-        assert prompt_content.startswith("Common prompt prefix")
+        # The prompt content is rendered from the XML template
         assert "Test prompt content" in prompt_content
 
     def test_common_prompt_optional(
@@ -401,27 +408,32 @@ class TestLlmStepExecutor:
         # Step should still succeed
         assert result.success is True
 
-    def test_session_log_context_provided(
+    def test_session_log_embedded_in_template(
         self,
         llm_executor: LlmStepExecutor,
         sample_current_issue: CurrentIssue,
         mock_issue_service: MagicMock,
         mock_claude_runner: MagicMock,
+        mock_prompt_service: MagicMock,
     ) -> None:
-        """Test that session log is provided as context to claude_runner."""
-        # Configure mock to return session log
-        mock_issue_service.read_full_log.return_value = "Previous step completed successfully"
+        """Test that session log is embedded in the XML template context.
+
+        For XML templates, context is embedded via <artifact> tags in the template
+        rather than passed as a separate context string to claude_runner.
+        """
+        # Configure mock to return session log tail
+        mock_issue_service.read_log_tail.return_value = "Previous step completed successfully"
 
         # Execute the step
         llm_executor.execute(sample_current_issue)
 
-        # Verify context was passed
+        # Verify context was passed as None (context is in template)
         call_args = mock_claude_runner.run_with_content.call_args
         context = call_args.kwargs.get("context")
+        assert context is None
 
-        assert context is not None
-        assert "Session Activity Log" in context
-        assert "Previous step completed successfully" in context
+        # Verify set_context was called on prompt_service
+        mock_prompt_service.set_context.assert_called_once()
 
     def test_updated_issue_step_respected(
         self,
