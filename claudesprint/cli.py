@@ -29,10 +29,6 @@ from claudesprint.ui import WorkflowDashboard
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
 
-# Initialize process manager early to install signal handlers for cleanup
-# This ensures Ctrl+C and other signals properly terminate Claude processes
-_process_manager = get_process_manager()
-
 app = typer.Typer(
     name="claudesprint",
     help="ClaudeSprint - Autonomous workflow orchestration for AI-driven development",
@@ -64,6 +60,10 @@ def main(
     ] = False,
 ) -> None:
     """ClaudeSprint - Run the workflow by default."""
+    # Initialize process manager to install signal handlers for cleanup
+    # This ensures Ctrl+C and other signals properly terminate Claude processes
+    get_process_manager()
+
     if version:
         console.print(f"claudesprint version {__version__}")
         raise typer.Exit()
