@@ -232,6 +232,10 @@ class IssueEngine:
                     error="Total iteration limit exceeded. This usually indicates an infinite loop between steps like FIX_TESTS <-> RUN_TESTS.",
                 )
 
+            # Increment total iterations before any step processing (including skips)
+            current_issue.total_iterations += 1
+            self.issue_service.write_current_issue(current_issue)
+
             # Check if we should skip the current step
             if self._should_skip_step(current_issue.step):
                 skip_result = self._get_skip_result(current_issue.step)
@@ -266,11 +270,6 @@ class IssueEngine:
 
             # Execute the step
             step_result = self._execute_step(current_issue)
-
-            # Increment total iterations (tracks all step executions, never resets)
-            current_issue.total_iterations += 1
-            # Persist immediately to ensure count is saved even on early exit
-            self.issue_service.write_current_issue(current_issue)
 
             # Handle rate limiting
             if step_result.rate_limited:
