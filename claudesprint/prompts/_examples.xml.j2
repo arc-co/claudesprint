@@ -1,0 +1,92 @@
+{# Gold Standard Examples - filtered by step_name #}
+{# These examples demonstrate ideal analysis and action patterns for each workflow step #}
+
+{% if step_name in ['run-tests', 'fix-tests'] %}
+<example type="routing_failure">
+    <scenario>Tests fail due to implementation bug</scenario>
+    <analysis>
+        Test Result: FAIL
+        Error: AssertionError: expected 200 but got 404
+        Verdict: FAIL_CODE - route not registered
+    </analysis>
+    <action>claudesprint-tools issue step implement --goal="Register missing route handler"</action>
+    <routing_signal>fail_code</routing_signal>
+</example>
+{% endif %}
+
+{% if step_name == 'fix-tests' %}
+<example type="test_wrong">
+    <scenario>Test expectation incorrect per acceptance criteria</scenario>
+    <analysis>
+        Failure: expected "admin" but got "user"
+        AC states: "Default role should be 'user'"
+        Verdict: TEST_WRONG - test expectation conflicts with AC
+    </analysis>
+    <action>Update test to expect "user" instead of "admin"</action>
+    <routing_signal>test_fixed</routing_signal>
+</example>
+
+<example type="code_wrong">
+    <scenario>Implementation does not match acceptance criteria</scenario>
+    <analysis>
+        Failure: expected status 201 but got 200
+        AC states: "Return 201 Created on successful resource creation"
+        Verdict: CODE_WRONG - implementation returns wrong status code
+    </analysis>
+    <action>claudesprint-tools issue step implement --goal="Return 201 status for POST endpoints"</action>
+    <routing_signal>code_wrong</routing_signal>
+</example>
+{% endif %}
+
+{% if step_name == 'code-review' %}
+<example type="code_review_pass">
+    <scenario>Implementation meets all acceptance criteria</scenario>
+    <analysis>
+        [AC1] Login endpoint returns JWT: IMPLEMENTED
+        [AC2] Invalid credentials return 401: IMPLEMENTED
+        [AC3] Token expires after 24h: IMPLEMENTED
+        Code Quality: Follows existing patterns, no security concerns
+    </analysis>
+    <routing_signal>pass</routing_signal>
+</example>
+
+<example type="code_review_issues">
+    <scenario>Implementation has issues requiring fixes</scenario>
+    <analysis>
+        [AC1] Login endpoint returns JWT: IMPLEMENTED
+        [AC2] Invalid credentials return 401: MISSING - returns 500 on invalid password
+        [AC3] Token expires after 24h: IMPLEMENTED
+        Code Quality: Missing error handling for invalid credentials
+    </analysis>
+    <action>claudesprint-tools issue step fix-code-review-issues --goal="Add proper 401 response for invalid credentials"</action>
+    <routing_signal>issues</routing_signal>
+</example>
+{% endif %}
+
+{% if step_name == 'implement' %}
+<example type="implementation_complete">
+    <scenario>Implementation task completed successfully</scenario>
+    <analysis>
+        1. Current state: No authentication endpoint exists
+        2. Goal: [AC1] Create POST /login endpoint
+        3. Approach: Add route handler with JWT generation
+    </analysis>
+    <action>claudesprint-tools issue change src/auth.py "Added login endpoint with JWT generation"</action>
+    <action>claudesprint-tools issue step write-tests --goal="Write tests for login endpoint"</action>
+    <routing_signal>pass</routing_signal>
+</example>
+{% endif %}
+
+{% if step_name == 'write-tests' %}
+<example type="tests_written">
+    <scenario>Test suite written for implementation</scenario>
+    <analysis>
+        1. Current state: Login endpoint implemented, no tests
+        2. Goal: Test all acceptance criteria
+        3. Approach: Write tests for valid login, invalid credentials, token expiry
+    </analysis>
+    <action>claudesprint-tools issue change tests/test_auth.py "Added tests for login endpoint"</action>
+    <action>claudesprint-tools issue step run-tests --goal="Verify implementation passes tests"</action>
+    <routing_signal>pass</routing_signal>
+</example>
+{% endif %}

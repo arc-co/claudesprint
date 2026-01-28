@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # Reserved keys that cannot be overridden by custom_vars without warning
-_RESERVED_CONTEXT_KEYS = frozenset({"browser_validation_enabled", "context7_available"})
+_RESERVED_CONTEXT_KEYS = frozenset({"browser_validation_enabled", "context7_available", "examples_enabled"})
 
 
 @dataclass
@@ -36,6 +36,7 @@ class PromptContext:
     Attributes:
         browser_validation_enabled: True if agent-browser is available
         context7_available: True if context7 binary is available
+        examples_enabled: True to include gold standard examples in prompts
         custom_vars: Additional user-defined variables.
         step_name: Name of the current workflow step (e.g., "implement", "run-tests")
         step_goal: Brief description of the step's goal
@@ -46,12 +47,13 @@ class PromptContext:
 
     Warning:
         If custom_vars contains keys that match reserved context keys
-        (browser_validation_enabled, context7_available), a warning will
+        (browser_validation_enabled, context7_available, examples_enabled), a warning will
         be logged and the custom value will override the built-in value.
     """
 
     browser_validation_enabled: bool = False
     context7_available: bool = False
+    examples_enabled: bool = True
     custom_vars: dict[str, Any] = field(default_factory=dict)
 
     # XML template context data
@@ -71,6 +73,7 @@ class PromptContext:
         result = {
             "browser_validation_enabled": self.browser_validation_enabled,
             "context7_available": self.context7_available,
+            "examples_enabled": self.examples_enabled,
             "step_name": self.step_name,
             "step_goal": self.step_goal,
             "sprint_json": self.sprint_json,

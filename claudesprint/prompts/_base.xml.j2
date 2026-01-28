@@ -69,6 +69,13 @@
         {% include '_common.xml.j2' %}
     </common_patterns>
 
+    {% if examples_enabled %}
+    <gold_standard_examples>
+        <description>Follow these patterns for analysis and action.</description>
+        {% include '_examples.xml.j2' ignore missing %}
+    </gold_standard_examples>
+    {% endif %}
+
     <instructions>
         {% block instructions %}{% endblock %}
     </instructions>

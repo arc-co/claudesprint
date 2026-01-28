@@ -21,6 +21,7 @@ class TestPromptContext:
         ctx = PromptContext()
         assert ctx.browser_validation_enabled is False
         assert ctx.context7_available is False
+        assert ctx.examples_enabled is True
         assert ctx.custom_vars == {}
         # New XML context fields
         assert ctx.step_name == ""
@@ -57,9 +58,24 @@ class TestPromptContext:
         result = ctx.to_dict()
         assert result["browser_validation_enabled"] is True
         assert result["context7_available"] is False
+        assert result["examples_enabled"] is True
         assert result["project_name"] == "test"
         assert result["step_name"] == "run-tests"
         assert result["step_goal"] == "Run the test suite"
+
+    def test_examples_enabled_in_to_dict(self) -> None:
+        """Test that examples_enabled is included in to_dict."""
+        ctx = PromptContext(examples_enabled=False)
+        result = ctx.to_dict()
+        assert "examples_enabled" in result
+        assert result["examples_enabled"] is False
+
+    def test_examples_enabled_default_true(self) -> None:
+        """Test that examples_enabled defaults to True."""
+        ctx = PromptContext()
+        assert ctx.examples_enabled is True
+        result = ctx.to_dict()
+        assert result["examples_enabled"] is True
 
     def test_to_dict_custom_vars_override(self) -> None:
         """Test that custom_vars can override default keys."""
