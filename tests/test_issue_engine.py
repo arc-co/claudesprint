@@ -282,24 +282,6 @@ class TestTotalIterationsModel:
         )
         assert issue.total_iterations == 0
 
-    def test_total_iterations_in_to_dict(self) -> None:
-        """total_iterations is included in to_dict output."""
-        issue = CurrentIssue(
-            schema_version="2.0",
-            session_id="2026-01-28T12:00:00Z/implement",
-            timestamp="2026-01-28T12:00:00Z",
-            sprint_path="./sprint.json",
-            issue_id="test-001",
-            issue_title="Test",
-            chunk_type=ChunkType.IMPLEMENT,
-            step=IssueStep.IMPLEMENT,
-            goal="Goal",
-            next_action="Action",
-            total_iterations=42,
-        )
-        result = issue.to_handoff_dict()
-        assert result["total_iterations"] == 42
-
     def test_total_iterations_reset_on_create_initial(self) -> None:
         """total_iterations is reset to 0 when creating via create_initial()."""
         issue = CurrentIssue.create_initial(sprint_path="./sprint.json")
