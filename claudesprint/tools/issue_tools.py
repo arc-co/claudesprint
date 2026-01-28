@@ -40,6 +40,77 @@ def _save_issue(data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
+def _get_log_path() -> Path:
+    """Get path to current_issue.log."""
+    if _project_dir is None:
+        raise RuntimeError("issue_tools not configured. Call configure() first.")
+    return _project_dir / "current_issue.log"
+
+
+def _clear_log() -> bool:
+    """Clear current_issue.log.
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        log_path = _get_log_path()
+        if log_path.exists():
+            log_path.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def _load_sprint(sprint_path: str) -> dict[str, Any] | None:
+    """Load sprint.json file.
+
+    Args:
+        sprint_path: Path to sprint.json
+
+    Returns:
+        Sprint data dict or None if file doesn't exist
+    """
+    path = Path(sprint_path)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def _validate_issue_in_sprint(
+    sprint_path: str, issue_id: str
+) -> tuple[bool, str, str | None]:
+    """Validate that an issue exists in the sprint and is selectable.
+
+    Args:
+        sprint_path: Path to sprint.json
+        issue_id: Issue ID to validate
+
+    Returns:
+        Tuple of (is_valid, error_message, issue_title)
+    """
+    sprint_data = _load_sprint(sprint_path)
+    if sprint_data is None:
+        return False, f"Sprint file not found: {sprint_path}", None
+
+    issues = sprint_data.get("issues", [])
+    for issue in issues:
+        if issue.get("id") == issue_id:
+            status = issue.get("status", "pending")
+            if status == "pending":
+                return True, "", issue.get("title", "")
+            elif status == "completed":
+                return False, f"Issue {issue_id} is already completed", None
+            elif status == "in_progress":
+                return False, f"Issue {issue_id} is already in progress", None
+            elif status == "blocked":
+                return False, f"Issue {issue_id} is blocked", None
+            else:
+                return False, f"Issue {issue_id} has invalid status: {status}", None
+
+    return False, f"Issue {issue_id} not found in sprint", None
+
+
 @dataclass
 class ToolResult:
     """Result from a tool operation."""
@@ -246,6 +317,14 @@ def init_issue(
                 message="Cannot init: could not determine sprint_path",
             )
 
+        # Validate issue exists in sprint and is selectable
+        is_valid, error_msg, issue_title = _validate_issue_in_sprint(sprint_path, issue_id)
+        if not is_valid:
+            return ToolResult(
+                success=False,
+                message=f"Cannot init issue: {error_msg}",
+            )
+
         # Create fresh current_issue data
         timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         session_id = f"{timestamp}/{step}"
@@ -254,7 +333,7 @@ def init_issue(
             "schema_version": "2.0",
             "sprint_path": sprint_path,
             "issue_id": issue_id,
-            "issue_title": "",  # Will be populated by engine or agent
+            "issue_title": issue_title or "",  # From sprint validation
             "step": step,
             "chunk_type": "IMPLEMENT",
             "goal": goal or f"Begin work on issue {issue_id}",
@@ -268,6 +347,10 @@ def init_issue(
             "repo_state": {"head_sha": "", "is_dirty": False},
             "log_tail": "",
         }
+
+        # Clear the log file when initializing a new issue to avoid mixing
+        # log entries from different issues
+        _clear_log()
 
         _save_issue(data)
 

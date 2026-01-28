@@ -238,6 +238,9 @@ class SprintEngine:
         If there's already an in_progress issue (from a previous interrupted
         session), that issue is resumed directly without running selection.
 
+        If current_issue.json exists with a pending issue (e.g., from
+        ISSUE_CHANGED transition), that issue is used directly.
+
         Args:
             sprint: Sprint model
 
@@ -249,6 +252,24 @@ class SprintEngine:
         if in_progress_issue:
             current_issue = self.issue_service.read_current_issue()
             return self._resume_in_progress_issue(in_progress_issue, current_issue)
+
+        # Check if current_issue.json already has a valid pending issue
+        # (this happens after ISSUE_CHANGED when the select-issue step already picked an issue)
+        existing_current = self.issue_service.read_current_issue()
+        if existing_current and existing_current.issue_id:
+            # Find this issue in the sprint
+            for issue in sprint.issues:
+                if issue.id == existing_current.issue_id and issue.status == IssueStatus.PENDING:
+                    # Valid pending issue already selected - use it
+                    self.issue_service.log_issue_selection(
+                        issue.id, issue.title, "Continuing from select-issue step"
+                    )
+                    return IssueSelectionResult(
+                        success=True,
+                        issue_id=issue.id,
+                        issue_title=issue.title,
+                        rationale="Continuing from select-issue step",
+                    )
 
         # Get available issues
         available = self.sprint_service.get_available_issues(sprint)
@@ -838,15 +859,46 @@ class SprintEngine:
                     and existing_current_issue.issue_id == issue.id
                 )
 
-                if is_resuming and has_valid_context:
-                    # Resuming: use existing current_issue context
+                if has_valid_context:
+                    # Use existing current_issue context (either resuming or continuing after
+                    # ISSUE_CHANGED from select-issue step)
                     current_issue = existing_current_issue
+
+                    # Ensure issue is marked as in_progress in sprint
+                    if not is_resuming:
+                        self.sprint_service.mark_issue_status(
+                            self.sprint_path,
+                            issue.id,
+                            IssueStatus.IN_PROGRESS,
+                        )
+
                     if self.on_output:
                         self.on_output(
                             f"\nResuming issue {issue.id} at step: {current_issue.step.value}\n"
                         )
                 else:
                     # New issue or no valid context: mark in_progress and create fresh context
+
+                    # Warn if sprint has IN_PROGRESS issue but current_issue.json doesn't match
+                    if is_resuming:
+                        mismatched_id = (
+                            existing_current_issue.issue_id
+                            if existing_current_issue
+                            else "missing"
+                        )
+                        if self.on_output:
+                            self.on_output(
+                                f"\nWarning: State mismatch detected. "
+                                f"Sprint has {issue.id} in_progress but current_issue.json "
+                                f"has {mismatched_id}. Creating fresh context.\n"
+                            )
+                        # Log the mismatch for debugging
+                        self.issue_service.log_step_transition(
+                            "resume",
+                            "fresh-context",
+                            f"State mismatch: sprint={issue.id}, current_issue={mismatched_id}",
+                        )
+
                     if not is_resuming:
                         self.sprint_service.mark_issue_status(
                             self.sprint_path,
@@ -908,6 +960,29 @@ class SprintEngine:
                         # Callback: issue complete
                         if self.on_issue_complete:
                             self.on_issue_complete(issue)
+
+                    case IssueExitReason.ISSUE_CHANGED:
+                        # The select-issue step transitioned to a new issue
+                        # Mark the OLD issue as complete
+                        self._mark_issue_complete(issue.id)
+                        issues_completed += 1
+
+                        # Callback: old issue complete
+                        if self.on_issue_complete:
+                            self.on_issue_complete(issue)
+
+                        # Atomically mark new issue as IN_PROGRESS to prevent state
+                        # inconsistency if process crashes before next loop iteration
+                        new_current_issue = self.issue_service.read_current_issue()
+                        if new_current_issue and new_current_issue.issue_id:
+                            self.sprint_service.mark_issue_status(
+                                self.sprint_path,
+                                new_current_issue.issue_id,
+                                IssueStatus.IN_PROGRESS,
+                            )
+
+                        # DON'T clear current_issue - it already has the new issue data
+                        # The next loop iteration will pick up the new issue and fire on_issue_start
 
                     case IssueExitReason.RATE_LIMITED:
                         # Handle rate limiting with backoff

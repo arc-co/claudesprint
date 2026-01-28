@@ -529,7 +529,10 @@ class TestCompletionStepExecutor:
         mock_sprint_service: MagicMock,
         mock_issue_service: MagicMock,
     ) -> None:
-        """Test successful completion marks issue complete and returns next_step=None."""
+        """Test successful completion logs and returns next_step=None.
+
+        Note: Sprint status update is now handled by SprintEngine, not the executor.
+        """
         # Create issue at COMPLETE_ISSUE step
         current_issue = CurrentIssue(
             schema_version="2.0",
@@ -554,13 +557,8 @@ class TestCompletionStepExecutor:
         assert "test-issue-001" in result.output
         assert "COMPLETED" in result.output
 
-        # Verify sprint service was called to mark status
-        mock_sprint_service.mark_issue_status.assert_called_once_with(
-            path="./sprints/test/sprint.json",
-            issue_id="test-issue-001",
-            status=IssueStatus.COMPLETED,
-            session_id="2026-01-28T12:00:00Z/complete-issue",
-        )
+        # Sprint status update is handled by SprintEngine, not executor
+        mock_sprint_service.mark_issue_status.assert_not_called()
 
         # Verify completion was logged
         mock_issue_service.log_issue_completion.assert_called_once_with(
@@ -600,39 +598,6 @@ class TestCompletionStepExecutor:
 
         # Sprint service should NOT be called
         mock_sprint_service.mark_issue_status.assert_not_called()
-
-    def test_failure_when_sprint_service_fails(
-        self,
-        completion_executor: CompletionStepExecutor,
-        mock_sprint_service: MagicMock,
-    ) -> None:
-        """Test failure when sprint service fails to mark status."""
-        # Configure sprint service to fail
-        mock_sprint_service.mark_issue_status.return_value = False
-
-        # Create issue at COMPLETE_ISSUE step
-        current_issue = CurrentIssue(
-            schema_version="2.0",
-            session_id="2026-01-28T12:00:00Z/complete-issue",
-            timestamp="2026-01-28T12:00:00Z",
-            sprint_path="./sprints/test/sprint.json",
-            issue_id="test-issue-001",
-            issue_title="Test issue",
-            chunk_type=ChunkType.COMPLETE,
-            step=IssueStep.COMPLETE_ISSUE,
-            goal="Complete the issue",
-            next_action="Mark issue as complete",
-            current_failures="",
-        )
-
-        # Execute the completion step
-        result = completion_executor.execute(current_issue)
-
-        # Verify failure
-        assert result.success is False
-        assert result.next_step is None
-        assert "Failed to update sprint.json" in result.output
-        assert "Could not find issue" in result.error
 
     def test_on_output_callback_called(
         self,
@@ -754,34 +719,6 @@ class TestEdgeCases:
 
         # Should still succeed with default routing
         assert result.success is True
-
-    def test_completion_executor_with_empty_issue_id(
-        self,
-        completion_executor: CompletionStepExecutor,
-        mock_sprint_service: MagicMock,
-    ) -> None:
-        """Test completion with empty issue ID."""
-        current_issue = CurrentIssue(
-            schema_version="2.0",
-            session_id="2026-01-28T12:00:00Z/complete-issue",
-            timestamp="2026-01-28T12:00:00Z",
-            sprint_path="./sprints/test/sprint.json",
-            issue_id="",  # Empty issue ID
-            issue_title="Test issue",
-            chunk_type=ChunkType.COMPLETE,
-            step=IssueStep.COMPLETE_ISSUE,
-            goal="Complete the issue",
-            next_action="Mark issue as complete",
-            current_failures="",
-        )
-
-        # Configure sprint service to fail (can't find empty issue_id)
-        mock_sprint_service.mark_issue_status.return_value = False
-
-        result = completion_executor.execute(current_issue)
-
-        # Should fail because issue_id is empty
-        assert result.success is False
 
     def test_llm_executor_subprocess_callbacks(
         self,
