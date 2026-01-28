@@ -21,52 +21,41 @@ Traditional AI coding assistants lose context between sessions. ClaudeSprint sol
 
 ClaudeSprint uses a two-loop architecture:
 
+```mermaid
+flowchart LR
+    subgraph outer["SPRINT LOOP (Outer) - Project Management Layer"]
+        A[Load Sprint] --> B[Get Bearings & Prioritize]
+        B --> C[Select Issue<br/>Agent-Driven]
+        C --> D[Enter Issue Loop]
+        D --> E[Mark Complete<br/>Clear Issue State]
+        E --> A
+    end
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SPRINT LOOP (Outer)                               │
-│                         Project Management Layer                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌────────────┐  │
-│   │  Load    │───▶│ Get Bearings │───▶│ Select Issue  │───▶│   Enter    │  │
-│   │ Sprint   │    │ & Prioritize │    │ (Agent-Driven)│    │ Issue Loop │  │
-│   └──────────┘    └──────────────┘    └───────────────┘    └─────┬──────┘  │
-│         ▲                                                        │         │
-│         │                                                        │         │
-│         │         ┌───────────────────────────────────┐          │         │
-│         └─────────│ Mark Complete, Clear Issue State  │◀─────────┘         │
-│                   └───────────────────────────────────┘                    │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           ISSUE LOOP (Inner)                                │
-│                          Execution Layer                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   select-issue ──▶ read-docs ──▶ implement ──▶ write-tests ──▶ run-tests   │
-│                                                                     │       │
-│                                      ┌──────────────────────────────┘       │
-│                                      ▼                                      │
-│                               ┌─────────────┐                               │
-│                               │ Tests Pass? │                               │
-│                               └──────┬──────┘                               │
-│                          yes ┌───────┴───────┐ no                           │
-│                              ▼               ▼                               │
-│                    browser-validation    fix-tests ──┐                      │
-│                              │                       │                      │
-│                              ▼                       └──▶ run-tests         │
-│                         code-review                                         │
-│                              │                                              │
-│                    ┌────────┴────────┐                                      │
-│               pass │                 │ issues                               │
-│                    ▼                 ▼                                      │
-│              update-docs    fix-code-review-issues ──▶ run-tests            │
-│                    │                                                        │
-│                    ▼                                                        │
-│              stage-changes ──▶ commit-changes ──▶ complete-issue            │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph inner["ISSUE LOOP (Inner) - Execution Layer"]
+        A[select-issue] --> B[read-docs]
+        B --> C[implement]
+        C --> D[write-tests]
+        D --> E[run-tests]
+        E --> F{Tests Pass?}
+
+        F -->|yes| G[browser-validation]
+        F -->|no| H[fix-tests]
+        H --> E
+
+        G --> I[code-review]
+        I --> J{Review Pass?}
+
+        J -->|pass| K[update-docs]
+        J -->|issues| L[fix-code-review-issues]
+        L --> E
+
+        K --> M[stage-changes]
+        M --> N[commit-changes]
+        N --> O[complete-issue]
+    end
 ```
 
 ### Sprint Loop (Outer)
