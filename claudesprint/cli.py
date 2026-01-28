@@ -213,9 +213,9 @@ def _run_sprint_console(
     # Create ClaudeRunner for sprint-level operations
     claude_runner = ClaudeRunner(
         project_root=project_root,
-        timeout=config.timeout,
+        timeout=config.claude_timeout,
         common_prompt_file=config.get_prompt_file("common"),
-        conversation_log_file=config.agent_conversations_log if config.debug_conversations else None,
+        conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
     )
 
     # Create IssueEngine factory that closes over shared dependencies
@@ -224,9 +224,9 @@ def _run_sprint_console(
         # Create a ClaudeRunner for this issue engine
         issue_claude_runner = ClaudeRunner(
             project_root=project_root,
-            timeout=config.timeout,
+            timeout=config.claude_timeout,
             common_prompt_file=config.get_prompt_file("common"),
-            conversation_log_file=config.agent_conversations_log if config.debug_conversations else None,
+            conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
         return IssueEngine(
             config=config,
