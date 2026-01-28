@@ -3,6 +3,7 @@
 
 Usage:
     claudesprint-tools issue get
+    claudesprint-tools issue init <issue_id> [--step=STEP] [--goal=GOAL] [--sprint-path=PATH]
     claudesprint-tools issue update [--goal=GOAL] [--next-action=ACTION]
     claudesprint-tools issue step <step_name> [--goal=GOAL] [--next-action=ACTION]
     claudesprint-tools issue change <path> <summary>
@@ -36,15 +37,16 @@ def find_project_root() -> Path:
 def configure_tools():
     """Configure tool modules with project paths."""
     project_root = find_project_root()
-    project_dir = project_root / ".claude" / "project"
-    sprints_dir = project_root / ".claude" / "sprints"
+    # Use .claudesprint/ directory (not .claude/) to match path_service.py and config.py
+    project_dir = project_root / ".claudesprint" / "project"
+    sprints_dir = project_root / ".claudesprint" / "sprints"
 
     from claudesprint.tools import issue_tools, hook_runner, sprint_tools
 
     issue_tools.configure(project_dir)
     sprint_tools.configure(sprints_dir)
     hook_runner.configure_runner(
-        config_path=project_root / ".claude" / "config" / "hooks.json",
+        config_path=project_root / ".claudesprint" / "config" / "hooks.json",
         project_root=project_root,
     )
 
@@ -102,6 +104,19 @@ def cmd_issue_clear_failures(args):
     from claudesprint.tools.issue_tools import clear_failures
 
     result = clear_failures()
+    print(json.dumps(result.to_dict(), indent=2))
+
+
+def cmd_issue_init(args):
+    """Initialize current_issue.json for a selected issue."""
+    from claudesprint.tools.issue_tools import init_issue
+
+    result = init_issue(
+        issue_id=args.issue_id,
+        step=args.step,
+        goal=args.goal,
+        sprint_path=args.sprint_path,
+    )
     print(json.dumps(result.to_dict(), indent=2))
 
 
@@ -194,6 +209,14 @@ def main():
     # issue clear-failures
     iclear_parser = issue_subparsers.add_parser("clear-failures", help="Clear failures")
     iclear_parser.set_defaults(func=cmd_issue_clear_failures)
+
+    # issue init
+    iinit_parser = issue_subparsers.add_parser("init", help="Initialize issue state")
+    iinit_parser.add_argument("issue_id", help="Issue ID to initialize")
+    iinit_parser.add_argument("--step", default="read-docs", help="Initial step (default: read-docs)")
+    iinit_parser.add_argument("--goal", help="Goal description")
+    iinit_parser.add_argument("--sprint-path", help="Path to sprint.json")
+    iinit_parser.set_defaults(func=cmd_issue_init)
 
     # Test commands
     test_parser = subparsers.add_parser("test", help="Test/validation hooks")

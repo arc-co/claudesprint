@@ -191,3 +191,90 @@ def clear_failures() -> ToolResult:
         )
     except Exception as e:
         return ToolResult(success=False, message=f"Failed to clear failures: {e}")
+
+
+def init_issue(
+    issue_id: str,
+    step: str = "read-docs",
+    goal: str | None = None,
+    sprint_path: str | None = None,
+) -> ToolResult:
+    """Initialize current_issue.json for a selected issue.
+
+    This creates or overwrites current_issue.json with fresh state for the selected issue.
+    Used by select-issue step to persist the issue selection.
+
+    Args:
+        issue_id: ID of the selected issue
+        step: Initial step (default: read-docs)
+        goal: Optional goal description
+        sprint_path: Optional path to sprint.json (will try to discover if not provided)
+
+    Returns:
+        ToolResult with success status
+    """
+    from datetime import datetime, UTC
+
+    try:
+        # Try to load existing issue to get sprint_path if not provided
+        if sprint_path is None:
+            existing = _load_issue()
+            if existing and "sprint_path" in existing:
+                sprint_path = existing["sprint_path"]
+            else:
+                # Try to find sprint.json in standard locations
+                if _project_dir is None:
+                    return ToolResult(
+                        success=False,
+                        message="Cannot init: no sprint_path provided and no existing issue to get it from",
+                    )
+                # Walk up to find .claudesprint/sprints/
+                project_root = _project_dir.parent.parent  # .claudesprint/project -> .claudesprint -> project_root
+                sprints_dir = project_root / ".claudesprint" / "sprints"
+                if sprints_dir.exists():
+                    # Find first sprint.json
+                    for sprint_dir in sprints_dir.iterdir():
+                        if sprint_dir.is_dir():
+                            sprint_json = sprint_dir / "sprint.json"
+                            if sprint_json.exists():
+                                sprint_path = str(sprint_json)
+                                break
+
+        if sprint_path is None:
+            return ToolResult(
+                success=False,
+                message="Cannot init: could not determine sprint_path",
+            )
+
+        # Create fresh current_issue data
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        session_id = f"{timestamp}/{step}"
+
+        data = {
+            "schema_version": "2.0",
+            "sprint_path": sprint_path,
+            "issue_id": issue_id,
+            "issue_title": "",  # Will be populated by engine or agent
+            "step": step,
+            "chunk_type": "IMPLEMENT",
+            "goal": goal or f"Begin work on issue {issue_id}",
+            "next_action": f"Read documentation and understand requirements",
+            "context": {},
+            "changes": [],
+            "current_failures": "",
+            "retry_count": 0,
+            "total_iterations": 0,
+            "session_id": session_id,
+            "repo_state": {"head_sha": "", "is_dirty": False},
+            "log_tail": "",
+        }
+
+        _save_issue(data)
+
+        return ToolResult(
+            success=True,
+            message=f"Initialized current_issue.json for {issue_id} at step {step}",
+            data={"issue_id": issue_id, "step": step, "sprint_path": sprint_path},
+        )
+    except Exception as e:
+        return ToolResult(success=False, message=f"Failed to init issue: {e}")
