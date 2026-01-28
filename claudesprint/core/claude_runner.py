@@ -365,6 +365,9 @@ class ClaudeRunner:
                 except BrokenPipeError:
                     # Expected when process dies - not an error
                     logger.debug("Reader thread: broken pipe (process died)")
+                except ValueError:
+                    # Expected when stdout is closed from main thread after timeout
+                    logger.debug("Reader thread: stdout closed (expected after timeout)")
                 except Exception as e:
                     reader_exception = e
                     logger.warning(f"Reader thread exception: {type(e).__name__}: {e}")
@@ -390,13 +393,20 @@ class ClaudeRunner:
                 self._force_kill_process(process)
                 exit_code = 124  # Standard timeout exit code
                 timed_out = True
+                # Immediately close stdout to unblock reader thread
+                # This forces readline() to return empty or raise ValueError
+                if process.stdout:
+                    try:
+                        process.stdout.close()
+                    except Exception as e:
+                        logger.debug(f"Error closing stdout after timeout: {e}")
 
             # Wait for reader to finish, but not forever
             reader_thread.join(timeout=5)
             if reader_thread.is_alive():
-                # Reader is stuck, force-close stdout to unblock
+                # Reader is still stuck, try closing stdout again if not already closed
                 logger.debug("Reader thread stuck, force-closing stdout")
-                if process.stdout:
+                if process.stdout and not process.stdout.closed:
                     try:
                         process.stdout.close()
                     except Exception as e:
@@ -551,6 +561,9 @@ class ClaudeRunner:
                 except BrokenPipeError:
                     # Expected when process dies - not an error
                     logger.debug("Reader thread: broken pipe (process died)")
+                except ValueError:
+                    # Expected when stdout is closed from main thread after timeout
+                    logger.debug("Reader thread: stdout closed (expected after timeout)")
                 except Exception as e:
                     reader_exception = e
                     logger.warning(f"Reader thread exception: {type(e).__name__}: {e}")
@@ -576,13 +589,20 @@ class ClaudeRunner:
                 self._force_kill_process(process)
                 exit_code = 124  # Standard timeout exit code
                 timed_out = True
+                # Immediately close stdout to unblock reader thread
+                # This forces readline() to return empty or raise ValueError
+                if process.stdout:
+                    try:
+                        process.stdout.close()
+                    except Exception as e:
+                        logger.debug(f"Error closing stdout after timeout: {e}")
 
             # Wait for reader to finish, but not forever
             reader_thread.join(timeout=5)
             if reader_thread.is_alive():
-                # Reader is stuck, force-close stdout to unblock
+                # Reader is still stuck, try closing stdout again if not already closed
                 logger.debug("Reader thread stuck, force-closing stdout")
-                if process.stdout:
+                if process.stdout and not process.stdout.closed:
                     try:
                         process.stdout.close()
                     except Exception as e:
