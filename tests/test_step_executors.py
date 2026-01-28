@@ -1,0 +1,836 @@
+"""Tests for step executors in claudesprint.core.step_executors."""
+
+import pytest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from claudesprint.core.claude_runner import ClaudeResult
+from claudesprint.core.issue_engine import ParseResult, StepResult
+from claudesprint.core.step_executors import (
+    CompletionStepExecutor,
+    LlmStepExecutor,
+    StepExecutor,
+)
+from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
+from claudesprint.models.sprint import IssueStatus
+
+
+# --- Fixtures ---
+
+
+@pytest.fixture
+def sample_current_issue() -> CurrentIssue:
+    """Create a sample CurrentIssue for testing."""
+    return CurrentIssue(
+        schema_version="2.0",
+        session_id="2026-01-28T12:00:00Z/implement",
+        timestamp="2026-01-28T12:00:00Z",
+        sprint_path="./sprints/test/sprint.json",
+        issue_id="test-issue-001",
+        issue_title="Test issue for step executors",
+        chunk_type=ChunkType.IMPLEMENT,
+        step=IssueStep.IMPLEMENT,
+        goal="Test goal",
+        next_action="Test action",
+        total_iterations=0,
+    )
+
+
+@pytest.fixture
+def mock_prompt_service() -> MagicMock:
+    """Create a mock prompt service."""
+    mock = MagicMock()
+    mock.get_prompt_content.return_value = "Test prompt content for step"
+    mock.get_common_prompt_content.return_value = "Common prompt prefix"
+    return mock
+
+
+@pytest.fixture
+def mock_claude_runner() -> MagicMock:
+    """Create a mock ClaudeRunner."""
+    mock = MagicMock()
+    mock.run_with_content.return_value = ClaudeResult(
+        exit_code=0,
+        duration_seconds=10,
+        timed_out=False,
+        rate_limited=False,
+        crashed=False,
+        output="Successful execution output\n<status>pass</status>",
+        error_type=None,
+    )
+    return mock
+
+
+@pytest.fixture
+def mock_issue_service() -> MagicMock:
+    """Create a mock issue service."""
+    mock = MagicMock()
+    mock.backup_current_issue.return_value = True
+    mock.read_full_log.return_value = ""
+    mock.read_current_issue.return_value = None
+    mock.log_issue_completion.return_value = True
+    return mock
+
+
+@pytest.fixture
+def mock_models_service() -> MagicMock:
+    """Create a mock models service."""
+    mock = MagicMock()
+    mock.get_model_for_step.return_value = "sonnet"
+    return mock
+
+
+@pytest.fixture
+def mock_sprint_service() -> MagicMock:
+    """Create a mock sprint service."""
+    mock = MagicMock()
+    mock.mark_issue_status.return_value = True
+    return mock
+
+
+@pytest.fixture
+def default_parse_step_output():
+    """Create a default parse_step_output function that returns success routing."""
+    def parse_fn(step: IssueStep, output: str) -> ParseResult:
+        # Default behavior: return next step based on routing
+        if "<status>pass</status>" in output.lower():
+            return ParseResult(next_step=IssueStep.CODE_REVIEW, matched_signal="pass")
+        if "<status>fail" in output.lower():
+            return ParseResult(next_step=IssueStep.IMPLEMENT, matched_signal="fail")
+        # Default routing
+        return ParseResult(next_step=IssueStep.WRITE_TESTS, matched_signal=None)
+    return parse_fn
+
+
+@pytest.fixture
+def llm_executor(
+    mock_prompt_service: MagicMock,
+    mock_claude_runner: MagicMock,
+    mock_issue_service: MagicMock,
+    mock_models_service: MagicMock,
+    default_parse_step_output,
+) -> LlmStepExecutor:
+    """Create an LlmStepExecutor with mocked dependencies."""
+    return LlmStepExecutor(
+        prompt_service=mock_prompt_service,
+        claude_runner=mock_claude_runner,
+        issue_service=mock_issue_service,
+        models_service=mock_models_service,
+        parse_step_output=default_parse_step_output,
+        requires_explicit_signal={IssueStep.RUN_TESTS, IssueStep.FIX_TESTS},
+        output_patterns={
+            IssueStep.RUN_TESTS: {
+                "pass": [r"<status>\s*pass\s*</status>"],
+                "fail_code": [r"<status>\s*fail_code\s*</status>"],
+                "fail_test": [r"<status>\s*fail_test\s*</status>"],
+            },
+            IssueStep.FIX_TESTS: {
+                "code_wrong": [r"<status>\s*code_wrong\s*</status>"],
+                "test_fixed": [r"<status>\s*test_fixed\s*</status>"],
+            },
+        },
+    )
+
+
+@pytest.fixture
+def completion_executor(
+    mock_sprint_service: MagicMock,
+    mock_issue_service: MagicMock,
+) -> CompletionStepExecutor:
+    """Create a CompletionStepExecutor with mocked dependencies."""
+    return CompletionStepExecutor(
+        sprint_service=mock_sprint_service,
+        issue_service=mock_issue_service,
+    )
+
+
+# --- LlmStepExecutor Tests ---
+
+
+class TestLlmStepExecutor:
+    """Tests for LlmStepExecutor."""
+
+    def test_successful_execution(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_claude_runner: MagicMock,
+        mock_prompt_service: MagicMock,
+        mock_issue_service: MagicMock,
+    ) -> None:
+        """Test successful step execution with mocked claude_runner."""
+        # Execute the step
+        result = llm_executor.execute(sample_current_issue)
+
+        # Verify success
+        assert result.success is True
+        assert result.rate_limited is False
+        assert result.crashed is False
+        assert result.error is None
+
+        # Verify claude_runner was called
+        mock_claude_runner.run_with_content.assert_called_once()
+        call_args = mock_claude_runner.run_with_content.call_args
+
+        # Verify prompt content was fetched
+        mock_prompt_service.get_prompt_content.assert_called_once_with("implement")
+
+        # Verify backup was made
+        mock_issue_service.backup_current_issue.assert_called_once()
+
+        # Verify model was fetched
+        llm_executor.models_service.get_model_for_step.assert_called_once_with(
+            IssueStep.IMPLEMENT
+        )
+
+    def test_handling_rate_limiting(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test handling of rate limiting (result.rate_limited = True)."""
+        # Configure mock to return rate limited result
+        mock_claude_runner.run_with_content.return_value = ClaudeResult(
+            exit_code=1,
+            duration_seconds=5,
+            timed_out=False,
+            rate_limited=True,
+            crashed=False,
+            output="You've hit your limit. Please try again later.",
+            error_type=None,
+        )
+
+        # Execute the step
+        result = llm_executor.execute(sample_current_issue)
+
+        # Verify rate limiting is propagated
+        assert result.success is False
+        assert result.rate_limited is True
+        assert result.crashed is False
+        assert result.next_step is None
+
+    def test_handling_crash(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test handling of crash (result.crashed = True)."""
+        # Configure mock to return crashed result
+        mock_claude_runner.run_with_content.return_value = ClaudeResult(
+            exit_code=1,
+            duration_seconds=2,
+            timed_out=False,
+            rate_limited=False,
+            crashed=True,
+            output="No messages returned",
+            error_type="crash_pattern_detected",
+        )
+
+        # Execute the step
+        result = llm_executor.execute(sample_current_issue)
+
+        # Verify crash is propagated
+        assert result.success is False
+        assert result.crashed is True
+        assert result.rate_limited is False
+        assert result.next_step is None
+        assert result.error == "crash_pattern_detected"
+
+    def test_prompt_not_found_error(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_prompt_service: MagicMock,
+    ) -> None:
+        """Test prompt not found error handling."""
+        # Configure mock to raise FileNotFoundError
+        mock_prompt_service.get_prompt_content.side_effect = FileNotFoundError(
+            "Prompt file not found"
+        )
+
+        # Execute the step
+        result = llm_executor.execute(sample_current_issue)
+
+        # Verify error handling
+        assert result.success is False
+        assert result.next_step is None
+        assert "Prompt not found" in result.error
+        assert "PROMPT_implement.md" in result.error
+
+    def test_explicit_signal_requirement_failure(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+    ) -> None:
+        """Test explicit signal requirement failure for steps like RUN_TESTS."""
+        # Create parse function that returns no matched signal (uses default routing)
+        def parse_no_signal(step: IssueStep, output: str) -> ParseResult:
+            return ParseResult(next_step=IssueStep.BROWSER_VALIDATION, matched_signal=None)
+
+        # Create executor with RUN_TESTS requiring explicit signal
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=parse_no_signal,
+            requires_explicit_signal={IssueStep.RUN_TESTS},
+            output_patterns={
+                IssueStep.RUN_TESTS: {
+                    "pass": [r"<status>\s*pass\s*</status>"],
+                    "fail_code": [r"<status>\s*fail_code\s*</status>"],
+                    "fail_test": [r"<status>\s*fail_test\s*</status>"],
+                },
+            },
+        )
+
+        # Create issue at RUN_TESTS step
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/run-tests",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue",
+            chunk_type=ChunkType.TEST,
+            step=IssueStep.RUN_TESTS,
+            goal="Run tests",
+            next_action="Run tests",
+        )
+
+        # Configure mock to return output without status signal
+        mock_claude_runner.run_with_content.return_value = ClaudeResult(
+            exit_code=0,
+            duration_seconds=10,
+            timed_out=False,
+            rate_limited=False,
+            crashed=False,
+            output="Tests completed but no status tag provided",
+            error_type=None,
+        )
+
+        # Execute the step
+        result = executor.execute(current_issue)
+
+        # Verify explicit signal requirement failure
+        assert result.success is False
+        assert result.next_step is None
+        assert "requires explicit STATUS terminator" in result.error
+        assert "run-tests" in result.error
+
+    def test_on_output_callback_called(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+    ) -> None:
+        """Test that on_output callback is called when provided."""
+        output_lines = []
+
+        def capture_output(line: str) -> None:
+            output_lines.append(line)
+
+        # Execute with callback
+        llm_executor.execute(sample_current_issue, on_output=capture_output)
+
+        # Verify callback was called (at least for step announcement)
+        assert len(output_lines) > 0
+        assert any("Running step" in line for line in output_lines)
+
+    def test_step_to_prompt_name_mapping(
+        self,
+        llm_executor: LlmStepExecutor,
+    ) -> None:
+        """Test that step names are correctly mapped to prompt names."""
+        # Verify all step mappings
+        assert llm_executor._get_prompt_name(IssueStep.SELECT_ISSUE) == "select-issue"
+        assert llm_executor._get_prompt_name(IssueStep.READ_DOCS) == "read-docs"
+        assert llm_executor._get_prompt_name(IssueStep.IMPLEMENT) == "implement"
+        assert llm_executor._get_prompt_name(IssueStep.WRITE_TESTS) == "write-tests"
+        assert llm_executor._get_prompt_name(IssueStep.RUN_TESTS) == "run-tests"
+        assert llm_executor._get_prompt_name(IssueStep.FIX_TESTS) == "fix-tests"
+        assert llm_executor._get_prompt_name(IssueStep.BROWSER_VALIDATION) == "browser-validation"
+        assert llm_executor._get_prompt_name(IssueStep.CODE_REVIEW) == "code-review"
+        assert llm_executor._get_prompt_name(IssueStep.FIX_CODE_REVIEW_ISSUES) == "fix-code-review-issues"
+        assert llm_executor._get_prompt_name(IssueStep.UPDATE_DOCS) == "update-docs"
+        assert llm_executor._get_prompt_name(IssueStep.STAGE_CHANGES) == "stage-changes"
+        assert llm_executor._get_prompt_name(IssueStep.COMMIT_CHANGES) == "commit-changes"
+        assert llm_executor._get_prompt_name(IssueStep.COMPLETE_ISSUE) == "complete-issue"
+
+    def test_common_prompt_prepended(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test that common prompt content is prepended to step prompts."""
+        # Execute the step
+        llm_executor.execute(sample_current_issue)
+
+        # Verify get_common_prompt_content was called
+        mock_prompt_service.get_common_prompt_content.assert_called_once()
+
+        # Verify the combined prompt was passed to claude_runner
+        call_args = mock_claude_runner.run_with_content.call_args
+        prompt_content = call_args.args[0]
+
+        # Common content should be at the start
+        assert prompt_content.startswith("Common prompt prefix")
+        assert "Test prompt content" in prompt_content
+
+    def test_common_prompt_optional(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test that missing common prompt doesn't cause failure."""
+        # Configure mock to raise FileNotFoundError for common prompt
+        mock_prompt_service.get_common_prompt_content.side_effect = FileNotFoundError(
+            "Common prompt not found"
+        )
+
+        # Execute the step - should not raise
+        result = llm_executor.execute(sample_current_issue)
+
+        # Step should still succeed
+        assert result.success is True
+
+    def test_session_log_context_provided(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_issue_service: MagicMock,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test that session log is provided as context to claude_runner."""
+        # Configure mock to return session log
+        mock_issue_service.read_full_log.return_value = "Previous step completed successfully"
+
+        # Execute the step
+        llm_executor.execute(sample_current_issue)
+
+        # Verify context was passed
+        call_args = mock_claude_runner.run_with_content.call_args
+        context = call_args.kwargs.get("context")
+
+        assert context is not None
+        assert "Session Activity Log" in context
+        assert "Previous step completed successfully" in context
+
+    def test_updated_issue_step_respected(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_issue_service: MagicMock,
+    ) -> None:
+        """Test that if Claude updates the step field, it's respected."""
+        # Configure mock to return updated issue with different step
+        updated_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/write-tests",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue",
+            chunk_type=ChunkType.TEST,
+            step=IssueStep.WRITE_TESTS,  # Claude changed the step
+            goal="Write tests",
+            next_action="Write tests",
+        )
+        mock_issue_service.read_current_issue.return_value = updated_issue
+
+        # Execute the step
+        result = llm_executor.execute(sample_current_issue)
+
+        # Verify the updated step is used
+        assert result.next_step == IssueStep.WRITE_TESTS
+
+    def test_non_zero_exit_code_without_next_step_fails(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+    ) -> None:
+        """Test that non-zero exit code without next_step is a failure."""
+        # Create parse function that returns no next step
+        def parse_no_next(step: IssueStep, output: str) -> ParseResult:
+            return ParseResult(next_step=None, matched_signal=None)
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=parse_no_next,
+            requires_explicit_signal=set(),  # No explicit signal required
+            output_patterns={},
+        )
+
+        # Configure mock to return non-zero exit code
+        mock_claude_runner.run_with_content.return_value = ClaudeResult(
+            exit_code=1,
+            duration_seconds=10,
+            timed_out=False,
+            rate_limited=False,
+            crashed=False,
+            output="Command failed with error",
+            error_type=None,
+        )
+
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/implement",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue",
+            chunk_type=ChunkType.IMPLEMENT,
+            step=IssueStep.IMPLEMENT,
+            goal="Implement",
+            next_action="Implement",
+        )
+
+        # Execute the step
+        result = executor.execute(current_issue)
+
+        # Verify failure
+        assert result.success is False
+        assert "exited with code 1" in result.error
+
+
+# --- CompletionStepExecutor Tests ---
+
+
+class TestCompletionStepExecutor:
+    """Tests for CompletionStepExecutor."""
+
+    def test_successful_completion(
+        self,
+        completion_executor: CompletionStepExecutor,
+        mock_sprint_service: MagicMock,
+        mock_issue_service: MagicMock,
+    ) -> None:
+        """Test successful completion marks issue complete and returns next_step=None."""
+        # Create issue at COMPLETE_ISSUE step
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue completed",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="",  # No failures
+        )
+
+        # Execute the completion step
+        result = completion_executor.execute(current_issue)
+
+        # Verify success
+        assert result.success is True
+        assert result.next_step is None  # Signals loop exit
+        assert "test-issue-001" in result.output
+        assert "COMPLETED" in result.output
+
+        # Verify sprint service was called to mark status
+        mock_sprint_service.mark_issue_status.assert_called_once_with(
+            path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            status=IssueStatus.COMPLETED,
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+        )
+
+        # Verify completion was logged
+        mock_issue_service.log_issue_completion.assert_called_once_with(
+            "test-issue-001",
+            "Test issue completed",
+        )
+
+    def test_failure_when_current_failures_set(
+        self,
+        completion_executor: CompletionStepExecutor,
+        mock_sprint_service: MagicMock,
+    ) -> None:
+        """Test failure when current_failures is set (should return FIX_CODE_REVIEW_ISSUES)."""
+        # Create issue with outstanding failures
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue with failures",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="Code review found issues: missing error handling",
+        )
+
+        # Execute the completion step
+        result = completion_executor.execute(current_issue)
+
+        # Verify failure with redirect to fix issues
+        assert result.success is False
+        assert result.next_step == IssueStep.FIX_CODE_REVIEW_ISSUES
+        assert "Outstanding failures" in result.error
+        assert "Cannot complete issue" in result.output
+
+        # Sprint service should NOT be called
+        mock_sprint_service.mark_issue_status.assert_not_called()
+
+    def test_failure_when_sprint_service_fails(
+        self,
+        completion_executor: CompletionStepExecutor,
+        mock_sprint_service: MagicMock,
+    ) -> None:
+        """Test failure when sprint service fails to mark status."""
+        # Configure sprint service to fail
+        mock_sprint_service.mark_issue_status.return_value = False
+
+        # Create issue at COMPLETE_ISSUE step
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="",
+        )
+
+        # Execute the completion step
+        result = completion_executor.execute(current_issue)
+
+        # Verify failure
+        assert result.success is False
+        assert result.next_step is None
+        assert "Failed to update sprint.json" in result.output
+        assert "Could not find issue" in result.error
+
+    def test_on_output_callback_called(
+        self,
+        completion_executor: CompletionStepExecutor,
+    ) -> None:
+        """Test that on_output callback is called when provided."""
+        output_lines = []
+
+        def capture_output(line: str) -> None:
+            output_lines.append(line)
+
+        # Create issue at COMPLETE_ISSUE step
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="test-issue-001",
+            issue_title="Test issue",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="",
+        )
+
+        # Execute with callback
+        completion_executor.execute(current_issue, on_output=capture_output)
+
+        # Verify callback was called
+        assert len(output_lines) >= 2  # At least step announcement and completion message
+        assert any("Running step" in line for line in output_lines)
+        assert any("Issue Complete" in line for line in output_lines)
+
+    def test_output_includes_issue_details(
+        self,
+        completion_executor: CompletionStepExecutor,
+    ) -> None:
+        """Test that completion output includes issue ID and title."""
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="PROJ-123",
+            issue_title="Implement user authentication",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="",
+        )
+
+        result = completion_executor.execute(current_issue)
+
+        assert result.success is True
+        assert "PROJ-123" in result.output
+        assert "Implement user authentication" in result.output
+        assert "COMPLETED" in result.output
+
+
+# --- StepExecutor Abstract Base Class Tests ---
+
+
+class TestStepExecutorInterface:
+    """Tests for StepExecutor abstract base class interface."""
+
+    def test_llm_executor_is_step_executor(
+        self,
+        llm_executor: LlmStepExecutor,
+    ) -> None:
+        """Test that LlmStepExecutor is a StepExecutor."""
+        assert isinstance(llm_executor, StepExecutor)
+
+    def test_completion_executor_is_step_executor(
+        self,
+        completion_executor: CompletionStepExecutor,
+    ) -> None:
+        """Test that CompletionStepExecutor is a StepExecutor."""
+        assert isinstance(completion_executor, StepExecutor)
+
+    def test_step_executor_has_execute_method(self) -> None:
+        """Test that StepExecutor defines execute method signature."""
+        import inspect
+        from abc import ABC
+
+        # Verify StepExecutor is abstract
+        assert issubclass(StepExecutor, ABC)
+
+        # Verify execute is an abstract method
+        assert hasattr(StepExecutor, "execute")
+        assert getattr(StepExecutor.execute, "__isabstractmethod__", False)
+
+
+# --- Edge Cases and Error Handling ---
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error handling."""
+
+    def test_llm_executor_with_empty_output(
+        self,
+        llm_executor: LlmStepExecutor,
+        sample_current_issue: CurrentIssue,
+        mock_claude_runner: MagicMock,
+    ) -> None:
+        """Test handling of empty output from Claude."""
+        mock_claude_runner.run_with_content.return_value = ClaudeResult(
+            exit_code=0,
+            duration_seconds=5,
+            timed_out=False,
+            rate_limited=False,
+            crashed=False,
+            output="",
+            error_type=None,
+        )
+
+        result = llm_executor.execute(sample_current_issue)
+
+        # Should still succeed with default routing
+        assert result.success is True
+
+    def test_completion_executor_with_empty_issue_id(
+        self,
+        completion_executor: CompletionStepExecutor,
+        mock_sprint_service: MagicMock,
+    ) -> None:
+        """Test completion with empty issue ID."""
+        current_issue = CurrentIssue(
+            schema_version="2.0",
+            session_id="2026-01-28T12:00:00Z/complete-issue",
+            timestamp="2026-01-28T12:00:00Z",
+            sprint_path="./sprints/test/sprint.json",
+            issue_id="",  # Empty issue ID
+            issue_title="Test issue",
+            chunk_type=ChunkType.COMPLETE,
+            step=IssueStep.COMPLETE_ISSUE,
+            goal="Complete the issue",
+            next_action="Mark issue as complete",
+            current_failures="",
+        )
+
+        # Configure sprint service to fail (can't find empty issue_id)
+        mock_sprint_service.mark_issue_status.return_value = False
+
+        result = completion_executor.execute(current_issue)
+
+        # Should fail because issue_id is empty
+        assert result.success is False
+
+    def test_llm_executor_subprocess_callbacks(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        sample_current_issue: CurrentIssue,
+    ) -> None:
+        """Test that subprocess callbacks are wired up correctly."""
+        on_start_called = []
+        on_end_called = []
+        on_output_called = []
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+            on_subprocess_start=lambda pid, cmd: on_start_called.append((pid, cmd)),
+            on_subprocess_end=lambda: on_end_called.append(True),
+            on_subprocess_output=lambda line: on_output_called.append(line),
+        )
+
+        # Execute - callbacks should be wired to claude_runner
+        executor.execute(sample_current_issue)
+
+        # Verify callbacks were wired (not necessarily called, as that depends on mock)
+        assert mock_claude_runner.on_subprocess_start is not None
+        assert mock_claude_runner.on_subprocess_end is not None
+
+    def test_llm_executor_on_step_start_callback(
+        self,
+        mock_prompt_service: MagicMock,
+        mock_claude_runner: MagicMock,
+        mock_issue_service: MagicMock,
+        mock_models_service: MagicMock,
+        default_parse_step_output,
+        sample_current_issue: CurrentIssue,
+    ) -> None:
+        """Test that on_step_start callback is called."""
+        step_starts = []
+
+        executor = LlmStepExecutor(
+            prompt_service=mock_prompt_service,
+            claude_runner=mock_claude_runner,
+            issue_service=mock_issue_service,
+            models_service=mock_models_service,
+            parse_step_output=default_parse_step_output,
+            requires_explicit_signal=set(),
+            output_patterns={},
+            on_step_start=lambda step, model: step_starts.append((step, model)),
+        )
+
+        executor.execute(sample_current_issue)
+
+        # Verify on_step_start was called
+        assert len(step_starts) == 1
+        assert step_starts[0][0] == IssueStep.IMPLEMENT
+        assert step_starts[0][1] == "sonnet"  # From mock_models_service

@@ -9,19 +9,28 @@ The IssueEngine manages the inner loop:
 
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Callable
 
-from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
+from claudesprint.core.claude_runner import ClaudeRunner
+from claudesprint.core.step_executors import (
+    CompletionStepExecutor,
+    LlmStepExecutor,
+    StepExecutor,
+)
+from claudesprint.core.step_types import ParseResult, StepResult
 from claudesprint.models.config import ClaudesprintConfig
-from claudesprint.models.current_issue import CurrentIssue, IssueStep, ChunkType
-from claudesprint.models.sprint import ResolvedConfig, IssueStatus
+from claudesprint.models.current_issue import CurrentIssue, IssueStep
+from claudesprint.models.sprint import ResolvedConfig
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.models_service import ModelsService
+from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.prompt_service import PromptService
 from claudesprint.services.sprint_service import SprintService
-from claudesprint.services.notification_service import NotificationService
+
+# Re-export for backward compatibility
+__all__ = ["IssueEngine", "IssueExitReason", "IssueResult", "ParseResult", "StepResult"]
 
 
 class IssueExitReason(StrEnum):
@@ -47,26 +56,6 @@ class IssueResult:
     final_step: IssueStep
     message: str
     error: str | None = None
-
-
-@dataclass
-class StepResult:
-    """Result of executing a single workflow step."""
-
-    success: bool
-    next_step: IssueStep | None
-    output: str
-    rate_limited: bool = False
-    crashed: bool = False
-    error: str | None = None
-
-
-@dataclass
-class ParseResult:
-    """Result of parsing step output."""
-
-    next_step: IssueStep | None
-    matched_signal: str | None  # The signal that matched, or None if default
 
 
 class IssueEngine:
@@ -116,6 +105,11 @@ class IssueEngine:
     REQUIRES_EXPLICIT_SIGNAL: set[IssueStep] = {
         IssueStep.RUN_TESTS,
         IssueStep.FIX_TESTS,
+    }
+
+    # Steps that use non-default executors (default is LlmStepExecutor)
+    STEP_EXECUTOR_OVERRIDES: dict[IssueStep, type] = {
+        IssueStep.COMPLETE_ISSUE: CompletionStepExecutor,
     }
 
     # Patterns for parsing step output to determine routing
@@ -201,6 +195,51 @@ class IssueEngine:
         self.on_subprocess_start: Callable[[int, str], None] | None = None  # (pid, command)
         self.on_subprocess_output: Callable[[str], None] | None = None  # (line)
         self.on_subprocess_end: Callable[[], None] | None = None
+
+        # Step executors registry
+        self._step_executors: dict[IssueStep, StepExecutor] = {}
+        self._init_step_executors()
+
+    def _init_step_executors(self) -> None:
+        """Initialize and register step executors.
+
+        Uses STEP_EXECUTOR_OVERRIDES to determine executor types.
+        Default executor is LlmStepExecutor for steps not in the overrides.
+        """
+        models_service = ModelsService(self.config.models_file)
+
+        # Create executor instances
+        # Note: Lambdas are used to defer callback lookup to execution time,
+        # since callbacks are set on IssueEngine after __init__ but before run()
+        executor_instances: dict[type, StepExecutor] = {
+            LlmStepExecutor: LlmStepExecutor(
+                prompt_service=self.prompt_service,
+                claude_runner=self.claude_runner,
+                issue_service=self.issue_service,
+                models_service=models_service,
+                parse_step_output=self._parse_step_output,
+                requires_explicit_signal=self.REQUIRES_EXPLICIT_SIGNAL,
+                output_patterns=self.OUTPUT_PATTERNS,
+                on_step_start=lambda s, m: self.on_step_start and self.on_step_start(s, m),
+                on_subprocess_start=lambda p, c: self.on_subprocess_start and self.on_subprocess_start(p, c),
+                on_subprocess_end=lambda: self.on_subprocess_end and self.on_subprocess_end(),
+                on_subprocess_output=lambda ln: self.on_subprocess_output and self.on_subprocess_output(ln),
+            ),
+            CompletionStepExecutor: CompletionStepExecutor(
+                sprint_service=self.sprint_service,
+                issue_service=self.issue_service,
+            ),
+        }
+
+        # Register executors for each step using the declarative mapping
+        for step in IssueStep:
+            executor_type = self.STEP_EXECUTOR_OVERRIDES.get(step, LlmStepExecutor)
+            self._step_executors[step] = executor_instances[executor_type]
+
+        # Verify all steps have executors (fail fast on misconfiguration)
+        missing_steps = set(IssueStep) - set(self._step_executors.keys())
+        if missing_steps:
+            raise RuntimeError(f"No executor registered for steps: {missing_steps}")
 
     def run(self, current_issue: CurrentIssue) -> IssueResult:
         """Run the issue through the workflow until completion or exit.
@@ -365,6 +404,8 @@ class IssueEngine:
     def _execute_step(self, current_issue: CurrentIssue) -> StepResult:
         """Execute a single workflow step.
 
+        Delegates to the registered StepExecutor for the current step.
+
         Args:
             current_issue: CurrentIssue context
 
@@ -373,189 +414,18 @@ class IssueEngine:
         """
         step = current_issue.step
 
-        # Intercept complete-issue step - execute via Python, not LLM
-        if step == IssueStep.COMPLETE_ISSUE:
-            return self._execute_complete_issue(current_issue)
-
-        # Get prompt content for this step using hierarchical loading
-        prompt_name = self._get_prompt_name(step)
-        try:
-            prompt_content = self.prompt_service.get_prompt_content(prompt_name)
-            # Prepend common prompt content if available
-            try:
-                common_content = self.prompt_service.get_common_prompt_content()
-                prompt_content = common_content + "\n\n---\n\n" + prompt_content
-            except FileNotFoundError:
-                pass  # Common prompt is optional
-        except FileNotFoundError:
+        # Look up the executor for this step
+        executor = self._step_executors.get(step)
+        if executor is None:
             return StepResult(
                 success=False,
                 next_step=None,
                 output="",
-                error=f"Prompt not found: PROMPT_{prompt_name}.md",
+                error=f"No executor registered for step: {step}",
             )
 
-        # Backup current_issue before running
-        self.issue_service.backup_current_issue()
-
-        # Get model for this step
-        models_service = ModelsService(self.config.models_file)
-        model = models_service.get_model_for_step(step)
-
-        # Callback: step starting
-        if self.on_step_start:
-            self.on_step_start(step, model)
-
-        # Build context from full session log for agent awareness
-        session_log = self.issue_service.read_full_log()
-        context_str: str | None = None
-        if session_log:
-            context_str = (
-                "## Session Activity Log\n"
-                "The following log shows the complete workflow activity for this session. "
-                "Use this to understand the full progression, including any failures or decisions made.\n\n"
-                f"```\n{session_log}\n```\n"
-            )
-
-        # Run Claude with the prompt
-        if self.on_output:
-            self.on_output(f"\n=== Running step: {step} ===\n")
-
-        # Wire up subprocess callbacks
-        self.claude_runner.on_subprocess_start = self.on_subprocess_start
-        self.claude_runner.on_subprocess_end = self.on_subprocess_end
-
-        # Create combined output handler that notifies both on_output and on_subprocess_output
-        def combined_output_handler(line: str) -> None:
-            if self.on_output:
-                self.on_output(line)
-            if self.on_subprocess_output:
-                self.on_subprocess_output(line)
-
-        result: ClaudeResult = self.claude_runner.run_with_content(
-            prompt_content,
-            source_name=f"PROMPT_{prompt_name}.md",
-            on_output=combined_output_handler,
-            model=model,
-            context=context_str,
-        )
-
-        # Check for rate limiting
-        if result.rate_limited:
-            return StepResult(
-                success=False,
-                next_step=None,
-                output=result.output,
-                rate_limited=True,
-            )
-
-        # Check for crash
-        if result.crashed:
-            return StepResult(
-                success=False,
-                next_step=None,
-                output=result.output,
-                crashed=True,
-                error=result.error_type or "Claude crashed",
-            )
-
-        # Parse output to determine routing
-        parse_result = self._parse_step_output(step, result.output)
-        next_step = parse_result.next_step
-
-        # Check if this step requires explicit signal matching
-        # If so, using default routing is a failure (prevents infinite loops)
-        if step in self.REQUIRES_EXPLICIT_SIGNAL and parse_result.matched_signal is None:
-            expected_patterns = list(self.OUTPUT_PATTERNS.get(step, {}).keys())
-            return StepResult(
-                success=False,
-                next_step=None,
-                output=result.output,
-                error=(
-                    f"Step {step} requires explicit STATUS terminator but none found. "
-                    f"Expected one of: {', '.join(expected_patterns)}. "
-                    "Check that the prompt ends with a STATUS line."
-                ),
-            )
-
-        # Reload current_issue to get any updates made by Claude
-        updated_issue = self.issue_service.read_current_issue()
-        if updated_issue:
-            # Claude may have updated the step field directly
-            if updated_issue.step != current_issue.step:
-                next_step = updated_issue.step
-
-        # Check exit code
-        if result.exit_code != 0 and not next_step:
-            return StepResult(
-                success=False,
-                next_step=None,
-                output=result.output,
-                error=f"Claude exited with code {result.exit_code}",
-            )
-
-        return StepResult(
-            success=True,
-            next_step=next_step,
-            output=result.output,
-        )
-
-    def _execute_complete_issue(self, current_issue: CurrentIssue) -> StepResult:
-        """Pure Python implementation of complete-issue step.
-
-        Updates sprint.json status to 'completed', logs completion,
-        and signals the workflow to exit.
-
-        Args:
-            current_issue: CurrentIssue context
-
-        Returns:
-            StepResult with outcome (next_step=None signals loop exit)
-        """
-        # Safety check: do not complete if there are known failures
-        if current_issue.current_failures:
-            return StepResult(
-                success=False,
-                next_step=IssueStep.FIX_CODE_REVIEW_ISSUES,
-                output="Cannot complete issue: Outstanding failures detected.",
-                error="Outstanding failures present in current_issue context",
-            )
-
-        # Update sprint file (mark as completed)
-        success = self.sprint_service.mark_issue_status(
-            path=current_issue.sprint_path,
-            issue_id=current_issue.issue_id,
-            status=IssueStatus.COMPLETED,
-            session_id=current_issue.session_id,
-        )
-
-        if not success:
-            return StepResult(
-                success=False,
-                next_step=None,
-                output="Failed to update sprint.json",
-                error=f"Could not find issue {current_issue.issue_id} in {current_issue.sprint_path}",
-            )
-
-        # Log completion
-        self.issue_service.log_issue_completion(
-            current_issue.issue_id,
-            current_issue.issue_title,
-        )
-
-        # Return success with next_step=None (signals loop exit)
-        output_msg = (
-            f"=== Issue Complete ===\n"
-            f"Issue: {current_issue.issue_id}\n"
-            f"Title: {current_issue.issue_title}\n"
-            f"Status: COMPLETED\n"
-        )
-
-        return StepResult(
-            success=True,
-            next_step=None,  # This triggers IssueExitReason.COMPLETED in run()
-            output=output_msg,
-        )
+        # Delegate execution to the executor
+        return executor.execute(current_issue, on_output=self.on_output)
 
     def _parse_step_output(self, step: IssueStep, output: str) -> ParseResult:
         """Parse step output to determine next step based on signals.
@@ -577,12 +447,11 @@ class IssueEngine:
         # Try to match patterns for conditional routing
         for signal, signal_patterns in patterns.items():
             for pattern in signal_patterns:
-                if re.search(pattern, output_lower, re.IGNORECASE):
-                    if signal in routing:
-                        return ParseResult(
-                            next_step=routing[signal],
-                            matched_signal=signal,
-                        )
+                if re.search(pattern, output_lower, re.IGNORECASE) and signal in routing:
+                    return ParseResult(
+                        next_step=routing[signal],
+                        matched_signal=signal,
+                    )
 
         # Fall back to default routing
         return ParseResult(
@@ -749,30 +618,3 @@ class IssueEngine:
 
         return actions.get(step, f"Execute step: {step}")
 
-    def _get_prompt_name(self, step: IssueStep) -> str:
-        """Get the prompt name for a workflow step.
-
-        Args:
-            step: Workflow step
-
-        Returns:
-            Prompt name (e.g., "implement", "run-tests")
-        """
-        # Map IssueStep to prompt file name
-        step_to_prompt = {
-            IssueStep.SELECT_ISSUE: "select-issue",
-            IssueStep.READ_DOCS: "read-docs",
-            IssueStep.IMPLEMENT: "implement",
-            IssueStep.WRITE_TESTS: "write-tests",
-            IssueStep.RUN_TESTS: "run-tests",
-            IssueStep.FIX_TESTS: "fix-tests",
-            IssueStep.BROWSER_VALIDATION: "browser-validation",
-            IssueStep.CODE_REVIEW: "code-review",
-            IssueStep.FIX_CODE_REVIEW_ISSUES: "fix-code-review-issues",
-            IssueStep.UPDATE_DOCS: "update-docs",
-            IssueStep.STAGE_CHANGES: "stage-changes",
-            IssueStep.COMMIT_CHANGES: "commit-changes",
-            IssueStep.COMPLETE_ISSUE: "complete-issue",
-        }
-
-        return step_to_prompt.get(step, step.value)
