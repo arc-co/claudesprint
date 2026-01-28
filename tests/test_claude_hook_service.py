@@ -304,3 +304,117 @@ class TestQuotedContentFalsePositives:
             service.is_interactive_git_command('echo "git rebase -i main"') is False
         )
         assert service.is_interactive_git_command("git rebase -i main") is True
+
+
+class TestEscapedQuotes:
+    """Tests for proper handling of escaped quotes in commands."""
+
+    def test_allows_escaped_quotes_with_watch_inside(self) -> None:
+        """Test that escaped quotes with 'watch' inside are handled correctly."""
+        service = ClaudeHookService()
+        # The word 'watch' appears inside escaped quotes - should be stripped
+        hook_input = HookInput(
+            tool_input={"command": 'echo "v1.0 \\"watch\\" release"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_commit_with_escaped_quotes_containing_blocked_word(self) -> None:
+        """Test commit message with escaped quotes containing blocked patterns."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={
+                "command": 'git commit -m "Update \\"watch\\" mode documentation"'
+            }
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_nested_escaped_quotes_with_serve(self) -> None:
+        """Test nested escaped quotes containing 'serve' keyword."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": 'echo "config: \\"serve\\": true"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_still_blocks_watch_outside_escaped_quotes(self) -> None:
+        """Test that watch command outside quotes is still blocked."""
+        service = ClaudeHookService()
+        # 'watch' appears outside the quoted content
+        hook_input = HookInput(
+            tool_input={"command": 'npm run watch --config "test.json"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_handles_mixed_quote_styles(self) -> None:
+        """Test handling of mixed single and double quotes."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": "git commit -m 'Fix \"watch\" handling'"}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_handles_backslash_at_end_of_double_quotes(self) -> None:
+        """Test backslash escape at end of double-quoted string."""
+        service = ClaudeHookService()
+        # Escaped backslash followed by closing quote
+        hook_input = HookInput(
+            tool_input={"command": 'echo "path\\\\watch\\\\"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_handles_unclosed_quotes_gracefully(self) -> None:
+        """Test that unclosed quotes don't cause errors."""
+        service = ClaudeHookService()
+        # Unclosed double quote - everything after should be treated as quoted
+        hook_input = HookInput(tool_input={"command": 'echo "watch'})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        # 'watch' is inside the unclosed quote, so should be stripped
+        assert result == HookResult.ALLOW
+
+    def test_handles_empty_escaped_quotes(self) -> None:
+        """Test empty escaped quotes don't cause issues."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": 'echo "\\"\\"" watch'})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        # 'watch' is outside quotes, should be blocked
+        assert result == HookResult.BLOCK
+
+    def test_is_watch_command_with_escaped_quotes(self) -> None:
+        """Test is_watch_command helper with escaped quotes."""
+        service = ClaudeHookService()
+
+        # 'watch' inside escaped quotes should not match
+        assert service.is_watch_command('echo "v1.0 \\"watch\\" release"') is False
+        # Actual watch command should still match
+        assert service.is_watch_command("npm test --watch") is True
+
+    def test_is_server_command_with_escaped_quotes(self) -> None:
+        """Test is_server_command helper with escaped quotes."""
+        service = ClaudeHookService()
+
+        # 'npm run dev' inside escaped quotes should not match
+        assert service.is_server_command('echo "\\"npm run dev\\""') is False
+        # Actual server command should still match
+        assert service.is_server_command("npm run dev") is True

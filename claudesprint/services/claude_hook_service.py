@@ -5,7 +5,6 @@ for Claude Code, replacing bash script hooks with portable Python implementation
 """
 
 import json
-import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -97,12 +96,10 @@ class ClaudeHookService:
         r"\bnpx\s+.*serve\b",
     ]
 
-    # Regex patterns for stripping quoted content
-    _SINGLE_QUOTE_PATTERN = re.compile(r"'[^']*'")
-    _DOUBLE_QUOTE_PATTERN = re.compile(r'"[^"]*"')
-
     def __init__(self) -> None:
         """Initialize the hook service."""
+        import re
+
         self._watch_regex = [re.compile(p, re.IGNORECASE) for p in self.WATCH_PATTERNS]
         self._git_regex = [
             re.compile(p, re.IGNORECASE) for p in self.INTERACTIVE_GIT_PATTERNS
@@ -114,11 +111,16 @@ class ClaudeHookService:
     def _strip_quoted_content(self, command: str) -> str:
         """Remove content inside quotes to avoid matching args/messages.
 
+        Uses a state machine to properly handle shell quoting rules:
+        - Double quotes: backslash escapes work (e.g., \\" for literal quote)
+        - Single quotes: no escaping possible (POSIX shell behavior)
+
         This prevents false positives where blocked patterns appear inside
         quoted strings (e.g., commit messages, echo statements).
 
-        Example:
+        Examples:
             'git commit -m "watch out for bugs"' -> 'git commit -m ""'
+            'echo "v1.0 \\"watch\\" release"' -> 'echo ""'
 
         Args:
             command: The command string to process
@@ -126,11 +128,43 @@ class ClaudeHookService:
         Returns:
             Command with quoted content replaced by empty quotes
         """
-        # Replace single-quoted strings with empty quotes
-        result = self._SINGLE_QUOTE_PATTERN.sub('""', command)
-        # Replace double-quoted strings with empty quotes
-        result = self._DOUBLE_QUOTE_PATTERN.sub('""', result)
-        return result
+        result: list[str] = []
+        i = 0
+        n = len(command)
+
+        while i < n:
+            char = command[i]
+
+            if char == '"':
+                # Start of double-quoted string - handle escape sequences
+                result.append('""')  # Replace entire quoted content with empty quotes
+                i += 1
+                # Skip until unescaped closing quote
+                while i < n:
+                    if command[i] == "\\" and i + 1 < n:
+                        i += 2  # Skip escape sequence (e.g., \", \\)
+                    elif command[i] == '"':
+                        i += 1  # Skip closing quote
+                        break
+                    else:
+                        i += 1
+
+            elif char == "'":
+                # Start of single-quoted string
+                # In POSIX shell, single quotes preserve everything literally
+                # and cannot contain single quotes (even escaped)
+                result.append('""')
+                i += 1
+                while i < n and command[i] != "'":
+                    i += 1
+                if i < n:
+                    i += 1  # Skip closing quote
+
+            else:
+                result.append(char)
+                i += 1
+
+        return "".join(result)
 
     def execute_hook(self, hook_type: HookType, hook_input: HookInput) -> HookResult:
         """Execute the specified hook type.
