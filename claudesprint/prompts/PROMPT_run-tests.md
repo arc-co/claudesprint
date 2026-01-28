@@ -60,9 +60,9 @@ echo "  Analysis: <why routing to implement or fix-tests>" >> .claudesprint/proj
 - Do NOT commit changes
 - Include verbatim failure output
 
-## Termination Token (REQUIRED)
+## Termination Tag (REQUIRED)
 
-Last line must be exactly one of:
-- `STATUS: PASS`
-- `STATUS: FAIL_CODE`
-- `STATUS: FAIL_TEST`
+End your response with exactly one of:
+- `<status>pass</status>` - all tests passed
+- `<status>fail_code</status>` - tests fail due to code bug
+- `<status>fail_test</status>` - tests fail due to test bug

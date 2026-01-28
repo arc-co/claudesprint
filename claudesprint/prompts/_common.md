@@ -45,13 +45,13 @@ Required fields to update:
 
 Log key decisions to `current_issue.log` using the Log Progress pattern above.
 
-## Termination Tokens
+## Termination Tags
 
-Some steps require a termination token as the last line:
-- `STATUS: PASS` - step succeeded
-- `STATUS: FAIL` / `STATUS: FAIL_CODE` / `STATUS: FAIL_TEST` - step failed
-- `STATUS: SKIP` - step skipped (not applicable)
-- `STATUS: ISSUES` - issues found (code review)
+Some steps require a status tag as the final output:
+- `<status>pass</status>` - step succeeded
+- `<status>fail</status>` / `<status>fail_code</status>` / `<status>fail_test</status>` - step failed
+- `<status>skip</status>` - step skipped (not applicable)
+- `<status>issues</status>` - issues found (code review)
 
 ## Session Rules
 

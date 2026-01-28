@@ -7,7 +7,7 @@ The `agent-browser` tool is not installed globally. Skip this step:
 - Set `step` to `code-review`
 - Log: "Skipped browser validation: agent-browser not available"
 
-STATUS: SKIP
+<status>skip</status>
 {% else %}
 You are a **browser validation agent**. Validate UI features using agent-browser for e2e testing.
 
@@ -94,10 +94,10 @@ echo "  Result: <PASS/FAIL/SKIP>" >> .claudesprint/project/current_issue.log
 - Always close browser session
 - Take screenshots as evidence
 
-## Termination Token (REQUIRED)
+## Termination Tag (REQUIRED)
 
-Last line must be exactly one of:
-- `STATUS: PASS`
-- `STATUS: FAIL`
-- `STATUS: SKIP`
+End your response with exactly one of:
+- `<status>pass</status>` - all UI validations passed
+- `<status>fail</status>` - UI validation failed
+- `<status>skip</status>` - no UI components to validate
 {% endif %}

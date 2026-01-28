@@ -119,45 +119,45 @@ class IssueEngine:
     }
 
     # Patterns for parsing step output to determine routing
-    # These patterns match STATUS tokens that signal routing decisions.
-    # No end-of-string anchor ($) is used because LLMs may add trailing text/newlines.
+    # These patterns match <status>...</status> XML tags that signal routing decisions.
+    # XML tags are preferred over plain text markers for more robust LLM output parsing.
     OUTPUT_PATTERNS = {
         IssueStep.RUN_TESTS: {
             "pass": [
-                r"STATUS:\s*PASS\s*",
+                r"<status>\s*pass\s*</status>",
             ],
             "fail_code": [
-                r"STATUS:\s*FAIL_CODE\s*",
+                r"<status>\s*fail_code\s*</status>",
             ],
             "fail_test": [
-                r"STATUS:\s*FAIL_TEST\s*",
+                r"<status>\s*fail_test\s*</status>",
             ],
         },
         IssueStep.FIX_TESTS: {
             "code_wrong": [
-                r"STATUS:\s*CODE_WRONG\s*",
+                r"<status>\s*code_wrong\s*</status>",
             ],
             "test_fixed": [
-                r"STATUS:\s*TEST_FIXED\s*",
+                r"<status>\s*test_fixed\s*</status>",
             ],
         },
         IssueStep.BROWSER_VALIDATION: {
             "skip": [
-                r"STATUS:\s*SKIP\s*",
+                r"<status>\s*skip\s*</status>",
             ],
             "fail": [
-                r"STATUS:\s*FAIL\s*",
+                r"<status>\s*fail\s*</status>",
             ],
             "pass": [
-                r"STATUS:\s*PASS\s*",
+                r"<status>\s*pass\s*</status>",
             ],
         },
         IssueStep.CODE_REVIEW: {
             "issues": [
-                r"STATUS:\s*ISSUES\s*",
+                r"<status>\s*issues\s*</status>",
             ],
             "pass": [
-                r"STATUS:\s*PASS\s*",
+                r"<status>\s*pass\s*</status>",
             ],
         },
     }
