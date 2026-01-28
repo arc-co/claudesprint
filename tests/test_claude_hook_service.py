@@ -418,3 +418,79 @@ class TestEscapedQuotes:
         assert service.is_server_command('echo "\\"npm run dev\\""') is False
         # Actual server command should still match
         assert service.is_server_command("npm run dev") is True
+
+
+class TestCommandSubstitutions:
+    """Tests for command substitutions with nested quotes."""
+
+    def test_allows_watch_in_command_substitution_inside_quotes(self) -> None:
+        """Test that 'watch' in a command substitution inside quotes is allowed."""
+        service = ClaudeHookService()
+        # The entire string is quoted, so command substitution content is stripped
+        hook_input = HookInput(
+            tool_input={"command": 'echo "$(git commit -m \'watch this\')"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_serve_in_nested_command_substitution(self) -> None:
+        """Test that 'serve' in nested quotes in command substitution is allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(
+            tool_input={"command": 'result="$(echo \"serve endpoint\")"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_blocks_watch_outside_command_substitution(self) -> None:
+        """Test that watch outside a command substitution is still blocked."""
+        service = ClaudeHookService()
+        # watch is outside the quoted string
+        hook_input = HookInput(
+            tool_input={"command": 'npm run watch "$(echo test)"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.BLOCK
+
+    def test_handles_backtick_command_substitution(self) -> None:
+        """Test that backtick command substitution with watch inside is allowed."""
+        service = ClaudeHookService()
+        # Note: shlex treats backticks as regular characters in POSIX mode
+        # The "watch" is inside the double-quoted string
+        hook_input = HookInput(
+            tool_input={"command": 'echo "`git commit -m watch`"'}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_helper_ignores_watch_in_command_substitution(self) -> None:
+        """Test is_watch_command ignores content in command substitutions."""
+        service = ClaudeHookService()
+
+        # 'watch' inside quoted command substitution should not match
+        assert (
+            service.is_watch_command('echo "$(git commit -m \'watch\')"') is False
+        )
+        # Actual watch command should still match
+        assert service.is_watch_command("npm run watch") is True
+
+    def test_handles_dollar_single_quotes(self) -> None:
+        """Test ANSI-C quoting ($'...') with watch inside."""
+        service = ClaudeHookService()
+        # shlex handles $'...' syntax in POSIX mode
+        hook_input = HookInput(
+            tool_input={"command": "echo $'watch\\nthis'"}
+        )
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        # The $'...' is treated as a single-quoted string by shlex
+        assert result == HookResult.ALLOW

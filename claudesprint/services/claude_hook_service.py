@@ -5,6 +5,7 @@ for Claude Code, replacing bash script hooks with portable Python implementation
 """
 
 import json
+import shlex
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -111,9 +112,11 @@ class ClaudeHookService:
     def _strip_quoted_content(self, command: str) -> str:
         """Remove content inside quotes to avoid matching args/messages.
 
-        Uses a state machine to properly handle shell quoting rules:
-        - Double quotes: backslash escapes work (e.g., \\" for literal quote)
-        - Single quotes: no escaping possible (POSIX shell behavior)
+        Uses Python's shlex module for robust shell parsing that handles:
+        - Double quotes with backslash escapes (e.g., \\" for literal quote)
+        - Single quotes (literal content, no escaping per POSIX)
+        - Command substitutions with nested quotes
+        - Other complex shell quoting edge cases
 
         This prevents false positives where blocked patterns appear inside
         quoted strings (e.g., commit messages, echo statements).
@@ -121,6 +124,7 @@ class ClaudeHookService:
         Examples:
             'git commit -m "watch out for bugs"' -> 'git commit -m ""'
             'echo "v1.0 \\"watch\\" release"' -> 'echo ""'
+            'echo "$(git commit -m 'watch')"' -> 'echo ""'
 
         Args:
             command: The command string to process
@@ -128,6 +132,9 @@ class ClaudeHookService:
         Returns:
             Command with quoted content replaced by empty quotes
         """
+        if not command:
+            return command
+
         result: list[str] = []
         i = 0
         n = len(command)
@@ -135,31 +142,47 @@ class ClaudeHookService:
         while i < n:
             char = command[i]
 
-            if char == '"':
-                # Start of double-quoted string - handle escape sequences
-                result.append('""')  # Replace entire quoted content with empty quotes
-                i += 1
-                # Skip until unescaped closing quote
-                while i < n:
-                    if command[i] == "\\" and i + 1 < n:
-                        i += 2  # Skip escape sequence (e.g., \", \\)
-                    elif command[i] == '"':
-                        i += 1  # Skip closing quote
-                        break
-                    else:
-                        i += 1
+            if char in ('"', "'"):
+                # Use shlex to find the end of this quoted string
+                try:
+                    # Create a POSIX-mode lexer for the remaining string
+                    lexer = shlex.shlex(command[i:], posix=True)
+                    # Get one token (the quoted string content)
+                    token = lexer.get_token()
 
-            elif char == "'":
-                # Start of single-quoted string
-                # In POSIX shell, single quotes preserve everything literally
-                # and cannot contain single quotes (even escaped)
+                    if token is not None:
+                        # Calculate how many characters were consumed
+                        # by reading what remains in the stream
+                        remaining = lexer.instream.read()
+                        consumed = len(command) - i - len(remaining)
+                        result.append('""')
+                        i += consumed
+                        continue
+                except ValueError:
+                    # Parse error (e.g., unterminated quote)
+                    # Fall through to manual handling for graceful degradation
+                    pass
+
+                # Fallback for parse errors: use simple state machine
+                quote_char = char
                 result.append('""')
                 i += 1
-                while i < n and command[i] != "'":
-                    i += 1
-                if i < n:
-                    i += 1  # Skip closing quote
-
+                if quote_char == '"':
+                    # Handle double quotes with escapes
+                    while i < n:
+                        if command[i] == "\\" and i + 1 < n:
+                            i += 2  # Skip escape sequence
+                        elif command[i] == '"':
+                            i += 1  # Skip closing quote
+                            break
+                        else:
+                            i += 1
+                else:
+                    # Handle single quotes (no escaping)
+                    while i < n and command[i] != "'":
+                        i += 1
+                    if i < n:
+                        i += 1  # Skip closing quote
             else:
                 result.append(char)
                 i += 1
