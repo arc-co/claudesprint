@@ -58,14 +58,48 @@ class HookInput:
             return cls()
 
 
+@dataclass
+class CommandRule:
+    """Rule for detecting blocked commands."""
+
+    required_sequence: tuple[str, ...]  # e.g., ("git", "commit")
+    blocked_flags: frozenset[str] = frozenset()  # Flags that trigger block
+    allow_flags: frozenset[str] = frozenset()  # Flags that allow if present
+    block_without_allow_flags: bool = False  # Block when allow_flags absent
+
+
+# Rules for interactive git commands (token-based parsing for complex flag logic)
+# Each rule defines a command sequence and flag conditions that trigger blocking.
+GIT_INTERACTIVE_RULES = [
+    CommandRule(
+        required_sequence=("git", "rebase"),
+        blocked_flags=frozenset({"-i", "--interactive"}),
+    ),
+    CommandRule(
+        required_sequence=("git", "add"),
+        blocked_flags=frozenset({"-i", "--interactive", "-p", "--patch"}),
+    ),
+    # Block git commit unless it has a flag that provides a message non-interactively.
+    # Without -m, -F, -C, or --no-edit, git commit opens an editor for the message.
+    CommandRule(
+        required_sequence=("git", "commit"),
+        allow_flags=frozenset(
+            {"-m", "--message", "-F", "--file", "-C", "--reuse-message", "--no-edit"}
+        ),
+        block_without_allow_flags=True,
+    ),
+]
+
+
 class ClaudeHookService:
     """Service for executing Claude hook logic."""
 
-    # Commands that block the terminal waiting for input or run indefinitely
+    # Commands that block the terminal waiting for input or run indefinitely.
+    # Note: We intentionally don't include `-w` as it's ambiguous (e.g., jest -w
+    # sets worker count, not watch mode). Only explicit --watch is blocked.
     WATCH_PATTERNS = [
         r"\bwatch\b",
         r"--watch\b",
-        r"-w\s*$",  # Common watch flag at end
         r"\bnpm\s+start\b",  # Often runs a dev server
         r"\byarn\s+start\b",
         r"\bserve\b",
@@ -108,6 +142,110 @@ class ClaudeHookService:
         self._server_regex = [
             re.compile(p, re.IGNORECASE) for p in self.SERVER_PATTERNS
         ]
+
+    def _tokenize_command(self, command: str) -> list[str] | None:
+        """Tokenize a command using shlex.
+
+        Args:
+            command: The command string to tokenize
+
+        Returns:
+            List of tokens, or None on parse failure (e.g., unclosed quotes)
+        """
+        if not command:
+            return []
+        try:
+            return shlex.split(command)
+        except ValueError:
+            return None
+
+    def _contains_sequence(
+        self,
+        tokens: list[str],
+        sequence: tuple[str, ...],
+    ) -> bool:
+        """Check if tokens contain sequence in order, starting at first token.
+
+        Args:
+            tokens: List of command tokens
+            sequence: Tuple of strings that must appear in order
+
+        Returns:
+            True if sequence found in order within tokens, starting at index 0
+        """
+        if not sequence:
+            return True
+        if not tokens:
+            return False
+
+        seq_idx = 0
+        for i, token in enumerate(tokens):
+            if token.lower() == sequence[seq_idx].lower():
+                seq_idx += 1
+                if seq_idx == len(sequence):
+                    return True
+            elif i == 0:
+                # First element of sequence must match first token
+                return False
+        return False
+
+    def _has_any_flag(self, tokens: list[str], flags: frozenset[str]) -> bool:
+        """Check if any flag appears in tokens.
+
+        Flags are matched case-sensitively (e.g., -m != -M) since CLI flags
+        are case-sensitive. Also handles:
+        - --flag=value syntax for long flags (e.g., --message="foo")
+        - Combined short flags (e.g., -am contains -a and -m)
+
+        Args:
+            tokens: List of command tokens
+            flags: Set of flags to look for
+
+        Returns:
+            True if any flag found in tokens
+        """
+        for token in tokens:
+            if token in flags:
+                return True
+            # Handle --flag=value syntax (e.g., --message="foo")
+            if "=" in token:
+                flag_part = token.split("=", 1)[0]
+                if flag_part in flags:
+                    return True
+            # Handle combined short flags (e.g., -am contains -a and -m)
+            if token.startswith("-") and not token.startswith("--") and len(token) > 2:
+                for char in token[1:]:
+                    if f"-{char}" in flags:
+                        return True
+        return False
+
+    def _matches_rule(self, tokens: list[str], rule: CommandRule) -> bool:
+        """Check if tokens match a command rule.
+
+        Args:
+            tokens: List of command tokens
+            rule: CommandRule to check against
+
+        Returns:
+            True if the tokens match the rule
+        """
+        # Check required sequence first
+        if rule.required_sequence and not self._contains_sequence(
+            tokens, rule.required_sequence
+        ):
+            return False
+
+        # If blocked_flags specified and present, block
+        if rule.blocked_flags and self._has_any_flag(tokens, rule.blocked_flags):
+            return True
+
+        # If block_without_allow_flags and no allow_flags present, block
+        if rule.block_without_allow_flags and not self._has_any_flag(
+            tokens, rule.allow_flags
+        ):
+            return True
+
+        return False
 
     def _strip_quoted_content(self, command: str) -> str:
         """Remove content inside quotes to avoid matching args/messages.
@@ -229,29 +367,23 @@ class ClaudeHookService:
         if not command:
             return HookResult.ALLOW
 
-        # Strip quoted content to avoid false positives on commit messages, etc.
-        # e.g., 'git commit -m "watch out"' should not be blocked
-        command_for_matching = self._strip_quoted_content(command)
+        # Check for watch patterns using regex on quote-stripped content
+        if self.is_watch_command(command):
+            self._print_block_message(
+                f"Blocked watch command: {command[:50]}..."
+                if len(command) > 50
+                else f"Blocked watch command: {command}"
+            )
+            return HookResult.BLOCK
 
-        # Check for watch patterns
-        for pattern in self._watch_regex:
-            if pattern.search(command_for_matching):
-                self._print_block_message(
-                    f"Blocked watch command: {command[:50]}..."
-                    if len(command) > 50
-                    else f"Blocked watch command: {command}"
-                )
-                return HookResult.BLOCK
-
-        # Check for interactive git patterns
-        for pattern in self._git_regex:
-            if pattern.search(command_for_matching):
-                self._print_block_message(
-                    f"Blocked interactive git command: {command[:50]}..."
-                    if len(command) > 50
-                    else f"Blocked interactive git command: {command}"
-                )
-                return HookResult.BLOCK
+        # Check for interactive git patterns using token-based parsing
+        if self.is_interactive_git_command(command):
+            self._print_block_message(
+                f"Blocked interactive git command: {command[:50]}..."
+                if len(command) > 50
+                else f"Blocked interactive git command: {command}"
+            )
+            return HookResult.BLOCK
 
         return HookResult.ALLOW
 
@@ -304,7 +436,8 @@ class ClaudeHookService:
     def is_watch_command(self, command: str) -> bool:
         """Check if a command is a watch/blocking command.
 
-        Quoted content is stripped before matching to avoid false positives.
+        Uses regex on quote-stripped content to avoid false positives from
+        watch-like words appearing in quoted strings (e.g., commit messages).
 
         Args:
             command: The command string to check
@@ -318,7 +451,8 @@ class ClaudeHookService:
     def is_interactive_git_command(self, command: str) -> bool:
         """Check if a command is an interactive git command.
 
-        Quoted content is stripped before matching to avoid false positives.
+        Uses token-based parsing for accuracy, with regex fallback for
+        malformed commands (e.g., unclosed quotes).
 
         Args:
             command: The command string to check
@@ -326,13 +460,18 @@ class ClaudeHookService:
         Returns:
             True if the command requires interactive input
         """
-        stripped = self._strip_quoted_content(command)
-        return any(pattern.search(stripped) for pattern in self._git_regex)
+        tokens = self._tokenize_command(command)
+        if tokens is None:
+            # Fallback to regex for malformed commands
+            stripped = self._strip_quoted_content(command)
+            return any(pattern.search(stripped) for pattern in self._git_regex)
+        return any(self._matches_rule(tokens, rule) for rule in GIT_INTERACTIVE_RULES)
 
     def is_server_command(self, command: str) -> bool:
         """Check if a command starts a server.
 
-        Quoted content is stripped before matching to avoid false positives.
+        Uses regex on quote-stripped content to avoid false positives from
+        server-like words appearing in quoted strings (e.g., commit messages).
 
         Args:
             command: The command string to check

@@ -283,246 +283,32 @@ class ClaudeRunner:
             cmd.extend(["--model", model])
         return cmd
 
-    def run_prompt(
-        self,
-        prompt_file: str | Path,
-        output_file: str | Path | None = None,
-        on_output: Callable[[str], None] | None = None,
-        model: str | None = None,
-        context: str | None = None,
-    ) -> ClaudeResult:
-        """Run Claude with a prompt file synchronously.
-
-        Args:
-            prompt_file: Path to the prompt file to pipe to Claude.
-            output_file: Optional file to capture output for rate limit detection.
-            on_output: Optional callback for streaming output lines.
-            model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
-            context: Optional context to prepend to the prompt content.
-
-        Returns:
-            ClaudeResult with exit code, duration, and status flags.
-        """
-        import threading
-        import time
-
-        prompt_path = Path(prompt_file)
-        if not prompt_path.exists():
-            return ClaudeResult(
-                exit_code=1,
-                duration_seconds=0,
-                timed_out=False,
-                rate_limited=False,
-                crashed=False,
-                output=f"Prompt file not found: {prompt_path}",
-            )
-
-        prompt_content = prompt_path.read_text()
-
-        # Prepend common prompt content if configured
-        if self.common_prompt_file and self.common_prompt_file.exists():
-            common_content = self.common_prompt_file.read_text()
-            prompt_content = common_content + "\n\n---\n\n" + prompt_content
-
-        if context:
-            prompt_content = context + "\n\n" + prompt_content
-        start_time = time.time()
-        output_lines: list[str] = []
-        reader_exception: Exception | None = None
-
-        process_manager = get_process_manager()
-
-        try:
-            # Start Claude in its own process group for clean termination
-            cmd = self._build_claude_command(model)
-            logger.debug(f"Running Claude with command: {' '.join(cmd)}")
-            process = subprocess.Popen(
-                cmd,
-                cwd=self.project_root,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # Line buffered for more responsive output
-                start_new_session=True,  # Create new process group
-            )
-
-            # Register process for cleanup tracking
-            process_manager.register_process(process)
-
-            # Notify subprocess start
-            if self.on_subprocess_start and process.pid:
-                self.on_subprocess_start(process.pid, " ".join(cmd))
-
-            # Stream output while capturing (with exception handling)
-            def stream_reader():
-                nonlocal reader_exception
-                try:
-                    assert process.stdout is not None
-                    # Use readline() instead of iterating - more responsive for pipes
-                    while True:
-                        line = process.stdout.readline()
-                        if not line:
-                            break  # EOF
-                        output_lines.append(line)
-                        if on_output:
-                            on_output(line.rstrip())
-                except BrokenPipeError:
-                    # Expected when process dies - not an error
-                    logger.debug("Reader thread: broken pipe (process died)")
-                except ValueError:
-                    # Expected when stdout is closed from main thread after timeout
-                    logger.debug("Reader thread: stdout closed (expected after timeout)")
-                except Exception as e:
-                    reader_exception = e
-                    logger.warning(f"Reader thread exception: {type(e).__name__}: {e}")
-
-            reader_thread = threading.Thread(target=stream_reader, daemon=True)
-            reader_thread.start()
-
-            # Send prompt
-            assert process.stdin is not None
-            try:
-                process.stdin.write(prompt_content)
-                process.stdin.close()
-            except BrokenPipeError:
-                # Claude died before reading input
-                pass
-
-            # Wait for completion with timeout
-            try:
-                exit_code = process.wait(timeout=self.timeout)
-                timed_out = False
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                exit_code = 124  # Standard timeout exit code
-                # IMPORTANT: Close stdout FIRST to unblock reader thread immediately
-                # This must happen BEFORE _force_kill_process which can take up to
-                # kill_timeout seconds. Otherwise the reader thread stays blocked
-                # on readline() during the entire kill grace period.
-                if process.stdout:
-                    try:
-                        process.stdout.close()
-                    except Exception as e:
-                        logger.debug(f"Error closing stdout after timeout: {e}")
-                # Now kill the process group (reader thread is already unblocked)
-                self._force_kill_process(process)
-
-            # Wait for reader to finish, but not forever
-            reader_thread.join(timeout=5)
-            if reader_thread.is_alive():
-                # Reader is still stuck, try closing stdout again if not already closed
-                logger.debug("Reader thread stuck, force-closing stdout")
-                if process.stdout and not process.stdout.closed:
-                    try:
-                        process.stdout.close()
-                    except Exception as e:
-                        logger.debug(f"Error closing stdout: {e}")
-                reader_thread.join(timeout=2)
-                if reader_thread.is_alive():
-                    logger.warning("Reader thread still alive after force-close")
-
-            # Unregister process now that it's done
-            process_manager.unregister_process(process)
-
-            # Notify subprocess end
-            if self.on_subprocess_end:
-                self.on_subprocess_end()
-
-        except Exception as e:
-            # Notify subprocess end on exception
-            if self.on_subprocess_end:
-                self.on_subprocess_end()
-            # Ensure process is unregistered on exception
-            if 'process' in locals():
-                process_manager.unregister_process(process)
-            return ClaudeResult(
-                exit_code=1,
-                duration_seconds=int(time.time() - start_time),
-                timed_out=False,
-                rate_limited=False,
-                crashed=True,
-                output=f"Error running Claude: {e}",
-                error_type=str(type(e).__name__),
-            )
-
-        duration = int(time.time() - start_time)
-        full_output = "".join(output_lines)
-
-        # Write to output file if specified
-        if output_file:
-            Path(output_file).write_text(full_output)
-
-        rate_limited = self._check_rate_limit(full_output)
-        explicit_crash, explicit_error = self._check_crash(full_output)
-
-        # Improved crash detection with multiple heuristics
-        crashed, error_type = self._should_mark_as_crash(
-            exit_code=exit_code,
-            output=full_output,
-            rate_limited=rate_limited,
-            explicit_crash=explicit_crash,
-        )
-        # Preserve explicit error type if available
-        if explicit_crash and explicit_error:
-            error_type = explicit_error
-
-        # Log conversation if debug mode is enabled
-        if self.conversation_logger:
-            self.conversation_logger.log_interaction(
-                source=str(prompt_path.name),
-                input_text=prompt_content,
-                output_text=full_output,
-                exit_code=exit_code,
-                model=model,
-                duration_seconds=duration,
-            )
-
-        return ClaudeResult(
-            exit_code=exit_code,
-            duration_seconds=duration,
-            timed_out=timed_out,
-            rate_limited=rate_limited,
-            crashed=crashed,
-            output=full_output,
-            error_type=error_type,
-        )
-
-    def run_with_content(
+    def _execute_session(
         self,
         prompt_content: str,
-        source_name: str = "prompt",
+        source_name: str,
         output_file: str | Path | None = None,
         on_output: Callable[[str], None] | None = None,
         model: str | None = None,
-        context: str | None = None,
     ) -> ClaudeResult:
-        """Run Claude with prompt content directly (not from a file).
+        """Execute a Claude session with the given prompt content.
 
-        This method is useful when prompts are loaded from package resources
-        via importlib.resources rather than from filesystem paths.
+        This is the core execution method that handles subprocess lifecycle,
+        output streaming, timeout handling, and crash detection.
 
         Args:
-            prompt_content: The prompt content to send to Claude.
+            prompt_content: The fully prepared prompt content to send to Claude.
             source_name: Name for logging purposes (e.g., "PROMPT_init.md").
             output_file: Optional file to capture output for rate limit detection.
             on_output: Optional callback for streaming output lines.
             model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
-            context: Optional context to prepend to the prompt content.
 
         Returns:
             ClaudeResult with exit code, duration, and status flags.
         """
+
         import threading
         import time
-
-        # Prepend common prompt content if configured
-        if self.common_prompt_file and self.common_prompt_file.exists():
-            common_content = self.common_prompt_file.read_text()
-            prompt_content = common_content + "\n\n---\n\n" + prompt_content
-
-        if context:
-            prompt_content = context + "\n\n" + prompt_content
 
         start_time = time.time()
         output_lines: list[str] = []
@@ -684,6 +470,109 @@ class ClaudeRunner:
             crashed=crashed,
             output=full_output,
             error_type=error_type,
+        )
+
+    def _prepare_prompt_content(
+        self,
+        prompt_content: str,
+        context: str | None = None,
+    ) -> str:
+        """Prepare prompt content by prepending common prompt and context.
+
+        Args:
+            prompt_content: The base prompt content.
+            context: Optional context to prepend.
+
+        Returns:
+            The fully prepared prompt content.
+        """
+        result = prompt_content
+
+        # Prepend common prompt content if configured
+        if self.common_prompt_file and self.common_prompt_file.exists():
+            common_content = self.common_prompt_file.read_text()
+            result = common_content + "\n\n---\n\n" + result
+
+        if context:
+            result = context + "\n\n" + result
+
+        return result
+
+    def run_prompt(
+        self,
+        prompt_file: str | Path,
+        output_file: str | Path | None = None,
+        on_output: Callable[[str], None] | None = None,
+        model: str | None = None,
+        context: str | None = None,
+    ) -> ClaudeResult:
+        """Run Claude with a prompt file synchronously.
+
+        Args:
+            prompt_file: Path to the prompt file to pipe to Claude.
+            output_file: Optional file to capture output for rate limit detection.
+            on_output: Optional callback for streaming output lines.
+            model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
+            context: Optional context to prepend to the prompt content.
+
+        Returns:
+            ClaudeResult with exit code, duration, and status flags.
+        """
+        prompt_path = Path(prompt_file)
+        if not prompt_path.exists():
+            return ClaudeResult(
+                exit_code=1,
+                duration_seconds=0,
+                timed_out=False,
+                rate_limited=False,
+                crashed=False,
+                output=f"Prompt file not found: {prompt_path}",
+            )
+
+        prompt_content = prompt_path.read_text()
+        prompt_content = self._prepare_prompt_content(prompt_content, context)
+
+        return self._execute_session(
+            prompt_content=prompt_content,
+            source_name=str(prompt_path.name),
+            output_file=output_file,
+            on_output=on_output,
+            model=model,
+        )
+
+    def run_with_content(
+        self,
+        prompt_content: str,
+        source_name: str = "prompt",
+        output_file: str | Path | None = None,
+        on_output: Callable[[str], None] | None = None,
+        model: str | None = None,
+        context: str | None = None,
+    ) -> ClaudeResult:
+        """Run Claude with prompt content directly (not from a file).
+
+        This method is useful when prompts are loaded from package resources
+        via importlib.resources rather than from filesystem paths.
+
+        Args:
+            prompt_content: The prompt content to send to Claude.
+            source_name: Name for logging purposes (e.g., "PROMPT_init.md").
+            output_file: Optional file to capture output for rate limit detection.
+            on_output: Optional callback for streaming output lines.
+            model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
+            context: Optional context to prepend to the prompt content.
+
+        Returns:
+            ClaudeResult with exit code, duration, and status flags.
+        """
+        prompt_content = self._prepare_prompt_content(prompt_content, context)
+
+        return self._execute_session(
+            prompt_content=prompt_content,
+            source_name=source_name,
+            output_file=output_file,
+            on_output=on_output,
+            model=model,
         )
 
     async def run_prompt_async(

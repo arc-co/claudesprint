@@ -494,3 +494,192 @@ class TestCommandSubstitutions:
 
         # The $'...' is treated as a single-quoted string by shlex
         assert result == HookResult.ALLOW
+
+
+class TestTokenBasedParsing:
+    """Tests for token-based command parsing that fixes fragile regex patterns."""
+
+    def test_blocks_git_commit_verbose_short(self) -> None:
+        """git commit -v opens editor, should block."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit -v") is True
+        ), "git commit -v opens editor and should be blocked"
+
+    def test_blocks_git_commit_verbose_long(self) -> None:
+        """git commit --verbose opens editor, should block."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit --verbose") is True
+        ), "git commit --verbose opens editor and should be blocked"
+
+    def test_blocks_explicit_watch_flag(self) -> None:
+        """npm test --watch --verbose should block (explicit --watch)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_watch_command("npm test --watch --verbose") is True
+        ), "explicit --watch flag should be blocked"
+
+    def test_blocks_git_commit_amend_verbose(self) -> None:
+        """git commit --amend -v opens editor, should block."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit --amend -v") is True
+        ), "git commit --amend -v opens editor and should be blocked"
+
+    def test_allows_git_commit_amend_with_message(self) -> None:
+        """git commit --amend -m 'fix' should allow."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command('git commit --amend -m "fix"') is False
+        ), "-m flag provides message non-interactively"
+
+    def test_allows_git_commit_amend_no_edit(self) -> None:
+        """git commit --amend --no-edit should allow."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit --amend --no-edit") is False
+        ), "--no-edit skips editor"
+
+    def test_allows_git_commit_with_message_and_verbose(self) -> None:
+        """git commit -m 'msg' -v should allow (has message flag)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command('git commit -m "msg" -v') is False
+        ), "-m flag provides message, -v is safe alongside it"
+
+    def test_allows_jest_workers_flag(self) -> None:
+        """jest -w 4 should allow (-w sets workers, not watch mode)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_watch_command("jest -w 4 --coverage") is False
+        ), "-w in jest sets worker count, not watch mode"
+
+    def test_blocks_jest_explicit_watch(self) -> None:
+        """jest --watch should block (explicit watch mode)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_watch_command("jest --watch") is True
+        ), "explicit --watch should be blocked"
+
+    def test_blocks_npm_test_watch_with_options(self) -> None:
+        """npm test --watch --coverage should block."""
+        service = ClaudeHookService()
+        assert (
+            service.is_watch_command("npm test --watch --coverage") is True
+        ), "--watch should be blocked regardless of other flags"
+
+    def test_allows_git_commit_with_file_flag(self) -> None:
+        """git commit -F message.txt should allow."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit -F message.txt") is False
+        ), "-F reads message from file non-interactively"
+
+    def test_allows_git_commit_with_reuse_message(self) -> None:
+        """git commit -C HEAD should allow."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit -C HEAD") is False
+        ), "-C reuses message from another commit"
+
+    def test_allows_git_commit_with_message_equals_syntax(self) -> None:
+        """git commit --message='fix' should allow (--flag=value syntax)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit --message='fix bug'") is False
+        ), "--message=value syntax should be recognized"
+
+    def test_allows_git_commit_with_file_equals_syntax(self) -> None:
+        """git commit --file=msg.txt should allow (--flag=value syntax)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit --file=msg.txt") is False
+        ), "--file=value syntax should be recognized"
+
+    def test_watch_command_ignores_watch_in_unclosed_quote(self) -> None:
+        """Watch detection ignores watch keyword inside unclosed quotes."""
+        service = ClaudeHookService()
+        # Unclosed quote - _strip_quoted_content handles partial quotes
+        # The 'watch' appears after the quote, so it's treated as quoted content
+        assert (
+            service.is_watch_command('echo "watch') is False
+        ), "watch inside unclosed quote should not trigger block"
+
+    def test_interactive_git_fallback_to_regex_on_unclosed_quote(self) -> None:
+        """Interactive git detection falls back to regex on malformed commands."""
+        service = ClaudeHookService()
+        # Unclosed quote - tokenization fails, falls back to regex
+        # The 'rebase -i' is inside the unclosed quote, so regex handles it
+        assert (
+            service.is_interactive_git_command('git log "rebase -i') is False
+        ), "rebase -i inside unclosed quote should not trigger block via regex fallback"
+
+    def test_server_guard_blocks_verbose_commit(self) -> None:
+        """Server guard should block git commit -v."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "git commit -v"})
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+        assert result == HookResult.BLOCK, "server guard should block git commit -v"
+
+    def test_server_guard_allows_commit_with_message(self) -> None:
+        """Server guard should allow git commit -m."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": 'git commit -m "test"'})
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+        assert result == HookResult.ALLOW, "server guard should allow git commit -m"
+
+    def test_allows_git_log(self) -> None:
+        """git log is not interactive and should be allowed."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git log") is False
+        ), "git log is not interactive"
+        assert (
+            service.is_interactive_git_command("git log --oneline") is False
+        ), "git log --oneline is not interactive"
+
+    def test_allows_git_status(self) -> None:
+        """git status is not interactive and should be allowed."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git status") is False
+        ), "git status is not interactive"
+
+    def test_allows_git_diff(self) -> None:
+        """git diff is not interactive and should be allowed."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git diff") is False
+        ), "git diff is not interactive"
+        assert (
+            service.is_interactive_git_command("git diff HEAD~1") is False
+        ), "git diff HEAD~1 is not interactive"
+
+    def test_allows_git_commit_with_combined_am_flag(self) -> None:
+        """git commit -am 'msg' should allow (-a and -m combined)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command('git commit -am "msg"') is False
+        ), "-am combines -a (stage all) and -m (message)"
+
+    def test_allows_git_commit_with_combined_vm_flag(self) -> None:
+        """git commit -vm 'msg' should allow (-v and -m combined)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command('git commit -vm "msg"') is False
+        ), "-vm combines -v (verbose) and -m (message)"
+
+    def test_allows_git_commit_with_combined_avm_flag(self) -> None:
+        """git commit -avm 'msg' should allow (-a, -v, and -m combined)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command('git commit -avm "msg"') is False
+        ), "-avm combines -a, -v, and -m flags"
+
+    def test_blocks_git_commit_with_combined_av_flag(self) -> None:
+        """git commit -av should block (no message flag)."""
+        service = ClaudeHookService()
+        assert (
+            service.is_interactive_git_command("git commit -av") is True
+        ), "-av has no message flag, opens editor"
