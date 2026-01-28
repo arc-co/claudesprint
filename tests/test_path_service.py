@@ -232,25 +232,3 @@ class TestPathServiceDirectoryCreation:
             assert paths.config_files_dir.exists()
 
 
-class TestPathServiceWithConfig:
-    """Tests for PathService integration with ClaudesprintConfig."""
-
-    def test_config_paths_property(self) -> None:
-        """Test that ClaudesprintConfig.paths returns a PathService."""
-        from claudesprint.models.config import ClaudesprintConfig
-
-        config = ClaudesprintConfig.from_project_root("/test/project")
-        paths = config.paths
-
-        assert isinstance(paths, PathService)
-        assert paths.project_root == Path("/test/project")
-
-    def test_config_paths_cached(self) -> None:
-        """Test that PathService is cached on the config."""
-        from claudesprint.models.config import ClaudesprintConfig
-
-        config = ClaudesprintConfig.from_project_root("/test/project")
-        paths1 = config.paths
-        paths2 = config.paths
-
-        assert paths1 is paths2

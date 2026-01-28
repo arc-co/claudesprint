@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, Field, PrivateAttr
+from pydantic import AliasChoices, BaseModel, Field
 from pydantic_settings import BaseSettings
-
-if TYPE_CHECKING:
-    from claudesprint.services.global_config_service import GlobalConfigService
-    from claudesprint.services.path_service import PathService
 
 
 class BarkConfig(BaseModel):
@@ -98,11 +93,6 @@ class ClaudesprintConfig(BaseSettings):
     claudesprint_dir: str = Field(default="", description="Path to .claudesprint directory")
     prompts_dir: str = Field(default="", description="Path to prompts directory (inside claudesprint)")
 
-    # Private attributes for services
-    _path_service: "PathService | None" = PrivateAttr(default=None)
-    _global_config_service: "GlobalConfigService | None" = PrivateAttr(default=None)
-    _project_root: Path | None = PrivateAttr(default=None)
-
     model_config = {
         "env_file": ".claudesprint/.env",
         "env_file_encoding": "utf-8",
@@ -153,20 +143,6 @@ class ClaudesprintConfig(BaseSettings):
 
         return result
 
-    @property
-    def paths(self) -> "PathService":
-        """Get PathService for centralized path resolution.
-
-        Returns:
-            PathService instance configured with the project root
-        """
-        if self._path_service is None:
-            # Lazy import to avoid circular dependency
-            from claudesprint.services.path_service import PathService
-
-            self._path_service = PathService(project_root=self._project_root)
-        return self._path_service
-
     @classmethod
     def from_project_root(cls, project_root: str) -> "ClaudesprintConfig":
         """Create config with paths derived from project root.
@@ -183,10 +159,6 @@ class ClaudesprintConfig(BaseSettings):
         Returns:
             ClaudesprintConfig instance configured for the project
         """
-        # Lazy import to avoid circular dependency
-        from claudesprint.services.global_config_service import GlobalConfigService
-        from claudesprint.services.path_service import PathService
-
         claude_dir = os.path.join(project_root, ".claude")
         claudesprint_dir = os.path.join(project_root, ".claudesprint")
 
@@ -220,11 +192,7 @@ class ClaudesprintConfig(BaseSettings):
             if global_key in global_defaults:
                 kwargs[field_name] = global_defaults[global_key]
 
-        config = cls(**kwargs)
-        config._project_root = Path(project_root)
-        config._path_service = PathService(project_root=project_root)
-        config._global_config_service = GlobalConfigService()
-        return config
+        return cls(**kwargs)
 
     @property
     def current_issue_file(self) -> str:

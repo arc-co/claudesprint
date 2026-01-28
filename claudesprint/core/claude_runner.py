@@ -92,6 +92,7 @@ class ClaudeRunner:
         min_output_length: int | None = None,  # Override MIN_OUTPUT_LENGTH
         common_prompt_file: str | Path | None = None,  # Prepended to all prompts
         conversation_log_file: str | Path | None = None,  # Debug conversation logging
+        conversation_logger: ConversationLogger | None = None,  # Injected logger (for testing)
     ) -> None:
         self.project_root = Path(project_root)
         self.timeout = timeout
@@ -108,10 +109,14 @@ class ClaudeRunner:
             re.compile(p, re.IGNORECASE) for p in self.VALID_SHORT_OUTPUT_PATTERNS
         ]
 
-        # Initialize conversation logger if path provided (debug mode)
-        self.conversation_logger: ConversationLogger | None = (
-            ConversationLogger(conversation_log_file) if conversation_log_file else None
-        )
+        # Initialize conversation logger: use injected logger, create from file path, or None
+        # Injected logger takes precedence over conversation_log_file
+        if conversation_logger is not None:
+            self.conversation_logger: ConversationLogger | None = conversation_logger
+        elif conversation_log_file is not None:
+            self.conversation_logger = ConversationLogger(conversation_log_file)
+        else:
+            self.conversation_logger = None
 
         # Callbacks for subprocess lifecycle
         self.on_subprocess_start: Callable[[int, str], None] | None = None
