@@ -65,24 +65,24 @@ class PathService:
         Raises:
             FileNotFoundError: If the prompt file doesn't exist
         """
-        resource = self._prompts_pkg.joinpath(f"PROMPT_{step}.md")
+        resource = self._prompts_pkg.joinpath(f"PROMPT_{step}.xml.j2")
         if not resource.is_file():
-            raise FileNotFoundError(f"Prompt not found: PROMPT_{step}.md")
+            raise FileNotFoundError(f"Prompt not found: PROMPT_{step}.xml.j2")
         content: str = resource.read_text(encoding="utf-8")
         return content
 
     def get_common_prompt_content(self) -> str:
-        """Get common prompt patterns prepended to all prompts.
+        """Get common prompt patterns.
 
         Returns:
             The common prompt content as a string
 
         Raises:
-            FileNotFoundError: If _common.md doesn't exist
+            FileNotFoundError: If _common.xml.j2 doesn't exist
         """
-        resource = self._prompts_pkg.joinpath("_common.md")
+        resource = self._prompts_pkg.joinpath("_common.xml.j2")
         if not resource.is_file():
-            raise FileNotFoundError("Common prompt not found: _common.md")
+            raise FileNotFoundError("Common prompt not found: _common.xml.j2")
         content: str = resource.read_text(encoding="utf-8")
         return content
 
@@ -113,8 +113,8 @@ class PathService:
         prompts = []
         for item in self._prompts_pkg.iterdir():
             name = item.name
-            if name.startswith("PROMPT_") and name.endswith(".md"):
-                step_name = name.replace("PROMPT_", "").replace(".md", "")
+            if name.startswith("PROMPT_") and name.endswith(".xml.j2"):
+                step_name = name.replace("PROMPT_", "").replace(".xml.j2", "")
                 prompts.append(step_name)
         return sorted(prompts)
 
@@ -127,7 +127,7 @@ class PathService:
         Returns:
             True if the prompt exists, False otherwise
         """
-        resource = self._prompts_pkg.joinpath(f"PROMPT_{step}.md")
+        resource = self._prompts_pkg.joinpath(f"PROMPT_{step}.xml.j2")
         result: bool = resource.is_file()
         return result
 

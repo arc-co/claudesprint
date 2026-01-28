@@ -7,8 +7,10 @@ engine's orchestration logic. Each executor handles a specific type of step:
 - CompletionStepExecutor: Runs the COMPLETE_ISSUE step via Python logic
 """
 
+import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from pathlib import Path
 
 from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner
 from claudesprint.core.step_types import ParseResult, StepResult
@@ -16,7 +18,7 @@ from claudesprint.models.current_issue import CurrentIssue, IssueStep
 from claudesprint.models.sprint import IssueStatus
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.models_service import ModelsService
-from claudesprint.services.prompt_service import PromptService
+from claudesprint.services.prompt_service import PromptContext, PromptService
 from claudesprint.services.sprint_service import SprintService
 
 
@@ -90,6 +92,56 @@ class LlmStepExecutor(StepExecutor):
         self.on_subprocess_end = on_subprocess_end
         self.on_subprocess_output = on_subprocess_output
 
+    def _build_template_context(self, current_issue: CurrentIssue) -> PromptContext:
+        """Build rich context data for XML template injection.
+
+        Args:
+            current_issue: CurrentIssue context
+
+        Returns:
+            PromptContext with all fields populated for XML template rendering
+        """
+        step = current_issue.step
+        prompt_name = self._get_prompt_name(step)
+
+        # Get step goal from current_issue
+        step_goal = current_issue.goal or f"Execute the {prompt_name} workflow step"
+
+        # Load sprint.json content if available
+        sprint_json = ""
+        if current_issue.sprint_path:
+            sprint_path = Path(current_issue.sprint_path)
+            if sprint_path.exists():
+                try:
+                    sprint_data = json.loads(sprint_path.read_text())
+                    sprint_json = json.dumps(sprint_data, indent=2)
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+        # Serialize current_issue to JSON
+        current_issue_json = current_issue.model_dump_json(indent=2)
+
+        # Get log tail (last 50 lines) for context
+        log_tail = self.issue_service.read_log_tail(num_lines=50)
+
+        # Get current failures
+        current_failures = current_issue.current_failures or ""
+
+        # Create base context from prompt service
+        base_context = self.prompt_service.context
+
+        return PromptContext(
+            browser_validation_enabled=base_context.browser_validation_enabled,
+            context7_available=base_context.context7_available,
+            custom_vars=base_context.custom_vars,
+            step_name=prompt_name,
+            step_goal=step_goal,
+            sprint_json=sprint_json,
+            current_issue_json=current_issue_json,
+            log_tail=log_tail,
+            current_failures=current_failures,
+        )
+
     def execute(
         self,
         current_issue: CurrentIssue,
@@ -106,22 +158,21 @@ class LlmStepExecutor(StepExecutor):
         """
         step = current_issue.step
 
+        # Build rich context for XML template
+        template_context = self._build_template_context(current_issue)
+        self.prompt_service.set_context(template_context)
+
         # Get prompt content for this step using hierarchical loading
+        # For XML templates, common content is included via {% include '_common.xml.j2' %}
         prompt_name = self._get_prompt_name(step)
         try:
             prompt_content = self.prompt_service.get_prompt_content(prompt_name)
-            # Prepend common prompt content if available
-            try:
-                common_content = self.prompt_service.get_common_prompt_content()
-                prompt_content = common_content + "\n\n---\n\n" + prompt_content
-            except FileNotFoundError:
-                pass  # Common prompt is optional
         except FileNotFoundError:
             return StepResult(
                 success=False,
                 next_step=None,
                 output="",
-                error=f"Prompt not found: PROMPT_{prompt_name}.md",
+                error=f"Prompt not found: PROMPT_{prompt_name}.xml.j2",
             )
 
         # Backup current_issue before running
@@ -134,18 +185,8 @@ class LlmStepExecutor(StepExecutor):
         if self.on_step_start:
             self.on_step_start(step, model)
 
-        # Build context from full session log for agent awareness
-        session_log = self.issue_service.read_full_log()
-        context_str: str | None = None
-        if session_log:
-            context_str = (
-                "## Session Activity Log\n"
-                "The following log shows the complete workflow activity for this session. "
-                "Use this to understand the full progression, including any failures or decisions made.\n\n"
-                f"```\n{session_log}\n```\n"
-            )
-
         # Run Claude with the prompt
+        # Note: Context is now embedded in XML template via <artifact> tags
         if on_output:
             on_output(f"\n=== Running step: {step} ===\n")
 
@@ -162,10 +203,10 @@ class LlmStepExecutor(StepExecutor):
 
         result: ClaudeResult = self.claude_runner.run_with_content(
             prompt_content,
-            source_name=f"PROMPT_{prompt_name}.md",
+            source_name=f"PROMPT_{prompt_name}.xml.j2",
             on_output=combined_output_handler,
             model=model,
-            context=context_str,
+            context=None,  # Context is embedded in XML template
         )
 
         # Check for rate limiting

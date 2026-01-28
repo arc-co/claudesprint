@@ -1,0 +1,102 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="high">Create valid sprint.json matching schema.</rule>
+        <rule priority="high">Set up proper .gitignore.</rule>
+        <rule priority="medium">Make initial git commit if git repo.</rule>
+{% endblock %}
+
+{% block extra_context %}
+        <note>This is the initialization step - sprint and current_issue context may not be available yet.</note>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="tasks">
+            <description>Initialize a sprint from a specification file.</description>
+            <command>claudesprint init --spec SPEC_01.md</command>
+            <steps>
+                <step>Read spec from .claudesprint/specs/&lt;spec&gt;.md</step>
+                <step>Generate sprint at sprints/&lt;spec_id&gt;/sprint.json</step>
+                <step>Create .gitignore (must ignore: node_modules/, dist/, build/, __pycache__/, .env, .claudesprint/project/*.log, .claudesprint/project/*.tmp)</step>
+                <step>Set up .claudesprint/scripts/init.sh for dev environment</step>
+                <step>Create initial project scaffolding if needed</step>
+                <step>Make initial git commit (if git repo)</step>
+            </steps>
+        </phase>
+
+        <phase name="sprint_schema">
+            <reference>See .claudesprint/schemas/sprint.schema.json for full schema.</reference>
+            <key_fields><![CDATA[
+{
+  "schema_version": "2.0",
+  "spec_id": "SPEC_01",
+  "spec_file": ".claudesprint/specs/SPEC_01.md",
+  "issues": [{
+    "id": "category-001",
+    "title": "Short title",
+    "status": "pending",
+    "priority": "critical|high|medium|low",
+    "category": "setup|infrastructure|feature|api|ui|testing|docs|bugfix",
+    "acceptance_criteria": ["Testable criterion"],
+    "dependencies": [],
+    "config": {"require_testing": true, "require_browser_qa": false}
+  }],
+  "config": {"require_testing": true, "require_browser_qa": false}
+}
+            ]]></key_fields>
+            <issue_id_convention>Format: {category}-{number} (e.g., setup-001, auth-002)</issue_id_convention>
+            <priorities>
+                <priority name="critical">Blocks all other work</priority>
+                <priority name="high">Core functionality</priority>
+                <priority name="medium">Important but not blocking</priority>
+                <priority name="low">Nice to have</priority>
+            </priorities>
+            <per_issue_config>
+                <option name="require_testing">false for docs, setup without testable code</option>
+                <option name="require_browser_qa">true for UI issues with visual acceptance criteria</option>
+            </per_issue_config>
+        </phase>
+
+        <phase name="git_setup">
+            <commands><![CDATA[
+git init 2>/dev/null || true
+cat > .gitignore << 'EOF'
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.env
+.env.local
+__pycache__/
+*.pyc
+.venv/
+.claudesprint/project/*.log
+.claudesprint/project/*.tmp
+EOF
+
+git add .gitignore sprints/<spec_id>/sprint.json .claudesprint/scripts/init.sh
+git commit -m "chore: Initialize sprint for <spec_id>"
+            ]]></commands>
+        </phase>
+
+        <phase name="validation">
+            <commands><![CDATA[
+claudesprint validate --sprint sprints/<spec_id>/sprint.json
+            ]]></commands>
+        </phase>
+
+        <phase name="exit_output">
+            <format><![CDATA[
+=== Sprint Initialized ===
+Spec: <spec_id>
+Sprint: sprints/<spec_id>/sprint.json
+Issues: X total (Critical: X, High: X, Medium: X, Low: X)
+Next: Run 'claudesprint run --sprint sprints/<spec_id>/sprint.json'
+            ]]></format>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <note>No termination tag required for this step.</note>
+{% endblock %}

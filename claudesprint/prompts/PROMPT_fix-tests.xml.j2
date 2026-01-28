@@ -1,0 +1,83 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">ALWAYS verify test expectations against spec before modifying.</rule>
+        <rule priority="critical">Do NOT run tests.</rule>
+        <rule priority="critical">Do NOT weaken tests to make them pass.</rule>
+        <rule priority="high">If implementation wrong, re-route to implement.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="prerequisites">
+            <commands><![CDATA[
+cat .claudesprint/project/current_issue.json
+            ]]></commands>
+            <check>current_failures is not empty. If empty, set step to run-tests and exit.</check>
+        </phase>
+
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
+claudesprint-tools sprint details "$ISSUE_ID"
+git diff --stat 2>/dev/null
+            ]]></commands>
+        </phase>
+
+        <phase name="analyze_failures" required="true">
+            <description>CRITICAL: Output analysis BEFORE any changes:</description>
+            <format><![CDATA[
+<analysis>
+Failure: [exact error message]
+
+Test Expectation: [what the test asserts]
+Acceptance Criteria: [relevant AC from sprint.json]
+
+Verdict: [TEST_WRONG | CODE_WRONG]
+Reasoning: [evidence for this verdict]
+
+Action: [what I will do next]
+</analysis>
+            ]]></format>
+            <decisions>
+                <decision verdict="TEST_WRONG">
+                    <indicator>Test asserts behavior not in acceptance criteria</indicator>
+                    <indicator>Test has incorrect expected values</indicator>
+                </decision>
+                <decision verdict="CODE_WRONG">
+                    <indicator>Test correctly asserts acceptance criteria</indicator>
+                    <indicator>Implementation produces wrong result</indicator>
+                </decision>
+            </decisions>
+            <enforcement>Do NOT make changes until analysis is output.</enforcement>
+        </phase>
+
+        <phase name="update_current_issue_json_fixing_test">
+            <condition>If fixing test</condition>
+            <update field="step">run-tests</update>
+            <update field="current_failures">Clear</update>
+            <update field="changes">Add: modified test files</update>
+        </phase>
+
+        <phase name="update_current_issue_json_code_wrong">
+            <condition>If code is wrong</condition>
+            <update field="step">implement</update>
+            <update field="current_failures">Keep</update>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-tests -> <next>" >> .claudesprint/project/current_issue.log
+echo "  Analysis: <test wrong OR code wrong>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <Fixed test: what was wrong OR Re-routing: test expects X, impl does Y>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <required>true</required>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="test_fixed">Test was fixed, ready to re-run</signal>
+        <signal value="code_wrong">Code needs fixing, not the test</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
+{% endblock %}

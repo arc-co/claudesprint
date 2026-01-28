@@ -477,22 +477,31 @@ class ClaudeRunner:
         prompt_content: str,
         context: str | None = None,
     ) -> str:
-        """Prepare prompt content by prepending common prompt and context.
+        """Prepare prompt content by optionally prepending context.
+
+        For XML templates, common patterns are included via Jinja2 template
+        inheritance ({% include '_common.xml.j2' %}) and context data is
+        embedded in <artifact> tags. The common_prompt_file parameter is
+        preserved for backwards compatibility but is not used with XML templates.
 
         Args:
             prompt_content: The base prompt content.
-            context: Optional context to prepend.
+            context: Optional context to prepend (deprecated for XML templates).
 
         Returns:
             The fully prepared prompt content.
         """
         result = prompt_content
 
-        # Prepend common prompt content if configured
+        # For backwards compatibility with legacy markdown prompts,
+        # prepend common_prompt_file if configured. XML templates
+        # use {% include '_common.xml.j2' %} instead.
         if self.common_prompt_file and self.common_prompt_file.exists():
             common_content = self.common_prompt_file.read_text()
             result = common_content + "\n\n---\n\n" + result
 
+        # Prepend context if provided (deprecated for XML templates which
+        # embed context via <artifact> tags in the template)
         if context:
             result = context + "\n\n" + result
 

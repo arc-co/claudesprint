@@ -1,0 +1,91 @@
+{% extends '_base.xml.j2' %}
+
+{% block extra_constraints %}
+        <rule priority="critical">Do NOT fix failures yourself.</rule>
+        <rule priority="critical">Do NOT commit changes.</rule>
+        <rule priority="high">Include verbatim failure output in current_failures.</rule>
+{% endblock %}
+
+{% block instructions %}
+        <phase name="get_bearings">
+            <commands><![CDATA[
+pwd
+cat .claudesprint/project/current_issue.json
+cat .claudesprint/config/hooks.json
+            ]]></commands>
+        </phase>
+
+        <phase name="run_tests">
+            <commands><![CDATA[
+VALIDATE_CMD=$(cat .claudesprint/config/hooks.json | jq -r '.validate.command')
+$VALIDATE_CMD
+            ]]></commands>
+            <action>Capture output. If failures, record exact error messages and identify if failures are in implementation or tests.</action>
+        </phase>
+
+        <phase name="analyze_results" required="true">
+            <description>CRITICAL: Output analysis BEFORE updating state:</description>
+            <format><![CDATA[
+<analysis>
+Test Result: [PASS | FAIL]
+
+{% if failures %}
+Failure Summary: [number of failures]
+Error Messages: [key error messages]
+
+Root Cause Assessment:
+- [code bug indicators OR test bug indicators]
+
+Verdict: [FAIL_CODE | FAIL_TEST]
+Reasoning: [evidence for this verdict]
+{% endif %}
+
+Next Step: [browser-validation | implement | fix-tests]
+</analysis>
+            ]]></format>
+            <enforcement>Do NOT update state until analysis is output.</enforcement>
+        </phase>
+
+        <phase name="update_current_issue_json_pass" condition="tests pass">
+            <update field="step">browser-validation</update>
+            <update field="current_failures">Clear</update>
+            <update field="retry_count">Reset to 0</update>
+        </phase>
+
+        <phase name="update_current_issue_json_fail" condition="tests fail">
+            <description>Determine cause of failure:</description>
+            <cause name="code_bug" route_to="implement">
+                <indicator>Test expectation correct but code produces wrong result</indicator>
+                <indicator>Runtime errors in application code</indicator>
+                <indicator>Missing implementation</indicator>
+            </cause>
+            <cause name="test_bug" route_to="fix-tests">
+                <indicator>Test has wrong expectation</indicator>
+                <indicator>Test setup broken</indicator>
+                <indicator>Test flaky/non-deterministic</indicator>
+            </cause>
+            <default>When uncertain, default to implement.</default>
+            <updates>
+                <update field="step">implement or fix-tests (based on cause)</update>
+                <update field="current_failures">Verbatim output (truncated ~200 lines)</update>
+                <update field="retry_count">Increment</update>
+            </updates>
+            <note>If retry_count > 5, add: "Multiple retries failed - may need human intervention"</note>
+        </phase>
+
+        <phase name="log_and_exit">
+            <commands><![CDATA[
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: run-tests -> <next> (<PASS/FAIL>)" >> .claudesprint/project/current_issue.log
+echo "  Analysis: <why routing to implement or fix-tests>" >> .claudesprint/project/current_issue.log
+            ]]></commands>
+        </phase>
+{% endblock %}
+
+{% block termination %}
+        <required>true</required>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="pass">All tests passed</signal>
+        <signal value="fail_code">Tests fail due to code bug</signal>
+        <signal value="fail_test">Tests fail due to test bug</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
+{% endblock %}

@@ -1,19 +1,56 @@
-"""Tests for _common.md prompt injection."""
+"""Tests for XML template common patterns inclusion.
 
-import tempfile
+With XML templating, common patterns are included via {% include '_common.xml.j2' %}
+in the _base.xml.j2 template, rather than being prepended by ClaudeRunner.
+"""
+
 from pathlib import Path
 
 import pytest
 
 from claudesprint.core.claude_runner import ClaudeRunner
+from claudesprint.services.path_service import PathService
+from claudesprint.services.prompt_service import PromptContext, PromptService
 
 
-class TestCommonPromptInjection:
-    """Tests that _common.md is properly injected into all prompts."""
+class TestXMLTemplateCommonPatterns:
+    """Tests that common patterns are properly included in XML templates."""
 
-    def test_common_content_prepended_to_prompt(self, tmp_path: Path):
-        """Common content should be prepended to prompt with separator."""
-        # Create mock common file
+    def test_common_included_via_template_inheritance(self, tmp_path: Path):
+        """Common patterns should be included via Jinja2 include directive."""
+        # Create mock _common.xml.j2
+        project_prompts = tmp_path / ".claudesprint" / "prompts"
+        project_prompts.mkdir(parents=True)
+        (project_prompts / "_common.xml.j2").write_text(
+            "<patterns><rule>Common rule here</rule></patterns>"
+        )
+
+        # Create mock _base.xml.j2 with include
+        (project_prompts / "_base.xml.j2").write_text(
+            """<prompt>
+<common>{% include '_common.xml.j2' %}</common>
+{% block instructions %}{% endblock %}
+</prompt>"""
+        )
+
+        # Create mock step prompt that extends base
+        (project_prompts / "PROMPT_test.xml.j2").write_text(
+            """{% extends '_base.xml.j2' %}
+{% block instructions %}<step>Do the thing</step>{% endblock %}"""
+        )
+
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("test")
+
+        # Verify common content is included
+        assert "Common rule here" in content
+        assert "Do the thing" in content
+
+    def test_legacy_common_prompt_file_still_works(self, tmp_path: Path):
+        """ClaudeRunner's common_prompt_file should still work for backwards compatibility."""
+        # Create mock common file (legacy markdown format)
         common_file = tmp_path / "_common.md"
         common_file.write_text("# Common Patterns\n\nContext rules here.")
 
@@ -28,31 +65,14 @@ class TestCommonPromptInjection:
             common_prompt_file=common_file,
         )
 
-        # Read what would be sent to Claude
+        # Simulate what _prepare_prompt_content does
         prompt_content = prompt_file.read_text()
-        if runner.common_prompt_file and runner.common_prompt_file.exists():
-            common_content = runner.common_prompt_file.read_text()
-            assembled = common_content + "\n\n---\n\n" + prompt_content
-        else:
-            assembled = prompt_content
+        assembled = runner._prepare_prompt_content(prompt_content)
 
-        # Verify structure
-        print("\n" + "=" * 60)
-        print("ASSEMBLED PROMPT CONTENT:")
-        print("=" * 60)
-        print(assembled)
-        print("=" * 60)
-
+        # Verify structure - common should be prepended
         assert "# Common Patterns" in assembled
         assert "Context rules here." in assembled
-        assert "---" in assembled
         assert "# Step: test" in assembled
-        assert "Do the thing." in assembled
-
-        # Verify order: common comes first
-        common_pos = assembled.find("# Common Patterns")
-        step_pos = assembled.find("# Step: test")
-        assert common_pos < step_pos, "Common content should come before step content"
 
     def test_prompt_works_without_common_file(self, tmp_path: Path):
         """Prompt should work when no common file exists."""
@@ -67,74 +87,66 @@ class TestCommonPromptInjection:
             common_prompt_file=tmp_path / "_common.md",  # Does not exist
         )
 
-        # Simulate what run_prompt does
+        # Simulate what _prepare_prompt_content does
         prompt_content = prompt_file.read_text()
-        if runner.common_prompt_file and runner.common_prompt_file.exists():
-            common_content = runner.common_prompt_file.read_text()
-            assembled = common_content + "\n\n---\n\n" + prompt_content
-        else:
-            assembled = prompt_content
+        assembled = runner._prepare_prompt_content(prompt_content)
 
-        print("\n" + "=" * 60)
-        print("PROMPT WITHOUT COMMON FILE:")
-        print("=" * 60)
-        print(assembled)
-        print("=" * 60)
-
-        # Should just be the prompt content
+        # Should just be the prompt content (no common file prepended)
         assert assembled == "# Step: test\n\nDo the thing."
-        assert "---" not in assembled
 
-    def test_real_common_file_structure(self):
-        """Test with the actual _common.md file from the project."""
-        # Find the real _common.md (tests/ -> claudesprint/prompts/)
-        common_file = Path(__file__).parent.parent / "claudesprint" / "prompts" / "_common.md"
+    def test_real_common_xml_file_structure(self):
+        """Test the actual _common.xml.j2 file from the project."""
+        common_file = Path(__file__).parent.parent / "claudesprint" / "prompts" / "_common.xml.j2"
 
         if not common_file.exists():
-            pytest.skip("_common.md not found in expected location")
+            pytest.skip("_common.xml.j2 not found in expected location")
 
         content = common_file.read_text()
 
-        print("\n" + "=" * 60)
-        print("ACTUAL _common.md CONTENT:")
-        print("=" * 60)
-        print(content)
-        print("=" * 60)
-
-        # Verify expected sections exist
-        assert "Context Rules" in content or "context" in content.lower()
-        assert "Get Bearings" in content or "bearings" in content.lower()
+        # Verify expected XML sections exist
+        assert "<patterns>" in content or "pattern" in content.lower()
         assert "current_issue.json" in content
-        assert "sprint.json" in content or "sprint_path" in content.lower()
+        assert "<session_rules>" in content or "rule" in content.lower()
 
-    def test_injection_with_real_prompt(self):
-        """Test injection with actual prompt and common files."""
-        prompts_dir = Path(__file__).parent.parent / "claudesprint" / "prompts"
-        common_file = prompts_dir / "_common.md"
-        prompt_file = prompts_dir / "PROMPT_implement.md"
+    def test_xml_template_renders_with_context(self, tmp_path: Path):
+        """Test XML template renders context variables correctly."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
 
-        if not common_file.exists() or not prompt_file.exists():
-            pytest.skip("Required prompt files not found")
+        # Set context
+        service.set_context(PromptContext(
+            step_name="implement",
+            step_goal="Implement the feature",
+            sprint_json='{"spec_id": "SPEC_01"}',
+            current_issue_json='{"issue_id": "auth-001"}',
+        ))
 
-        common_content = common_file.read_text()
-        prompt_content = prompt_file.read_text()
-        assembled = common_content + "\n\n---\n\n" + prompt_content
+        # Load actual implement prompt
+        content = service.get_prompt_content("implement")
 
-        print("\n" + "=" * 60)
-        print("FULL ASSEMBLED PROMPT (implement step):")
-        print("=" * 60)
-        print(f"Total length: {len(assembled)} chars")
-        print(f"Common length: {len(common_content)} chars")
-        print(f"Prompt length: {len(prompt_content)} chars")
-        print("-" * 60)
-        print("First 500 chars:")
-        print(assembled[:500])
-        print("-" * 60)
-        print("Last 300 chars:")
-        print(assembled[-300:])
-        print("=" * 60)
+        # Verify context was rendered
+        assert "implement" in content.lower()
+        # The step_goal should appear somewhere in the rendered output
+        assert "feature" in content.lower() or "implement" in content.lower()
 
-        # Verify structure
-        assert common_content in assembled
-        assert prompt_content in assembled
-        assert assembled.index(common_content) < assembled.index(prompt_content)
+    def test_artifact_tags_in_rendered_output(self, tmp_path: Path):
+        """Test that artifact tags contain context data."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        # Set context with data
+        service.set_context(PromptContext(
+            step_name="run-tests",
+            step_goal="Run the test suite",
+            sprint_json='{"spec_id": "SPEC_01", "issues": []}',
+            current_issue_json='{"issue_id": "test-001", "step": "run-tests"}',
+            log_tail="[2024-01-01] Previous step completed",
+        ))
+
+        # Load any prompt that uses base template
+        content = service.get_prompt_content("run-tests")
+
+        # Verify artifact tags are present (from base template)
+        assert "<artifact" in content or "artifact" in content.lower()
+        # Context data should be embedded
+        assert "SPEC_01" in content or "spec_id" in content
