@@ -46,7 +46,6 @@ class TestGlobalConfigModels:
         """Test DebugConfig has expected defaults."""
         config = DebugConfig()
         assert config.conversations is False
-        assert config.max_rationale == 20
 
     def test_global_config_defaults(self) -> None:
         """Test GlobalConfig composes all sections."""

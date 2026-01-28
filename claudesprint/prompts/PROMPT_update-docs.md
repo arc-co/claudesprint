@@ -26,7 +26,7 @@ ls -la docs/ 2>/dev/null || echo "No docs directory"
 
 If skipping:
 - Set `step` to `stage-changes`
-- Add to `rationale`: "Skipped docs: <reason>"
+- Log: "Skipped docs: <reason>"
 
 ## Require Docs Update If ANY True:
 
@@ -54,7 +54,6 @@ Guidelines: Clear language, code examples where helpful, follow existing style, 
 
 - Set `step` to `stage-changes`
 - Add to `changes`: doc files created/modified
-- Add to `rationale`: "Updated docs: <summary>" or "Skipped docs: <reason>"
 
 **IMPORTANT**: Preserve existing `changes` array.
 
@@ -63,6 +62,7 @@ Guidelines: Clear language, code examples where helpful, follow existing style, 
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: update-docs -> stage-changes" >> .claudesprint/project/current_issue.log
 echo "  Docs: <updated/skipped>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <Updated docs: summary OR Skipped docs: reason>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

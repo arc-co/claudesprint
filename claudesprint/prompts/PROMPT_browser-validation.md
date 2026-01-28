@@ -5,7 +5,7 @@
 
 The `agent-browser` tool is not installed globally. Skip this step:
 - Set `step` to `code-review`
-- Add to `rationale`: "Skipped browser validation: agent-browser not available"
+- Log: "Skipped browser validation: agent-browser not available"
 
 STATUS: SKIP
 {% else %}
@@ -18,7 +18,7 @@ You are a **browser validation agent**. Validate UI features using agent-browser
 
 If NO UI components, skip to code-review:
 - Set `step` to `code-review`
-- Add to `rationale`: "Skipped browser validation: no UI keywords in acceptance criteria"
+- Log: "Skipped browser validation: no UI keywords in acceptance criteria"
 - Exit
 
 ## Get Bearings
@@ -79,7 +79,7 @@ For each UI acceptance criterion verify:
 
 ### If SKIP:
 - Set `step` to `code-review`
-- Add to `rationale`: "Skipped: no UI in acceptance criteria"
+- Log: "Skipped browser validation: no UI in acceptance criteria"
 
 ## Log & Exit
 

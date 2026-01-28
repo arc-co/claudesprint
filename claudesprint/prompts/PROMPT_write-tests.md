@@ -41,13 +41,13 @@ Guidelines:
 - Set `step` to `run-tests`
 - Set `goal` to describe test execution
 - Add to `changes`: `{"path": "<test file>", "summary": "<tests added>"}`
-- Add to `rationale`: test coverage summary
 
 ## Log & Exit
 
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: write-tests -> run-tests" >> .claudesprint/project/current_issue.log
 echo "  Tests added: <test files>" >> .claudesprint/project/current_issue.log
+echo "  Coverage: <test coverage summary>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

@@ -12,7 +12,7 @@ git status 2>/dev/null || echo "Not a git repo"
 
 If NOT a git repo:
 - Set `step` to `commit-changes` (will skip to complete)
-- Add to `rationale`: "Skipped staging: not a git repository"
+- Log: "Skipped staging: not a git repository"
 - Exit
 
 ## Check Baseline Dirty Files

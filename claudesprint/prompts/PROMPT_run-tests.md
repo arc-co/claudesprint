@@ -43,7 +43,6 @@ When uncertain, default to `implement`.
 For the determined route:
 - Set `step` to `implement` or `fix-tests`
 - Set `current_failures` to verbatim output (truncated ~200 lines)
-- Add to `rationale`: analysis of why routing that way
 - Increment `retry_count`
 
 If `retry_count` > 5, add: "Multiple retries failed - may need human intervention"
@@ -52,6 +51,7 @@ If `retry_count` > 5, add: "Multiple retries failed - may need human interventio
 
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: run-tests -> <next> (<PASS/FAIL>)" >> .claudesprint/project/current_issue.log
+echo "  Analysis: <why routing to implement or fix-tests>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

@@ -213,7 +213,6 @@ flowchart TB
         issue_id[issue_id]
         step[step]
         changes[changes]
-        rationale[rationale]
     end
 
     CurrentIssue -->|Execute Steps| Log

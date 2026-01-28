@@ -46,7 +46,6 @@ For each criterion: Is it implemented? Is it tested? Does it work?
 
 ### If CLEAN:
 - Set `step` to `update-docs`
-- Add to `rationale`: "Code review passed: all AC verified"
 
 ### If blocking issues:
 - Set `step` to `fix-code-review-issues`
@@ -57,6 +56,7 @@ For each criterion: Is it implemented? Is it tested? Does it work?
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: code-review -> <next>" >> .claudesprint/project/current_issue.log
 echo "  Result: <PASS/ISSUES>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <Code review passed: all AC verified OR blocking issues found>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

@@ -89,23 +89,21 @@ flowchart TB
 3. Use Context7 (if available) for library documentation
 4. Explore codebase for existing patterns
 5. Identify files to modify or create
-6. Document findings in `rationale`
+6. Document findings in `context` and session log
 
 **Output State**:
 ```json
 {
   "step": "implement",
-  "rationale": [
-    "Found existing Button component pattern in src/components/Button.tsx",
-    "React Testing Library already configured for component tests",
-    "Will create Counter.tsx following Button.tsx structure"
-  ],
+  "context": {
+    "external_docs_findings": "Found Button component pattern, RTL configured. Will create Counter.tsx following Button.tsx structure"
+  },
   "next_action": "Create Counter component with useState hook for count state"
 }
 ```
 
 **Failure Modes**:
-- Missing critical documentation → Proceed with best effort, note in rationale
+- Missing critical documentation → Proceed with best effort, log decision
 - Context7 unavailable → Continue without library docs
 
 ---
@@ -116,11 +114,11 @@ flowchart TB
 
 **Input State**:
 - `current_issue.json` with `step: "implement"`
-- `rationale` from read-docs step
+- `context` from read-docs step
 
 **Agent Behavior**:
 1. Review acceptance criteria
-2. Review rationale and identified patterns
+2. Review context and session log for identified patterns
 3. Make minimal code changes:
    - Create new files as needed
    - Modify existing files carefully
@@ -148,7 +146,7 @@ flowchart TB
 
 **Failure Modes**:
 - Missing dependencies → Note in `current_failures`, may need different issue first
-- Unclear requirements → Document assumptions in `rationale`
+- Unclear requirements → Document assumptions in session log
 
 ---
 
@@ -188,7 +186,7 @@ flowchart LR
 
 **Failure Modes**:
 - Tests already exist → Verify coverage, update if needed
-- Unclear how to test → Document limitation in rationale
+- Unclear how to test → Document limitation in session log
 
 ---
 
@@ -261,8 +259,7 @@ flowchart TB
 ```json
 {
   "step": "run-tests",
-  "current_failures": "",
-  "rationale": ["Test was correct, fixed useState initial value in Counter.tsx"]
+  "current_failures": ""
 }
 ```
 
@@ -270,8 +267,7 @@ flowchart TB
 ```json
 {
   "step": "implement",
-  "current_failures": "Implementation missing required feature",
-  "rationale": ["Code doesn't handle edge case specified in acceptance criteria"]
+  "current_failures": "Implementation missing required feature"
 }
 ```
 
@@ -311,16 +307,14 @@ agent-browser close
 **Output State (Pass)**:
 ```json
 {
-  "step": "code-review",
-  "rationale": ["Browser validation passed, count increments correctly"]
+  "step": "code-review"
 }
 ```
 
 **Output State (Skip)**:
 ```json
 {
-  "step": "code-review",
-  "rationale": ["Skipped browser validation - API-only issue"]
+  "step": "code-review"
 }
 ```
 
@@ -355,8 +349,7 @@ agent-browser close
 **Output State (Pass)**:
 ```json
 {
-  "step": "update-docs",
-  "rationale": ["Code review passed - all acceptance criteria verified"]
+  "step": "update-docs"
 }
 ```
 
@@ -364,8 +357,7 @@ agent-browser close
 ```json
 {
   "step": "fix-code-review-issues",
-  "current_failures": "Missing validation for negative count values",
-  "rationale": ["Acceptance criterion 'Count should not go below 0' not implemented"]
+  "current_failures": "Missing validation for negative count values"
 }
 ```
 

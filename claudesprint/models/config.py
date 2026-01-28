@@ -70,11 +70,6 @@ class ClaudesprintConfig(BaseSettings):
         description="Maximum wait time in seconds for rate limit backoff (default 15 min)",
         validation_alias=AliasChoices("rate_limit_max_wait", "CLAUDESPRINT_RATE_LIMIT_MAX_WAIT"),
     )
-    max_rationale_entries: Annotated[int, Field(ge=5)] = Field(
-        default=20,
-        description="Maximum rationale entries to keep (oldest pruned first)",
-        validation_alias=AliasChoices("max_rationale_entries", "CLAUDESPRINT_MAX_RATIONALE"),
-    )
     heartbeat_timeout: Annotated[int, Field(ge=60)] = Field(
         default=600,
         description="Seconds of inactivity before triggering hung process notification",
@@ -138,7 +133,6 @@ class ClaudesprintConfig(BaseSettings):
             "heartbeat_enabled": "CLAUDESPRINT_HEARTBEAT_ENABLED",
             "heartbeat_timeout": "CLAUDESPRINT_HEARTBEAT_TIMEOUT",
             "debug_conversations": "CLAUDESPRINT_DEBUG_CONVERSATIONS",
-            "max_rationale_entries": "CLAUDESPRINT_MAX_RATIONALE",
         }
 
         # Only include values where env var is not set
@@ -212,7 +206,6 @@ class ClaudesprintConfig(BaseSettings):
             "heartbeat_enabled": "heartbeat_enabled",
             "heartbeat_timeout": "heartbeat_timeout",
             "debug_conversations": "debug_conversations",
-            "max_rationale_entries": "max_rationale_entries",
         }
 
         for field_name, global_key in field_mapping.items():

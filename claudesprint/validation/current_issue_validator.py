@@ -38,7 +38,6 @@ class CurrentIssueValidator:
         "commands_run",
         "current_failures",
         "retry_count",
-        "rationale",
     ]
 
     def __init__(self, current_issue_path: str | Path) -> None:
@@ -125,7 +124,7 @@ class CurrentIssueValidator:
                 errors.append("repo_state.dirty must be boolean")
 
         # Check array types
-        array_fields = ["changes", "commands_run", "rationale"]
+        array_fields = ["changes", "commands_run"]
         for field_name in array_fields:
             if not isinstance(data.get(field_name), list):
                 errors.append(f"{field_name} must be an array")

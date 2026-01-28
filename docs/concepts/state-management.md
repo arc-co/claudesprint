@@ -156,11 +156,6 @@ Location: `.claudesprint/project/current_issue.json`
 
   "next_action": "Create src/components/Counter.tsx with a functional component that uses useState to manage count",
 
-  "rationale": [
-    "Chose functional component with hooks per project conventions",
-    "Using useState for local state as count doesn't need global state"
-  ],
-
   "retry_count": 0,
 
   "context": {
@@ -186,7 +181,6 @@ Location: `.claudesprint/project/current_issue.json`
 | `commands_run[]` | Commands executed so far |
 | `current_failures` | Error message if in failed state |
 | `next_action` | Specific next step to execute |
-| `rationale[]` | Decisions made and why |
 | `retry_count` | Number of retries on current step |
 | `context` | Cached data from sprint.json |
 
@@ -360,7 +354,7 @@ Don't rely on terminal history or memory. If it's not in `current_issue.json` or
 
 ### 2. Log Decisions
 
-Use `rationale` in `current_issue.json` to capture why decisions were made. This helps future steps understand context.
+Use `current_issue.log` to capture why decisions were made. This helps future steps understand context since the log is injected into agent context.
 
 ### 3. Keep Changes Atomic
 

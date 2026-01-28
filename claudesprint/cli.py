@@ -944,7 +944,6 @@ def config_show() -> None:
 
     console.print("[bold]\\[debug][/bold]")
     console.print(f"  conversations = {str(config.debug.conversations).lower()}")
-    console.print(f"  max_rationale = {config.debug.max_rationale}")
 
 
 @config_app.command("edit")

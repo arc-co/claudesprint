@@ -336,10 +336,6 @@ The current issue file contains all context for the active workflow step.
     "next_action": {
       "type": "string"
     },
-    "rationale": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
     "retry_count": {
       "type": "integer",
       "minimum": 0
@@ -370,7 +366,6 @@ The current issue file contains all context for the active workflow step.
 | `commands_run` | array | No | Commands executed |
 | `current_failures` | string | No | Error message if failed |
 | `next_action` | string | No | Next action to take |
-| `rationale` | array | No | Decisions and reasoning |
 | `retry_count` | integer | No | Retry attempts on current step |
 | `context` | object | Yes | Issue context from sprint |
 
@@ -457,11 +452,6 @@ The current issue file contains all context for the active workflow step.
   "commands_run": [],
   "current_failures": "",
   "next_action": "Create src/components/Counter.tsx with functional component using useState",
-  "rationale": [
-    "Using functional component with hooks per project conventions",
-    "useState for local state - count doesn't need global state",
-    "Following Button.tsx pattern for component structure"
-  ],
   "retry_count": 0,
   "context": {
     "acceptance_criteria": [

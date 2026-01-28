@@ -34,7 +34,6 @@ Query external docs when using: library APIs, framework patterns, external servi
 
 - Set `step` to `implement`
 - Set `goal` to describe implementation
-- Add to `rationale`: architectural decisions, patterns to follow, library APIs from docs
 - Add `context.external_docs_findings`: key API methods, config patterns, version notes
 
 ## Log & Exit
@@ -42,6 +41,7 @@ Query external docs when using: library APIs, framework patterns, external servi
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: read-docs -> implement" >> .claudesprint/project/current_issue.log
 echo "  Findings: <key findings>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <architectural decisions, patterns to follow, library APIs>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

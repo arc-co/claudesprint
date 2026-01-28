@@ -12,7 +12,7 @@ claudesprint-tools sprint details "$ISSUE_ID"
 git log --oneline -5 2>/dev/null || echo "Not a git repo"
 ```
 
-Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `current_failures`, `rationale`
+Extract: `issue_id`, `issue_title`, `context.acceptance_criteria`, `current_failures`
 
 If `issue_id` is empty, report the issue.
 
@@ -28,14 +28,13 @@ If `issue_id` is empty, report the issue.
 If routed here from `run-tests`, `fix-tests`, or `browser-validation`:
 - Read `current_failures` for specific issue to fix
 - Focus on fixing that issue first
-- Add rationale for fix approach
+- Log fix approach to `current_issue.log`
 
 ## Update current_issue.json
 
 - Set `step` to `write-tests`
 - Set `goal` to describe test writing
 - Add to `changes`: `{"path": "<file>", "summary": "<what changed>"}`
-- Add to `rationale`: key implementation decisions
 - Clear `current_failures` if fixed
 
 ## Log & Exit
@@ -43,6 +42,7 @@ If routed here from `run-tests`, `fix-tests`, or `browser-validation`:
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: implement -> write-tests" >> .claudesprint/project/current_issue.log
 echo "  Changes: <files modified>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <key implementation decisions>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

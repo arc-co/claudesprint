@@ -127,7 +127,6 @@ def sample_current_issue_dict():
         "changes": [],
         "commands_run": [],
         "current_failures": "",
-        "rationale": [],
         "retry_count": 0,
     }
 

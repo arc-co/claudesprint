@@ -219,10 +219,6 @@ class CurrentIssue(BaseModel):
     )
 
     # Context preservation
-    rationale: list[str] = Field(
-        default_factory=list,
-        description="Key decisions made and their reasoning",
-    )
     context: dict[str, str] = Field(
         default_factory=dict,
         description="Arbitrary context data for the session",
@@ -269,38 +265,17 @@ class CurrentIssue(BaseModel):
         """Update the timestamp to current UTC time."""
         self.timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def prune_rationale(self, max_entries: int = 5) -> int:
-        """Prune rationale array to prevent context window exhaustion.
-
-        Keeps the most recent entries (last N entries).
-        Default is conservative (5) to prevent token bloat in debugging loops.
-
-        Args:
-            max_entries: Maximum number of entries to keep.
-
-        Returns:
-            Number of entries pruned.
-        """
-        if len(self.rationale) <= max_entries:
-            return 0
-
-        pruned_count = len(self.rationale) - max_entries
-        self.rationale = self.rationale[-max_entries:]
-        return pruned_count
-
     def prune_arrays(
         self,
-        max_rationale: int = 5,
         max_changes: int = 20,
         max_commands: int = 30,
     ) -> dict[str, int]:
-        """Prune all arrays that can grow unbounded.
+        """Prune arrays that can grow unbounded.
 
         Conservative defaults prevent context window exhaustion during
         debugging loops (e.g., fix-tests cycling 5+ times).
 
         Args:
-            max_rationale: Maximum rationale entries to keep (default 5).
             max_changes: Maximum file change entries to keep (default 20).
             max_commands: Maximum commands_run entries to keep (default 30).
 
@@ -308,11 +283,6 @@ class CurrentIssue(BaseModel):
             Dict with counts of pruned entries per field.
         """
         pruned = {}
-
-        # Prune rationale - most likely to grow large during debugging
-        if len(self.rationale) > max_rationale:
-            pruned["rationale"] = len(self.rationale) - max_rationale
-            self.rationale = self.rationale[-max_rationale:]
 
         # Prune changes (keep most recent)
         if len(self.changes) > max_changes:
@@ -345,7 +315,6 @@ class CurrentIssue(BaseModel):
             commands_run=[],
             current_failures="",
             retry_count=0,
-            rationale=[],
             context={},
             last_test_run_hash="",
             cached_docs={},
@@ -369,7 +338,7 @@ class CurrentIssue(BaseModel):
             "next_action": self.next_action,
             "assumptions": [],
             "open_questions": [],
-            "rationale": self.rationale,
+            "rationale": [],  # Deprecated - kept for backward compat
             "retry_count": self.retry_count,
             "last_test_run_hash": self.last_test_run_hash,
             "cached_docs": self.cached_docs,
