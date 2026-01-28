@@ -1,6 +1,6 @@
 """Sprint model - multi-spec project management with execution gates."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
 
@@ -84,7 +84,7 @@ class Issue(BaseModel):
         default=None,
         description="Optional notes about the issue",
     )
-    config: IssueConfig | None = Field(
+    config: "IssueConfig | None" = Field(
         default=None,
         description="Issue-specific execution gates. Inherits from sprint config if null.",
     )
