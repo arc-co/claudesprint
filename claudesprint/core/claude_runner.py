@@ -389,17 +389,19 @@ class ClaudeRunner:
                 exit_code = process.wait(timeout=self.timeout)
                 timed_out = False
             except subprocess.TimeoutExpired:
-                # Kill the entire process group
-                self._force_kill_process(process)
-                exit_code = 124  # Standard timeout exit code
                 timed_out = True
-                # Immediately close stdout to unblock reader thread
-                # This forces readline() to return empty or raise ValueError
+                exit_code = 124  # Standard timeout exit code
+                # IMPORTANT: Close stdout FIRST to unblock reader thread immediately
+                # This must happen BEFORE _force_kill_process which can take up to
+                # kill_timeout seconds. Otherwise the reader thread stays blocked
+                # on readline() during the entire kill grace period.
                 if process.stdout:
                     try:
                         process.stdout.close()
                     except Exception as e:
                         logger.debug(f"Error closing stdout after timeout: {e}")
+                # Now kill the process group (reader thread is already unblocked)
+                self._force_kill_process(process)
 
             # Wait for reader to finish, but not forever
             reader_thread.join(timeout=5)
@@ -585,17 +587,19 @@ class ClaudeRunner:
                 exit_code = process.wait(timeout=self.timeout)
                 timed_out = False
             except subprocess.TimeoutExpired:
-                # Kill the entire process group
-                self._force_kill_process(process)
-                exit_code = 124  # Standard timeout exit code
                 timed_out = True
-                # Immediately close stdout to unblock reader thread
-                # This forces readline() to return empty or raise ValueError
+                exit_code = 124  # Standard timeout exit code
+                # IMPORTANT: Close stdout FIRST to unblock reader thread immediately
+                # This must happen BEFORE _force_kill_process which can take up to
+                # kill_timeout seconds. Otherwise the reader thread stays blocked
+                # on readline() during the entire kill grace period.
                 if process.stdout:
                     try:
                         process.stdout.close()
                     except Exception as e:
                         logger.debug(f"Error closing stdout after timeout: {e}")
+                # Now kill the process group (reader thread is already unblocked)
+                self._force_kill_process(process)
 
             # Wait for reader to finish, but not forever
             reader_thread.join(timeout=5)
