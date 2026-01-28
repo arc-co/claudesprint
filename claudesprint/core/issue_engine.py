@@ -37,6 +37,7 @@ class IssueExitReason(StrEnum):
     """Reasons for issue loop exit."""
 
     COMPLETED = "completed"
+    ISSUE_CHANGED = "issue_changed"  # Issue transitioned to a new issue (select-issue step)
     MAX_RETRY = "max_retry"
     MAX_ITERATIONS = "max_iterations"  # Total iteration limit (prevents infinite loops)
     RATE_LIMITED = "rate_limited"
@@ -364,6 +365,22 @@ class IssueEngine:
             steps_completed += 1
             current_issue.retry_count = 0
             current_issue.current_failures = ""
+
+            # Check if the issue changed after SELECT_ISSUE step
+            # (the select-issue step may have selected a new issue via init_issue tool)
+            if current_issue.step == IssueStep.SELECT_ISSUE:
+                updated_issue = self.issue_service.read_current_issue()
+                if updated_issue and updated_issue.issue_id != issue_id:
+                    # Issue changed - return control to sprint engine for proper transition
+                    elapsed = int(time.time() - start_time)
+                    return IssueResult(
+                        exit_reason=IssueExitReason.ISSUE_CHANGED,
+                        issue_id=issue_id,  # Return the OLD issue_id
+                        steps_completed=steps_completed,
+                        elapsed_seconds=elapsed,
+                        final_step=current_issue.step,
+                        message=f"Issue transitioned to {updated_issue.issue_id}",
+                    )
 
             # Determine next step
             next_step = step_result.next_step
