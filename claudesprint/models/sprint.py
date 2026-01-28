@@ -46,6 +46,22 @@ class IssueHistory(BaseModel):
     session_id: str | None = Field(default=None, description="Session ID when action occurred")
 
 
+class IssueConfig(BaseModel):
+    """Issue-specific execution configuration with gates.
+
+    When set on an issue, these override the sprint-level defaults.
+    """
+
+    require_testing: bool | None = Field(
+        default=None,
+        description="Whether testing steps are required. None inherits from sprint config.",
+    )
+    require_browser_qa: bool | None = Field(
+        default=None,
+        description="Whether browser-validation step is required. None inherits from sprint config.",
+    )
+
+
 class Issue(BaseModel):
     """A single issue in the sprint (replaces Task in backlog model)."""
 
@@ -142,22 +158,6 @@ class Issue(BaseModel):
                 chain.append(dep_id)
 
         return chain
-
-
-class IssueConfig(BaseModel):
-    """Issue-specific execution configuration with gates.
-
-    When set on an issue, these override the sprint-level defaults.
-    """
-
-    require_testing: bool | None = Field(
-        default=None,
-        description="Whether testing steps are required. None inherits from sprint config.",
-    )
-    require_browser_qa: bool | None = Field(
-        default=None,
-        description="Whether browser-validation step is required. None inherits from sprint config.",
-    )
 
 
 class SprintConfig(BaseModel):
