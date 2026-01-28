@@ -41,18 +41,17 @@ Before ANY changes:
 - Set `step` to `run-tests`
 - Clear `current_failures`
 - Add to `changes`: modified test files
-- Add to `rationale`: "Fixed test: <what was wrong>"
 
 ### If code is wrong:
 - Set `step` to `implement`
 - Keep `current_failures`
-- Add to `rationale`: "Re-routing: test correctly expects X, implementation does Y"
 
 ## Log & Exit
 
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-tests -> <next>" >> .claudesprint/project/current_issue.log
 echo "  Analysis: <test wrong OR code wrong>" >> .claudesprint/project/current_issue.log
+echo "  Decision: <Fixed test: what was wrong OR Re-routing: test expects X, impl does Y>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

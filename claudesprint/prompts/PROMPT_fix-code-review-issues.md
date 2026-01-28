@@ -26,7 +26,6 @@ Extract: `current_failures` (issues to fix), `next_action` (first issue to addre
 - Set `step` to `run-tests`
 - Clear `current_failures`
 - Add to `changes`: `{"path": "<file>", "summary": "<what fixed>"}`
-- Add to `rationale`: "Fixed review issues: <summary>"
 
 **IMPORTANT**: Preserve existing `changes` array and ADD fix changes.
 
@@ -35,6 +34,7 @@ Extract: `current_failures` (issues to fix), `next_action` (first issue to addre
 ```bash
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: fix-code-review-issues -> run-tests" >> .claudesprint/project/current_issue.log
 echo "  Fixed: <issues fixed>" >> .claudesprint/project/current_issue.log
+echo "  Decision: Fixed review issues: <summary>" >> .claudesprint/project/current_issue.log
 ```
 
 ## Rules

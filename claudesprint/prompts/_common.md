@@ -42,7 +42,8 @@ Required fields to update:
 - `next_action` - specific action for next session
 - `changes` - array of `{path, summary}` for modified files
 - `commands_run` - array of commands executed
-- `rationale` - array of key decisions made
+
+Log key decisions to `current_issue.log` using the Log Progress pattern above.
 
 ## Termination Tokens
 

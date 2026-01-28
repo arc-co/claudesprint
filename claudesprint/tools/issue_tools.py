@@ -77,7 +77,6 @@ def get_issue() -> ToolResult:
 def update_issue(
     goal: str | None = None,
     next_action: str | None = None,
-    add_rationale: str | None = None,
 ) -> ToolResult:
     """Update current issue fields."""
     try:
@@ -89,16 +88,12 @@ def update_issue(
             data["goal"] = goal
         if next_action is not None:
             data["next_action"] = next_action
-        if add_rationale is not None:
-            rationale = data.get("rationale", [])
-            rationale.append(add_rationale)
-            data["rationale"] = rationale
 
         _save_issue(data)
         return ToolResult(
             success=True,
             message="Issue updated",
-            data={"updated_fields": [k for k, v in [("goal", goal), ("next_action", next_action), ("rationale", add_rationale)] if v is not None]},
+            data={"updated_fields": [k for k, v in [("goal", goal), ("next_action", next_action)] if v is not None]},
         )
     except Exception as e:
         return ToolResult(success=False, message=f"Failed to update issue: {e}")

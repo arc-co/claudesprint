@@ -18,8 +18,7 @@
     "changes",
     "commands_run",
     "current_failures",
-    "retry_count",
-    "rationale"
+    "retry_count"
   ],
   "properties": {
     "$schema": {
@@ -126,11 +125,6 @@
       "minimum": 0,
       "default": 0,
       "description": "Number of times the current step has been retried due to failures"
-    },
-    "rationale": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Key decisions made and their reasoning"
     },
     "context": {
       "type": "object",

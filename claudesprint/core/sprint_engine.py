@@ -386,15 +386,12 @@ class SprintEngine:
             )
 
         # Check current_issue.json first (Claude may have written it)
+        # Note: Selection rationale is logged to current_issue.log, not stored in JSON
         updated_issue = self.issue_service.read_current_issue()
         if updated_issue and updated_issue.issue_id:
             issue = sprint.get_issue(updated_issue.issue_id)
             if issue:
-                rationale = (
-                    updated_issue.rationale[0]
-                    if updated_issue.rationale
-                    else "Agent selected"
-                )
+                rationale = "Agent selected"
                 self.issue_service.log_issue_selection(
                     issue.id, issue.title, rationale
                 )

@@ -86,11 +86,6 @@ class DebugConfig(BaseModel):
         default=False,
         description="Log full agent inputs/outputs",
     )
-    max_rationale: int = Field(
-        default=20,
-        ge=5,
-        description="Maximum rationale entries to keep",
-    )
 
 
 class GlobalConfig(BaseModel):
@@ -140,9 +135,6 @@ timeout = 600  # 10 minutes
 [debug]
 # Log full agent inputs/outputs
 conversations = false
-
-# Maximum rationale entries to keep
-max_rationale = 20
 """
 
 
@@ -328,7 +320,6 @@ class GlobalConfigService:
 
         # Flatten debug section
         result["debug_conversations"] = config.debug.conversations
-        result["max_rationale_entries"] = config.debug.max_rationale
 
         return result
 

@@ -100,7 +100,7 @@ Ensures prerequisites are met before proceeding:
 ## Pre-flight Checks
 1. Read current_issue.json - verify step is "implement"
 2. Read sprint.json - verify issue exists and is in_progress
-3. Check that read-docs completed (rationale has entries)
+3. Check that read-docs completed (context has findings)
 ```
 
 #### Instructions
@@ -111,8 +111,8 @@ Step-by-step guidance:
 ## Instructions
 
 1. Read the acceptance criteria from context.acceptance_criteria
-2. Review the rationale from the read-docs step
-3. Identify files to modify based on rationale
+2. Review the context from the read-docs step
+3. Identify files to modify based on context and session log
 4. Make minimal code changes:
    - Follow existing patterns
    - Don't add unrequested features
@@ -127,7 +127,7 @@ Explicit boundaries:
 
 ```markdown
 ## DO
-- Follow patterns from files mentioned in rationale
+- Follow patterns from files mentioned in context/session log
 - Make the minimum changes to satisfy criteria
 - Record all changes in current_issue.json
 
@@ -242,8 +242,8 @@ Reference values from `current_issue.json`:
 2. Check issue category:
    ${context.category}
 
-3. Consider previous rationale:
-   ${rationale}
+3. Consider previous context:
+   ${context}
 ```
 
 ### Conditional Sections
@@ -279,7 +279,7 @@ Review each acceptance criterion and verify:
 1. Code implements the criterion exactly
 2. No additional functionality was added
 3. Tests exist for the criterion
-4. Code follows patterns in rationale
+4. Code follows patterns from context
 ```
 
 ### 2. Use Checklists
@@ -343,8 +343,8 @@ Update current_issue.json with:
 - `step`: "write-tests"
 - `changes`: Add all files modified
 - `commands_run`: Add any commands executed
-- `rationale`: Add any decisions made
 - `current_failures`: Clear if previously set
+- Log key decisions to `current_issue.log`
 ```
 
 ## Testing Prompt Changes

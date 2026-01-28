@@ -52,7 +52,6 @@ For selected issue:
   "commands_run": [],
   "current_failures": "",
   "retry_count": 0,
-  "rationale": ["Selected <id> because: <reason>"],
   "context": {
     "acceptance_criteria": "<from details>",
     "category": "<category>"
@@ -64,6 +63,7 @@ For selected issue:
 
 ```bash
 echo "[<ISO>] SELECTED: <id> - <title>" >> .claudesprint/project/current_issue.log
+echo "  Rationale: <why chosen>" >> .claudesprint/project/current_issue.log
 ```
 
 Output summary:

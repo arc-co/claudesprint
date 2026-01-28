@@ -11,7 +11,7 @@ git diff --staged --stat 2>/dev/null || echo "Nothing staged"
 
 If NOT a git repo or nothing staged:
 - Set `step` to `select-issue` (issue complete, select next)
-- Add to `rationale`: "Skipped commit: <reason>"
+- Log: "Skipped commit: <reason>"
 - Exit
 
 ## Get Bearings

@@ -172,7 +172,7 @@ Additional details...
 - Set `step` to `next-step`
 - Set `goal` to describe next action
 - Add to `changes`: modified files
-- Add to `rationale`: key decisions
+- Log key decisions to `current_issue.log`
 
 ## Log & Exit
 

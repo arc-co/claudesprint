@@ -3,7 +3,7 @@
 
 Usage:
     claudesprint-tools issue get
-    claudesprint-tools issue update [--goal=GOAL] [--next-action=ACTION] [--rationale=REASON]
+    claudesprint-tools issue update [--goal=GOAL] [--next-action=ACTION]
     claudesprint-tools issue step <step_name> [--goal=GOAL] [--next-action=ACTION]
     claudesprint-tools issue change <path> <summary>
     claudesprint-tools issue failure <message>
@@ -64,7 +64,6 @@ def cmd_issue_update(args):
     result = update_issue(
         goal=args.goal,
         next_action=args.next_action,
-        add_rationale=args.rationale,
     )
     print(json.dumps(result.to_dict(), indent=2))
 
@@ -170,7 +169,6 @@ def main():
     iupdate_parser = issue_subparsers.add_parser("update", help="Update issue fields")
     iupdate_parser.add_argument("--goal", help="New goal")
     iupdate_parser.add_argument("--next-action", help="New next action")
-    iupdate_parser.add_argument("--rationale", help="Add rationale entry")
     iupdate_parser.set_defaults(func=cmd_issue_update)
 
     # issue step
