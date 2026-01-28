@@ -206,7 +206,7 @@ def _run_sprint_console(
 
     # Create all services for dependency injection
     issue_service = IssueService(config.project_dir)
-    notification_service = NotificationService(config.notifications_config)
+    notification_service = NotificationService(config.notifications_file)
     path_service = PathService(project_root)
     prompt_service = PromptService(path_service, project_root)
 
