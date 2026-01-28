@@ -153,7 +153,7 @@ def _run_sprint_console(
     # Pre-flight git check: warn if working directory has uncommitted changes
     git_service = GitService(project_root)
     git_status = git_service.get_status()
-    baseline_dirty_path = config.project_dir / "baseline_dirty.json"
+    baseline_dirty_path = Path(config.project_dir) / "baseline_dirty.json"
 
     if git_status.is_repo and git_status.dirty:
         dirty_files = git_service.get_dirty_files()
