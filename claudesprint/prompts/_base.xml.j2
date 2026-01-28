@@ -26,6 +26,21 @@
         <enforcement>Analysis MUST appear BEFORE any tool calls or code changes.</enforcement>
     </protocol>
 
+    <termination_protocol>
+        <description>When you have completed the task, you MUST end your final message with exactly one routing signal tag.</description>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
+        <rules>
+            <rule>The routing_signal tag MUST be the last content in your response.</rule>
+            <rule>Do NOT provide closing conversational text after this tag.</rule>
+            <rule>Use ONLY the signal values defined in the termination block for this step.</rule>
+        </rules>
+        <example><![CDATA[
+...analysis and work...
+
+<routing_signal>pass</routing_signal>
+        ]]></example>
+    </termination_protocol>
+
     <context>
         {% if sprint_json %}
         <artifact type="sprint_file" source="sprint.json" readonly="true">

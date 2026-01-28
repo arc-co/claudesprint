@@ -113,45 +113,45 @@ class IssueEngine:
     }
 
     # Patterns for parsing step output to determine routing
-    # These patterns match <status>...</status> XML tags that signal routing decisions.
-    # XML tags are preferred over plain text markers for more robust LLM output parsing.
+    # These patterns match <routing_signal>...</routing_signal> XML tags that signal routing decisions.
+    # The distinct tag name avoids false matches with code snippets in verbose Claude output.
     OUTPUT_PATTERNS = {
         IssueStep.RUN_TESTS: {
             "pass": [
-                r"<status>\s*pass\s*</status>",
+                r"<routing_signal>\s*pass\s*</routing_signal>",
             ],
             "fail_code": [
-                r"<status>\s*fail_code\s*</status>",
+                r"<routing_signal>\s*fail_code\s*</routing_signal>",
             ],
             "fail_test": [
-                r"<status>\s*fail_test\s*</status>",
+                r"<routing_signal>\s*fail_test\s*</routing_signal>",
             ],
         },
         IssueStep.FIX_TESTS: {
             "code_wrong": [
-                r"<status>\s*code_wrong\s*</status>",
+                r"<routing_signal>\s*code_wrong\s*</routing_signal>",
             ],
             "test_fixed": [
-                r"<status>\s*test_fixed\s*</status>",
+                r"<routing_signal>\s*test_fixed\s*</routing_signal>",
             ],
         },
         IssueStep.BROWSER_VALIDATION: {
             "skip": [
-                r"<status>\s*skip\s*</status>",
+                r"<routing_signal>\s*skip\s*</routing_signal>",
             ],
             "fail": [
-                r"<status>\s*fail\s*</status>",
+                r"<routing_signal>\s*fail\s*</routing_signal>",
             ],
             "pass": [
-                r"<status>\s*pass\s*</status>",
+                r"<routing_signal>\s*pass\s*</routing_signal>",
             ],
         },
         IssueStep.CODE_REVIEW: {
             "issues": [
-                r"<status>\s*issues\s*</status>",
+                r"<routing_signal>\s*issues\s*</routing_signal>",
             ],
             "pass": [
-                r"<status>\s*pass\s*</status>",
+                r"<routing_signal>\s*pass\s*</routing_signal>",
             ],
         },
     }

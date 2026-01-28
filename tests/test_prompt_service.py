@@ -866,3 +866,61 @@ class TestPromptServiceIntegration:
         assert "implement" in content.lower()
         # Should have constraint rules from base template
         assert "rule" in content.lower() or "constraint" in content.lower()
+
+
+class TestRoutingSignalFormat:
+    """Tests for Issue 5: Standardize XML Routing Signals."""
+
+    def test_common_uses_routing_signal_format(self, tmp_path: Path) -> None:
+        """Ensure _common.xml.j2 uses routing_signal format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_common_prompt_content(render=False)
+        assert "<routing_signal>" in content
+        # <status> may appear in "Do NOT use <status> tags" warning
+        status_occurrences = content.count("<status>")
+        warning_occurrences = content.count("Do NOT use <status>")
+        assert status_occurrences == warning_occurrences, "status tags should only appear in warning"
+
+    def test_base_has_termination_protocol(self, tmp_path: Path) -> None:
+        """Ensure _base.xml.j2 has termination_protocol section."""
+        from importlib.resources import files
+
+        base_content = (
+            files("claudesprint.prompts").joinpath("_base.xml.j2").read_text()
+        )
+        assert "<termination_protocol>" in base_content
+        assert "<routing_signal>" in base_content
+
+    def test_run_tests_uses_routing_signal(self, tmp_path: Path) -> None:
+        """Ensure run-tests prompt uses routing_signal format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("run-tests", render=False)
+        assert "<routing_signal>" in content
+
+    def test_fix_tests_uses_routing_signal(self, tmp_path: Path) -> None:
+        """Ensure fix-tests prompt uses routing_signal format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("fix-tests", render=False)
+        assert "<routing_signal>" in content
+
+    def test_browser_validation_uses_routing_signal(self, tmp_path: Path) -> None:
+        """Ensure browser-validation prompt uses routing_signal format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("browser-validation", render=False)
+        assert "<routing_signal>" in content
+
+    def test_code_review_uses_routing_signal(self, tmp_path: Path) -> None:
+        """Ensure code-review prompt uses routing_signal format."""
+        path_service = PathService(project_root=tmp_path)
+        service = PromptService(path_service, project_root=tmp_path)
+
+        content = service.get_prompt_content("code-review", render=False)
+        assert "<routing_signal>" in content

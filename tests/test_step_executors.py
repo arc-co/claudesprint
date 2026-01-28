@@ -58,7 +58,7 @@ def mock_claude_runner() -> MagicMock:
         timed_out=False,
         rate_limited=False,
         crashed=False,
-        output="Successful execution output\n<status>pass</status>",
+        output="Successful execution output\n<routing_signal>pass</routing_signal>",
         error_type=None,
     )
     return mock
@@ -97,9 +97,9 @@ def default_parse_step_output():
     """Create a default parse_step_output function that returns success routing."""
     def parse_fn(step: IssueStep, output: str) -> ParseResult:
         # Default behavior: return next step based on routing
-        if "<status>pass</status>" in output.lower():
+        if "<routing_signal>pass</routing_signal>" in output.lower():
             return ParseResult(next_step=IssueStep.CODE_REVIEW, matched_signal="pass")
-        if "<status>fail" in output.lower():
+        if "<routing_signal>fail" in output.lower():
             return ParseResult(next_step=IssueStep.IMPLEMENT, matched_signal="fail")
         # Default routing
         return ParseResult(next_step=IssueStep.WRITE_TESTS, matched_signal=None)
@@ -124,13 +124,13 @@ def llm_executor(
         requires_explicit_signal={IssueStep.RUN_TESTS, IssueStep.FIX_TESTS},
         output_patterns={
             IssueStep.RUN_TESTS: {
-                "pass": [r"<status>\s*pass\s*</status>"],
-                "fail_code": [r"<status>\s*fail_code\s*</status>"],
-                "fail_test": [r"<status>\s*fail_test\s*</status>"],
+                "pass": [r"<routing_signal>\s*pass\s*</routing_signal>"],
+                "fail_code": [r"<routing_signal>\s*fail_code\s*</routing_signal>"],
+                "fail_test": [r"<routing_signal>\s*fail_test\s*</routing_signal>"],
             },
             IssueStep.FIX_TESTS: {
-                "code_wrong": [r"<status>\s*code_wrong\s*</status>"],
-                "test_fixed": [r"<status>\s*test_fixed\s*</status>"],
+                "code_wrong": [r"<routing_signal>\s*code_wrong\s*</routing_signal>"],
+                "test_fixed": [r"<routing_signal>\s*test_fixed\s*</routing_signal>"],
             },
         },
     )
@@ -285,9 +285,9 @@ class TestLlmStepExecutor:
             requires_explicit_signal={IssueStep.RUN_TESTS},
             output_patterns={
                 IssueStep.RUN_TESTS: {
-                    "pass": [r"<status>\s*pass\s*</status>"],
-                    "fail_code": [r"<status>\s*fail_code\s*</status>"],
-                    "fail_test": [r"<status>\s*fail_test\s*</status>"],
+                    "pass": [r"<routing_signal>\s*pass\s*</routing_signal>"],
+                    "fail_code": [r"<routing_signal>\s*fail_code\s*</routing_signal>"],
+                    "fail_test": [r"<routing_signal>\s*fail_test\s*</routing_signal>"],
                 },
             },
         )

@@ -76,7 +76,8 @@ echo "  Decision: <Fixed test: what was wrong OR Re-routing: test expects X, imp
 
 {% block termination %}
         <required>true</required>
-        <description>End your response with exactly one of:</description>
-        <tag value="test_fixed">Test was fixed, ready to re-run</tag>
-        <tag value="code_wrong">Code needs fixing, not the test</tag>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="test_fixed">Test was fixed, ready to re-run</signal>
+        <signal value="code_wrong">Code needs fixing, not the test</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
 {% endblock %}

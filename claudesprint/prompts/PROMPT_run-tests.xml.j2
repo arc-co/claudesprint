@@ -83,8 +83,9 @@ echo "  Analysis: <why routing to implement or fix-tests>" >> .claudesprint/proj
 
 {% block termination %}
         <required>true</required>
-        <description>End your response with exactly one of:</description>
-        <tag value="pass">All tests passed</tag>
-        <tag value="fail_code">Tests fail due to code bug</tag>
-        <tag value="fail_test">Tests fail due to test bug</tag>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="pass">All tests passed</signal>
+        <signal value="fail_code">Tests fail due to code bug</signal>
+        <signal value="fail_test">Tests fail due to test bug</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
 {% endblock %}

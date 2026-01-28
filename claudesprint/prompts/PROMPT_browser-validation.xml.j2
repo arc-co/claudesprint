@@ -97,8 +97,9 @@ echo "  Result: <PASS/FAIL/SKIP>" >> .claudesprint/project/current_issue.log
 
 {% block termination %}
         <required>true</required>
-        <description>End your response with exactly one of:</description>
-        <tag value="pass">All UI validations passed</tag>
-        <tag value="fail">UI validation failed</tag>
-        <tag value="skip">No UI components to validate (or agent-browser not available)</tag>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="pass">All UI validations passed</signal>
+        <signal value="fail">UI validation failed</signal>
+        <signal value="skip">No UI components to validate (or agent-browser not available)</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
 {% endblock %}

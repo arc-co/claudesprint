@@ -57,7 +57,7 @@ echo "  <summary>" >> .claudesprint/project/current_issue.log
 </state_management>
 
 <termination_tags>
-    <description>Status tags that may be required as final output for certain steps</description>
+    <description>Routing signal tags for step completion. Use ONLY these tags to indicate step outcome.</description>
     <tag name="pass">Step succeeded</tag>
     <tag name="fail">Step failed (generic)</tag>
     <tag name="fail_code">Step failed due to code bug</tag>
@@ -66,7 +66,8 @@ echo "  <summary>" >> .claudesprint/project/current_issue.log
     <tag name="issues">Issues found (code review)</tag>
     <tag name="test_fixed">Test was fixed, ready to re-run</tag>
     <tag name="code_wrong">Code needs fixing, not the test</tag>
-    <example><![CDATA[<status>pass</status>]]></example>
+    <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
+    <important>Do NOT use <status> tags - use <routing_signal> exclusively.</important>
 </termination_tags>
 
 <session_rules>

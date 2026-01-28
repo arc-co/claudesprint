@@ -105,7 +105,8 @@ echo "  Decision: <Code review passed: all AC verified OR blocking issues found>
 
 {% block termination %}
         <required>true</required>
-        <description>End your response with exactly one of:</description>
-        <tag value="pass">Code review passed</tag>
-        <tag value="issues">Blocking issues found</tag>
+        <description>End your response with exactly one of these routing signals:</description>
+        <signal value="pass">Code review passed</signal>
+        <signal value="issues">Blocking issues found</signal>
+        <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
 {% endblock %}
