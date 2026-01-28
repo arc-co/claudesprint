@@ -91,7 +91,7 @@ class TestGetDirtyFiles:
         (subdir / "file.txt").write_text("content")
 
         service = GitService(git_repo)
-        # Git status --porcelain shows untracked directories as "dir/"
+        # Git shows untracked directories as "dir/"
         assert service.get_dirty_files() == {"subdir/"}
 
     def test_handles_deleted_file(self, git_repo: Path) -> None:
@@ -99,6 +99,19 @@ class TestGetDirtyFiles:
         (git_repo / "README.md").unlink()
         service = GitService(git_repo)
         assert service.get_dirty_files() == {"README.md"}
+
+    def test_handles_filenames_with_special_characters(self, git_repo: Path) -> None:
+        """Handles filenames with spaces and special characters (uses -z format)."""
+        # Filename with spaces
+        (git_repo / "file with spaces.txt").write_text("content")
+        # Filename with unicode
+        (git_repo / "file_émoji_🎉.txt").write_text("content")
+
+        service = GitService(git_repo)
+        dirty = service.get_dirty_files()
+
+        assert "file with spaces.txt" in dirty
+        assert "file_émoji_🎉.txt" in dirty
 
 
 class TestSaveBaselineDirtyFiles:

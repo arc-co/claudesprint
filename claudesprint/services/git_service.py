@@ -94,40 +94,52 @@ class GitService:
         if not self.is_repo():
             return set()
 
-        # Run git status --porcelain directly without using _run to preserve
-        # leading whitespace which is significant in the output format
+        # Use git status -z for null-terminated output, which avoids quoting
+        # issues with special characters in filenames (tabs, newlines, etc.)
         try:
             result = subprocess.run(
-                ["git", "status", "--porcelain"],
+                ["git", "status", "-z"],
                 cwd=self.project_root,
                 capture_output=True,
-                text=True,
                 timeout=60,
             )
             if result.returncode != 0 or not result.stdout:
                 return set()
+            # Use binary mode output - don't decode as text to preserve NUL bytes
             output = result.stdout
         except (subprocess.TimeoutExpired, Exception):
             return set()
 
         dirty_files: set[str] = set()
-        for line in output.splitlines():
-            if not line or len(line) < 4:
+        # Split on NUL bytes; git status -z format:
+        # - Regular entry: "XY PATH\0"
+        # - Rename/copy: "XY NEW_PATH\0OLD_PATH\0" (old path is separate NUL field)
+        entries = output.split(b"\0")
+        i = 0
+        while i < len(entries):
+            entry = entries[i]
+            if not entry:
+                i += 1
                 continue
-            # Format: "XY filename" where XY is 2 chars followed by space
-            # Examples: " M README.md", "?? new.txt", "A  staged.txt"
-            # Position 0-1: status codes, position 2: space, position 3+: filename
-            file_part = line[3:]
-            # Handle quoted paths (git quotes paths with special chars)
-            if file_part.startswith('"') and file_part.endswith('"'):
-                file_part = file_part[1:-1]
-            # Handle renames: "old -> new"
-            if " -> " in file_part:
-                old, new = file_part.split(" -> ", 1)
-                dirty_files.add(old.strip().strip('"'))
-                dirty_files.add(new.strip().strip('"'))
-            else:
-                dirty_files.add(file_part)
+
+            # Entry format: XY<space>PATH where XY is 2 status chars
+            if len(entry) < 4:
+                i += 1
+                continue
+
+            status = entry[:2]
+            file_path = entry[3:].decode("utf-8", errors="replace")
+            dirty_files.add(file_path)
+
+            # Check for rename/copy: status codes R or C in either position
+            # means the next NUL-separated field is the original path
+            if b"R" in status or b"C" in status:
+                i += 1
+                if i < len(entries) and entries[i]:
+                    old_path = entries[i].decode("utf-8", errors="replace")
+                    dirty_files.add(old_path)
+
+            i += 1
 
         return dirty_files
 
