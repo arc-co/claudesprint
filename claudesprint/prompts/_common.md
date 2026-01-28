@@ -52,3 +52,35 @@ Some steps require a termination token as the last line:
 - `STATUS: FAIL` / `STATUS: FAIL_CODE` / `STATUS: FAIL_TEST` - step failed
 - `STATUS: SKIP` - step skipped (not applicable)
 - `STATUS: ISSUES` - issues found (code review)
+
+## Session Rules
+
+1. **ONLY use current_issue.json + sprint.json** - no other context
+2. **Fail fast** - if required fields missing, stop and report
+3. **Execute one step** - complete it, then update current_issue.json
+4. **Log progress** - append to current_issue.log
+5. **Validate before exit** - run `claudesprint validate`
+
+## Critical Rules
+
+### Commit Rules
+- Do NOT commit unless: implementation complete, tests pass, code review clean
+- Use explicit file staging (not `git add -A`)
+
+### Sprint Rules
+- `sprint.json` issues are immutable contracts
+- Only change `status` and `history` fields during implementation
+
+### Scope Rules
+- ONE issue per workflow cycle
+- Exit after completing one issue for fresh context
+
+## Implementation Guidelines
+
+**DO:** Exactly what acceptance criteria specify, error handling, tests for AC
+
+**DON'T:** Features not in AC, optimizations not requested, refactoring unrelated code, extra configurability, unnecessary documentation
+
+## Valid Steps
+
+`select-issue`, `read-docs`, `implement`, `write-tests`, `run-tests`, `fix-tests`, `browser-validation`, `code-review`, `fix-code-review-issues`, `update-docs`, `stage-changes`, `commit-changes`
