@@ -38,12 +38,18 @@ class ClaudesprintConfig(BaseSettings):
     - CLAUDESPRINT_RATE_LIMIT_RETRIES: Max rate limit retries before exiting (default: 3, 0 = exit immediately)
     - CLAUDESPRINT_RATE_LIMIT_BASE_WAIT: Base wait time in seconds for rate limit backoff (default: 60)
     - CLAUDESPRINT_RATE_LIMIT_MAX_WAIT: Maximum wait time in seconds for rate limit backoff (default: 900 = 15 min)
+    - CLAUDESPRINT_MAX_TOTAL_ITERATIONS: Maximum total step executions per issue (default: 50, prevents infinite loops)
     """
 
     max_retry: Annotated[int, Field(ge=1)] = Field(
         default=5,
         description="Maximum number of retries before giving up",
         validation_alias=AliasChoices("max_retry", "CLAUDESPRINT_MAX_RETRY"),
+    )
+    max_total_iterations: Annotated[int, Field(ge=1)] = Field(
+        default=50,
+        description="Maximum total step executions per issue (prevents infinite loops between steps)",
+        validation_alias=AliasChoices("max_total_iterations", "CLAUDESPRINT_MAX_TOTAL_ITERATIONS"),
     )
     claude_timeout: Annotated[int, Field(ge=60)] = Field(
         default=1800,
@@ -125,6 +131,7 @@ class ClaudesprintConfig(BaseSettings):
         # Map of field name -> env var name
         env_var_map = {
             "max_retry": "CLAUDESPRINT_MAX_RETRY",
+            "max_total_iterations": "CLAUDESPRINT_MAX_TOTAL_ITERATIONS",
             "claude_timeout": "CLAUDESPRINT_CLAUDE_TIMEOUT",
             "total_timeout": "CLAUDESPRINT_TOTAL_TIMEOUT",
             "rate_limit_retries": "CLAUDESPRINT_RATE_LIMIT_RETRIES",
@@ -198,6 +205,7 @@ class ClaudesprintConfig(BaseSettings):
         # Only set if the global config has a value (not relying on Pydantic defaults)
         field_mapping = {
             "max_retry": "max_retry",
+            "max_total_iterations": "max_total_iterations",
             "claude_timeout": "claude_timeout",
             "total_timeout": "total_timeout",
             "rate_limit_retries": "rate_limit_retries",

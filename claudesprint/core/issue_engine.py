@@ -30,6 +30,7 @@ class IssueExitReason(StrEnum):
 
     COMPLETED = "completed"
     MAX_RETRY = "max_retry"
+    MAX_ITERATIONS = "max_iterations"  # Total iteration limit (prevents infinite loops)
     RATE_LIMITED = "rate_limited"
     CRASHED = "crashed"
     BLOCKED = "blocked"
@@ -216,6 +217,21 @@ class IssueEngine:
         issue_id = current_issue.issue_id
 
         while True:
+            # Check total iteration limit (prevents infinite loops between steps)
+            if current_issue.total_iterations >= self.config.max_total_iterations:
+                self.notification_service.notify_failure(
+                    f"Max total iterations reached ({self.config.max_total_iterations}) for: {issue_id}"
+                )
+                return IssueResult(
+                    exit_reason=IssueExitReason.MAX_ITERATIONS,
+                    issue_id=issue_id,
+                    steps_completed=steps_completed,
+                    elapsed_seconds=int(time.time() - start_time),
+                    final_step=current_issue.step,
+                    message=f"Max total iterations limit ({self.config.max_total_iterations}) reached - possible infinite loop",
+                    error="Total iteration limit exceeded. This usually indicates an infinite loop between steps like FIX_TESTS <-> RUN_TESTS.",
+                )
+
             # Check if we should skip the current step
             if self._should_skip_step(current_issue.step):
                 skip_result = self._get_skip_result(current_issue.step)
@@ -250,6 +266,11 @@ class IssueEngine:
 
             # Execute the step
             step_result = self._execute_step(current_issue)
+
+            # Increment total iterations (tracks all step executions, never resets)
+            current_issue.total_iterations += 1
+            # Persist immediately to ensure count is saved even on early exit
+            self.issue_service.write_current_issue(current_issue)
 
             # Handle rate limiting
             if step_result.rate_limited:

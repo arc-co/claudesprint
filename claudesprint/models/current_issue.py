@@ -217,6 +217,10 @@ class CurrentIssue(BaseModel):
         default=0,
         description="Number of times the current step has been retried due to failures",
     )
+    total_iterations: Annotated[int, Field(ge=0)] = Field(
+        default=0,
+        description="Total number of step executions for this issue (never resets, prevents infinite loops)",
+    )
 
     # Context preservation
     context: dict[str, str] = Field(
@@ -315,6 +319,7 @@ class CurrentIssue(BaseModel):
             commands_run=[],
             current_failures="",
             retry_count=0,
+            total_iterations=0,
             context={},
             last_test_run_hash="",
             cached_docs={},
@@ -340,6 +345,7 @@ class CurrentIssue(BaseModel):
             "open_questions": [],
             "rationale": [],  # Deprecated - kept for backward compat
             "retry_count": self.retry_count,
+            "total_iterations": self.total_iterations,
             "last_test_run_hash": self.last_test_run_hash,
             "cached_docs": self.cached_docs,
             "shutdown_reason": "",
