@@ -878,6 +878,27 @@ class SprintEngine:
                         )
                 else:
                     # New issue or no valid context: mark in_progress and create fresh context
+
+                    # Warn if sprint has IN_PROGRESS issue but current_issue.json doesn't match
+                    if is_resuming:
+                        mismatched_id = (
+                            existing_current_issue.issue_id
+                            if existing_current_issue
+                            else "missing"
+                        )
+                        if self.on_output:
+                            self.on_output(
+                                f"\nWarning: State mismatch detected. "
+                                f"Sprint has {issue.id} in_progress but current_issue.json "
+                                f"has {mismatched_id}. Creating fresh context.\n"
+                            )
+                        # Log the mismatch for debugging
+                        self.issue_service.log_step_transition(
+                            "resume",
+                            "fresh-context",
+                            f"State mismatch: sprint={issue.id}, current_issue={mismatched_id}",
+                        )
+
                     if not is_resuming:
                         self.sprint_service.mark_issue_status(
                             self.sprint_path,
@@ -950,8 +971,18 @@ class SprintEngine:
                         if self.on_issue_complete:
                             self.on_issue_complete(issue)
 
+                        # Atomically mark new issue as IN_PROGRESS to prevent state
+                        # inconsistency if process crashes before next loop iteration
+                        new_current_issue = self.issue_service.read_current_issue()
+                        if new_current_issue and new_current_issue.issue_id:
+                            self.sprint_service.mark_issue_status(
+                                self.sprint_path,
+                                new_current_issue.issue_id,
+                                IssueStatus.IN_PROGRESS,
+                            )
+
                         # DON'T clear current_issue - it already has the new issue data
-                        # The next loop iteration will pick up the new issue via is_resuming
+                        # The next loop iteration will pick up the new issue and fire on_issue_start
 
                     case IssueExitReason.RATE_LIMITED:
                         # Handle rate limiting with backoff

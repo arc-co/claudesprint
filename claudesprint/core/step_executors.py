@@ -300,9 +300,12 @@ class CompletionStepExecutor(StepExecutor):
     """Executor for the COMPLETE_ISSUE step.
 
     This executor runs Python logic instead of an LLM prompt to:
-    - Update sprint.json status to 'completed'
+    - Validate issue can be completed (no outstanding failures)
     - Log completion
     - Signal the workflow to exit
+
+    Note: Sprint status update is handled by SprintEngine when it receives
+    the COMPLETED exit reason, to ensure single source of truth.
     """
 
     def __init__(
@@ -313,10 +316,10 @@ class CompletionStepExecutor(StepExecutor):
         """Initialize CompletionStepExecutor.
 
         Args:
-            sprint_service: Service for managing sprint data
+            sprint_service: Service for managing sprint data (kept for compatibility)
             issue_service: Service for managing current issue state
         """
-        self.sprint_service = sprint_service
+        self.sprint_service = sprint_service  # Kept for potential future use
         self.issue_service = issue_service
 
     def execute(
@@ -345,23 +348,7 @@ class CompletionStepExecutor(StepExecutor):
                 error="Outstanding failures present in current_issue context",
             )
 
-        # Update sprint file (mark as completed)
-        success = self.sprint_service.mark_issue_status(
-            path=current_issue.sprint_path,
-            issue_id=current_issue.issue_id,
-            status=IssueStatus.COMPLETED,
-            session_id=current_issue.session_id,
-        )
-
-        if not success:
-            return StepResult(
-                success=False,
-                next_step=None,
-                output="Failed to update sprint.json",
-                error=f"Could not find issue {current_issue.issue_id} in {current_issue.sprint_path}",
-            )
-
-        # Log completion
+        # Log completion (sprint status update is handled by SprintEngine)
         self.issue_service.log_issue_completion(
             current_issue.issue_id,
             current_issue.issue_title,
