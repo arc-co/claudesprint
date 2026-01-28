@@ -11,7 +11,6 @@ import re
 import time
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 from typing import Callable
 
 from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
@@ -165,33 +164,33 @@ class IssueEngine:
 
     def __init__(
         self,
-        project_root: str | Path,
         config: ClaudesprintConfig,
         execution_config: ResolvedConfig,
+        # Injected Dependencies:
+        issue_service: IssueService,
+        sprint_service: SprintService,
+        notification_service: NotificationService,
+        prompt_service: PromptService,
+        claude_runner: ClaudeRunner,
     ) -> None:
         """Initialize IssueEngine.
 
         Args:
-            project_root: Root directory of the project
             config: ClaudesprintConfig with timeout and retry settings
             execution_config: ResolvedConfig with resolved execution gates for this issue
+            issue_service: Service for managing current issue state
+            sprint_service: Service for managing sprint data
+            notification_service: Service for sending notifications
+            prompt_service: Service for loading prompt templates
+            claude_runner: Runner for executing Claude commands
         """
-        self.project_root = Path(project_root)
         self.config = config
         self.execution_config = execution_config
-
-        # Initialize services
-        self.issue_service = IssueService(config.project_dir)
-        self.sprint_service = SprintService(config.sprints_dir)
-        self.notification_service = NotificationService(config.notifications_file)
-        self.prompt_service = PromptService(config.paths, project_root=project_root)
-        self.claude_runner = ClaudeRunner(
-            project_root,
-            config.claude_timeout,
-            conversation_log_file=(
-                config.conversation_log_file if config.debug_conversations else None
-            ),
-        )
+        self.issue_service = issue_service
+        self.sprint_service = sprint_service
+        self.notification_service = notification_service
+        self.prompt_service = prompt_service
+        self.claude_runner = claude_runner
 
         # Callbacks
         self.on_output: Callable[[str], None] | None = None

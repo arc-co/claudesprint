@@ -11,8 +11,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 from claudesprint import __version__
+from claudesprint.core.claude_runner import ClaudeRunner
 from claudesprint.core.issue_engine import IssueEngine
-from claudesprint.core.sprint_engine import SprintEngine, SprintExitReason, SprintResult
+from claudesprint.core.sprint_engine import SprintEngine, SprintExitReason, SprintResult, IssueEngineFactory
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import IssueStep
 from claudesprint.models.sprint import Sprint, Issue, ResolvedConfig
@@ -22,6 +23,8 @@ from claudesprint.services.issue_service import IssueService
 from claudesprint.services.global_config_service import GlobalConfigService
 from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MODELS
 from claudesprint.services.notification_service import NotificationService, NotificationType
+from claudesprint.services.path_service import PathService
+from claudesprint.services.prompt_service import PromptService
 from claudesprint.ui import WorkflowDashboard
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
@@ -201,7 +204,51 @@ def _run_sprint_console(
 
     refresh_issues_board()
 
-    engine = SprintEngine(project_root, sprint_path, config)
+    # Create all services for dependency injection
+    issue_service = IssueService(config.project_dir)
+    notification_service = NotificationService(config.notifications_file)
+    path_service = PathService(project_root)
+    prompt_service = PromptService(path_service, project_root)
+
+    # Create ClaudeRunner for sprint-level operations
+    claude_runner = ClaudeRunner(
+        project_root=project_root,
+        timeout=config.timeout,
+        common_prompt_file=config.get_prompt_file("common"),
+        conversation_log_file=config.agent_conversations_log if config.debug_conversations else None,
+    )
+
+    # Create IssueEngine factory that closes over shared dependencies
+    def issue_engine_factory(resolved_config: ResolvedConfig) -> IssueEngine:
+        """Factory function to create IssueEngine instances."""
+        # Create a ClaudeRunner for this issue engine
+        issue_claude_runner = ClaudeRunner(
+            project_root=project_root,
+            timeout=config.timeout,
+            common_prompt_file=config.get_prompt_file("common"),
+            conversation_log_file=config.agent_conversations_log if config.debug_conversations else None,
+        )
+        return IssueEngine(
+            config=config,
+            execution_config=resolved_config,
+            issue_service=issue_service,
+            sprint_service=sprint_service,
+            notification_service=notification_service,
+            prompt_service=prompt_service,
+            claude_runner=issue_claude_runner,
+        )
+
+    # Create SprintEngine with all dependencies
+    engine = SprintEngine(
+        sprint_path=sprint_path,
+        config=config,
+        git_service=git_service,
+        sprint_service=sprint_service,
+        issue_service=issue_service,
+        notification_service=notification_service,
+        claude_runner=claude_runner,
+        issue_engine_factory=issue_engine_factory,
+    )
 
     # Set up callbacks
     def on_issue_start(issue: Issue) -> None:
@@ -329,9 +376,11 @@ def init_project(
     console.print("")
 
     # Now invoke the init agent to populate the sprint with issues
-    # Load prompt from package resources via PathService
+    # Load prompt from package resources via PromptService
+    path_service = PathService(project_root=project_root)
+    prompt_service = PromptService(path_service, project_root=project_root)
     try:
-        prompt_content = config.paths.get_prompt_content("init")
+        prompt_content = prompt_service.get_prompt_content("init")
     except FileNotFoundError:
         console.print("[red]Error: PROMPT_init.md not found in package[/red]")
         raise typer.Exit(1)
@@ -400,9 +449,11 @@ def run_planner(
     project_root = get_project_root()
     config = get_config()
 
-    # Load prompt from package resources via PathService
+    # Load prompt from package resources via PromptService
+    path_service = PathService(project_root=project_root)
+    prompt_service = PromptService(path_service, project_root=project_root)
     try:
-        prompt_content = config.paths.get_prompt_content("plan")
+        prompt_content = prompt_service.get_prompt_content("plan")
     except FileNotFoundError:
         console.print("[red]Error: PROMPT_plan.md not found in package[/red]")
         raise typer.Exit(1)

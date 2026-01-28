@@ -28,6 +28,10 @@ from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
 
 
+# Type alias for the IssueEngine factory
+IssueEngineFactory = Callable[[ResolvedConfig], IssueEngine]
+
+
 class SprintExitReason(StrEnum):
     """Reasons for sprint loop exit."""
 
@@ -78,34 +82,42 @@ class SprintEngine:
 
     def __init__(
         self,
-        project_root: str | Path,
-        sprint_path: str | Path,
-        config: ClaudesprintConfig | None = None,
+        sprint_path: Path,
+        config: ClaudesprintConfig,
+        # Injected Services
+        git_service: GitService,
+        sprint_service: SprintService,
+        issue_service: IssueService,
+        notification_service: NotificationService,
+        claude_runner: ClaudeRunner,
+        # Injected Factory
+        issue_engine_factory: IssueEngineFactory,
     ) -> None:
         """Initialize SprintEngine.
 
         Args:
-            project_root: Root directory of the project
             sprint_path: Path to the sprint.json file
-            config: Optional ClaudesprintConfig (uses defaults if not provided)
+            config: ClaudesprintConfig for the project
+            git_service: Injected GitService instance
+            sprint_service: Injected SprintService instance
+            issue_service: Injected IssueService instance
+            notification_service: Injected NotificationService instance
+            claude_runner: Injected ClaudeRunner instance
+            issue_engine_factory: Factory function to create IssueEngine instances
         """
-        self.project_root = Path(project_root)
-        self.sprint_path = Path(sprint_path)
-        self.config = config or ClaudesprintConfig.from_project_root(str(project_root))
+        self.sprint_path = sprint_path
+        self.config = config
+        self.project_root = Path(config.project_dir)
 
-        # Initialize services
-        self.git_service = GitService(project_root)
-        self.sprint_service = SprintService(self.sprint_path.parent.parent)  # sprints dir
-        self.issue_service = IssueService(self.config.project_dir)
-        self.notification_service = NotificationService(self.config.notifications_file)
-        self.claude_runner = ClaudeRunner(
-            project_root,
-            self.config.claude_timeout,
-            common_prompt_file=self.config.common_prompt_file,
-            conversation_log_file=(
-                self.config.conversation_log_file if self.config.debug_conversations else None
-            ),
-        )
+        # Injected services
+        self.git_service = git_service
+        self.sprint_service = sprint_service
+        self.issue_service = issue_service
+        self.notification_service = notification_service
+        self.claude_runner = claude_runner
+
+        # Injected factory
+        self.issue_engine_factory = issue_engine_factory
 
         # Rate limit tracking
         self._rate_limit_retries = 0
@@ -874,11 +886,7 @@ class SprintEngine:
                 resolved_config = self._resolve_issue_config(sprint, issue)
 
                 # Create and run issue engine
-                issue_engine = IssueEngine(
-                    self.project_root,
-                    self.config,
-                    resolved_config,
-                )
+                issue_engine = self.issue_engine_factory(resolved_config)
                 issue_engine.on_output = self.on_output
 
                 # Allow external configuration of the issue engine (e.g., for dashboard callbacks)
