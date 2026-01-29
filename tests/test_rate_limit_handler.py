@@ -7,8 +7,8 @@ import pytest
 
 from claudesprint.core.rate_limit_handler import (
     RateLimitConfig,
-    RateLimitExceeded,
     RateLimitHandler,
+    RateLimitRetriesExhausted,
 )
 
 
@@ -39,12 +39,12 @@ class TestRateLimitConfig:
         assert config.jitter_factor == 0.2
 
 
-class TestRateLimitExceeded:
-    """Tests for RateLimitExceeded exception."""
+class TestRateLimitRetriesExhausted:
+    """Tests for RateLimitRetriesExhausted exception."""
 
     def test_exception_message(self):
         """Test exception message format."""
-        exc = RateLimitExceeded(retries=3, max_retries=3)
+        exc = RateLimitRetriesExhausted(retries=3, max_retries=3)
 
         assert exc.retries == 3
         assert exc.max_retries == 3

@@ -18,7 +18,7 @@ class RateLimitConfig:
     jitter_factor: float = 0.1
 
 
-class RateLimitExceeded(Exception):
+class RateLimitRetriesExhausted(Exception):
     """Raised when max rate limit retries are exhausted."""
 
     def __init__(self, retries: int, max_retries: int) -> None:
@@ -43,7 +43,7 @@ class RateLimitHandler:
             except RateLimitError:
                 handler.record_rate_limit()
                 if not handler.should_retry():
-                    raise RateLimitExceeded(...)
+                    raise RateLimitRetriesExhausted(...)
                 wait = handler.calculate_backoff()
                 time.sleep(wait.total_seconds())
     """
