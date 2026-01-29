@@ -129,6 +129,10 @@ class SprintEngine:
         self.on_sprint_complete: Callable[[SprintResult], None] | None = None
         self.issue_engine_configurator: Callable[[IssueEngine], None] | None = None
 
+        # New callbacks for outer loop visibility (simple-logs mode)
+        self.on_sprint_iteration: Callable[[int, int], None] | None = None
+        self.on_selecting_issue: Callable[[], None] | None = None
+
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
 
@@ -770,6 +774,13 @@ class SprintEngine:
             while True:
                 iteration += 1
 
+                # Reload sprint to get current state for iteration callback
+                sprint = self.sprint_service.read_sprint(self.sprint_path)
+                if sprint:
+                    available_count = len(sprint.get_available_issues())
+                    if self.on_sprint_iteration:
+                        self.on_sprint_iteration(iteration, available_count)
+
                 # Check iteration limit
                 if max_iterations > 0 and iteration > max_iterations:
                     elapsed = int(time.time() - start_time)
@@ -827,6 +838,8 @@ class SprintEngine:
                     return result
 
                 # Select next issue
+                if self.on_selecting_issue:
+                    self.on_selecting_issue()
                 selection = self.select_issue(sprint)
                 if not selection.success:
                     elapsed = int(time.time() - start_time)
