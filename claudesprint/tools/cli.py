@@ -13,11 +13,6 @@ Usage:
     claudesprint-tools sprint available [--spec=SPEC_ID]
     claudesprint-tools sprint start <issue_id> [--spec=SPEC_ID]
     claudesprint-tools sprint details <issue_id> [--spec=SPEC_ID]
-
-    claudesprint-tools test run
-    claudesprint-tools test lint
-    claudesprint-tools test build
-    claudesprint-tools test validate
 """
 
 import argparse
@@ -42,14 +37,10 @@ def configure_tools():
     project_dir = project_root / ".claudesprint" / "project"
     sprints_dir = project_root / ".claudesprint" / "sprints"
 
-    from claudesprint.tools import issue_tools, hook_runner, sprint_tools
+    from claudesprint.tools import issue_tools, sprint_tools
 
     issue_tools.configure(project_dir)
     sprint_tools.configure(sprints_dir)
-    hook_runner.configure_runner(
-        config_path=project_root / ".claudesprint" / "config" / "hooks.json",
-        project_root=project_root,
-    )
 
 
 def cmd_issue_get(args):
@@ -118,38 +109,6 @@ def cmd_issue_init(args):
         goal=args.goal,
         sprint_path=args.sprint_path,
     )
-    print(json.dumps(result.to_dict(), indent=2))
-
-
-def cmd_test_run(args):
-    """Run test hook."""
-    from claudesprint.tools.hook_runner import run_test_hook
-
-    result = run_test_hook()
-    print(json.dumps(result.to_dict(), indent=2))
-
-
-def cmd_test_lint(args):
-    """Run lint hook."""
-    from claudesprint.tools.hook_runner import run_lint_hook
-
-    result = run_lint_hook()
-    print(json.dumps(result.to_dict(), indent=2))
-
-
-def cmd_test_build(args):
-    """Run build hook."""
-    from claudesprint.tools.hook_runner import run_build_hook
-
-    result = run_build_hook()
-    print(json.dumps(result.to_dict(), indent=2))
-
-
-def cmd_test_validate(args):
-    """Run validate hook."""
-    from claudesprint.tools.hook_runner import run_validate_hook
-
-    result = run_validate_hook()
     print(json.dumps(result.to_dict(), indent=2))
 
 
@@ -226,22 +185,6 @@ def main():
     iinit_parser.add_argument("--goal", help="Goal description")
     iinit_parser.add_argument("--sprint-path", help="Path to sprint.json")
     iinit_parser.set_defaults(func=cmd_issue_init)
-
-    # Test commands
-    test_parser = subparsers.add_parser("test", help="Test/validation hooks")
-    test_subparsers = test_parser.add_subparsers(dest="subcommand", required=True)
-
-    test_run_parser = test_subparsers.add_parser("run", help="Run tests")
-    test_run_parser.set_defaults(func=cmd_test_run)
-
-    test_lint_parser = test_subparsers.add_parser("lint", help="Run linter")
-    test_lint_parser.set_defaults(func=cmd_test_lint)
-
-    test_build_parser = test_subparsers.add_parser("build", help="Run build")
-    test_build_parser.set_defaults(func=cmd_test_build)
-
-    test_validate_parser = test_subparsers.add_parser("validate", help="Run all validation")
-    test_validate_parser.set_defaults(func=cmd_test_validate)
 
     # Sprint commands (token-optimized views)
     sprint_parser = subparsers.add_parser("sprint", help="Sprint query tools")

@@ -1,0 +1,82 @@
+<project_discovery>
+    <description>
+        You have full access to examine project files to understand how this project works.
+        Use your judgment to determine the appropriate commands - don't rely on hardcoded assumptions.
+    </description>
+
+    <approach>
+        <step>Read relevant project files (package.json, pyproject.toml, Makefile, etc.)</step>
+        <step>Understand the project's structure, dependencies, and scripts</step>
+        <step>Determine the appropriate command for the task at hand</step>
+        <step>Execute the command you've determined is correct</step>
+    </approach>
+
+    <files_to_examine>
+        <file name="package.json">Contains scripts, dependencies, and project metadata for Node.js projects</file>
+        <file name="pyproject.toml">Python project configuration, may contain test/lint tool configs</file>
+        <file name="Cargo.toml">Rust project manifest</file>
+        <file name="go.mod">Go module definition</file>
+        <file name="Makefile">May define test, build, dev targets</file>
+        <file name=".env / .env.local">May contain PORT or other environment variables</file>
+        <file name="vite.config.* / next.config.* / etc.">Framework configs may specify ports</file>
+        <file name="README.md">Often documents how to run tests, start dev server, etc.</file>
+    </files_to_examine>
+
+    <guidelines>
+        <guideline>Read the actual files - don't assume based on project type</guideline>
+        <guideline>Look for custom scripts that may differ from defaults</guideline>
+        <guideline>Check if there are multiple test commands (unit, e2e, integration)</guideline>
+        <guideline>Consider the project's specific tooling (NestJS, Next.js, Django, etc.)</guideline>
+    </guidelines>
+
+    <server_management>
+        <critical>
+            BEFORE starting any dev server, you MUST check if one is already running.
+            Spawning duplicate servers will exhaust system memory.
+        </critical>
+
+        <rule name="check_before_start">
+            Before running any server command (npm run dev, uvicorn, flask run, etc.):
+            1. Check if the port is already in use (try in order):
+               - `curl -s --max-time 2 localhost:PORT` (best - checks if responding)
+               - `lsof -i :PORT` (common on macOS/Linux with lsof)
+               - `ss -tuln | grep :PORT` (Linux alternative to lsof)
+            2. If something is running on that port, DO NOT start another server
+            3. If you need to restart, kill the existing process first
+        </rule>
+
+        <rule name="track_what_you_start">
+            If you start a server, remember that you started it.
+            Don't start it again later in the same session.
+        </rule>
+
+        <rule name="cleanup">
+            If you started a server and no longer need it, kill it:
+            `pkill -f "npm run dev"` or similar
+        </rule>
+
+        <rule name="prefer_existing">
+            If a server is already running (started externally or earlier), use it.
+            Don't restart it unless there's a specific reason.
+        </rule>
+
+        <example_check><![CDATA[
+# Set variables based on your discovery of the project
+PORT=3000  # Discovered from package.json, .env, or framework defaults
+DEV_CMD="npm run dev"  # Discovered from package.json scripts
+
+# Check if port is in use before starting (try multiple methods for compatibility)
+if curl -s --max-time 2 "http://localhost:$PORT" > /dev/null 2>&1; then
+    echo "Server already responding on port $PORT"
+elif lsof -i :$PORT > /dev/null 2>&1; then
+    echo "Port $PORT is in use (server may be starting)"
+elif ss -tuln 2>/dev/null | grep -q ":$PORT "; then
+    echo "Port $PORT is in use (ss check)"
+else
+    echo "Starting dev server on port $PORT..."
+    $DEV_CMD &
+    sleep 3  # Wait for startup
+fi
+        ]]></example_check>
+    </server_management>
+</project_discovery>

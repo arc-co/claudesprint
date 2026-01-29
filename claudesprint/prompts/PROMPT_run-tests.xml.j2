@@ -6,27 +6,45 @@
         <rule priority="high">Include verbatim failure output in current_failures.</rule>
 {% endblock %}
 
+{% block extra_context %}
+        {% include '_project_discovery.xml.j2' %}
+{% endblock %}
+
 {% block instructions %}
         <phase name="get_bearings">
             <commands><![CDATA[
 pwd
 cat .claudesprint/project/current_issue.json
-cat .claudesprint/config/hooks.json
             ]]></commands>
         </phase>
 
-        <phase name="run_tests">
-            <commands><![CDATA[
-VALIDATE_CMD=$(cat .claudesprint/config/hooks.json | jq -r '.validate.command')
-$VALIDATE_CMD
-            ]]></commands>
-            <action>Capture output. If failures, record exact error messages and identify if failures are in implementation or tests.</action>
+        <phase name="discover_and_run_tests">
+            <description>
+                Examine the project to determine how to run tests, then run them.
+            </description>
+            <steps>
+                <step>Read package.json, pyproject.toml, Makefile, or other relevant config files</step>
+                <step>Identify the appropriate test command for this project</step>
+                <step>Consider if there's a "validate" script that runs lint + typecheck + tests</step>
+                <step>Run the test command and capture the output</step>
+            </steps>
+            <examples>
+                <example project="typical Node.js">npm test</example>
+                <example project="Node.js with validate script">npm run validate</example>
+                <example project="NestJS">npm run test or npm run test:e2e</example>
+                <example project="Python with pytest">pytest or uv run pytest</example>
+                <example project="Rust">cargo test</example>
+                <example project="Go">go test ./...</example>
+                <example project="Project with Makefile">make test</example>
+            </examples>
+            <note>These are just examples - read the actual project files to determine the correct command.</note>
         </phase>
 
         <phase name="analyze_results" required="true">
             <description>CRITICAL: Output analysis BEFORE updating state:</description>
             <format><![CDATA[
 <analysis>
+Test Command Used: [the command you ran]
 Test Result: [PASS | FAIL]
 
 {% if failures %}
@@ -76,6 +94,7 @@ Next Step: [browser-validation | implement | fix-tests]
         <phase name="log_and_exit">
             <commands><![CDATA[
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: run-tests -> <next> (<PASS/FAIL>)" >> .claudesprint/project/current_issue.log
+echo "  Test command: <command_used>" >> .claudesprint/project/current_issue.log
 echo "  Analysis: <why routing to implement or fix-tests>" >> .claudesprint/project/current_issue.log
             ]]></commands>
         </phase>

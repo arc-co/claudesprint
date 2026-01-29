@@ -2,8 +2,13 @@
 
 {% block extra_constraints %}
         <rule priority="critical">Do NOT fix failures yourself - route to implement.</rule>
+        <rule priority="critical">Check if server is running BEFORE starting one - never spawn duplicates.</rule>
         <rule priority="high">Always close browser session.</rule>
         <rule priority="medium">Take screenshots as evidence.</rule>
+{% endblock %}
+
+{% block extra_context %}
+        {% include '_project_discovery.xml.j2' %}
 {% endblock %}
 
 {% block instructions %}
@@ -32,28 +37,73 @@ pwd
 cat .claudesprint/project/current_issue.json
 ISSUE_ID=$(cat .claudesprint/project/current_issue.json | jq -r '.issue_id')
 claudesprint-tools sprint details "$ISSUE_ID"
-cat .claudesprint/config/project.json
             ]]></commands>
         </phase>
 
-        <phase name="start_dev_server">
+        <phase name="discover_dev_server">
+            <description>
+                Examine the project to determine the dev server URL.
+            </description>
+            <steps>
+                <step>Read package.json, framework config files, .env files</step>
+                <step>Identify what framework is being used (Vite, Next.js, NestJS, Django, etc.)</step>
+                <step>Determine the likely port from config or framework defaults</step>
+                <step>Check .env or .env.local for PORT overrides</step>
+            </steps>
+            <common_ports>
+                <port framework="Vite">5173</port>
+                <port framework="Next.js / Nuxt / CRA">3000</port>
+                <port framework="Angular">4200</port>
+                <port framework="NestJS">3000</port>
+                <port framework="Django / FastAPI">8000</port>
+                <port framework="Flask">5000</port>
+            </common_ports>
+            <note>These are defaults - check the actual project config for the real port.</note>
+        </phase>
+
+        <phase name="check_or_start_server">
+            <description>Check if the dev server is running. If not, start it (checking for duplicates first).</description>
+            <note>
+                Set DEV_URL and PORT based on your discovery in the previous phase.
+                Example: DEV_URL="http://localhost:3000" PORT=3000
+            </note>
             <commands><![CDATA[
-DEV_URL=$(cat .claudesprint/config/project.json | jq -r '.dev_server.url')
-curl -s "$DEV_URL" > /dev/null 2>&1 && echo "Server running" || echo "Server not running"
+# First, check if server is already responding
+if curl -s --max-time 5 "$DEV_URL" > /dev/null 2>&1; then
+    echo "Server already running at $DEV_URL"
+else
+    echo "Server not running, checking port..."
+    # Check if port is in use (try multiple methods for compatibility)
+    if curl -s --max-time 2 "http://localhost:$PORT" > /dev/null 2>&1; then
+        echo "Port $PORT responding - server is up"
+    elif lsof -i :$PORT > /dev/null 2>&1; then
+        echo "Port $PORT is in use but not responding - waiting..."
+        sleep 5
+    elif ss -tuln 2>/dev/null | grep -q ":$PORT "; then
+        echo "Port $PORT is in use (ss) - waiting..."
+        sleep 5
+    else
+        echo "Starting dev server..."
+        # Start server in background - use the command discovered from package.json
+        # Example: npm run dev &
+        # Wait for startup
+        sleep 5
+    fi
+fi
             ]]></commands>
-            <fallback><![CDATA[
-START_CMD=$(cat .claudesprint/config/project.json | jq -r '.dev_server.start_command')
-WAIT_SECS=$(cat .claudesprint/config/project.json | jq -r '.dev_server.wait_seconds')
-$START_CMD &
-sleep $WAIT_SECS
-            ]]></fallback>
+            <important>
+                NEVER start a server if one is already running on the same port.
+                Check using: curl, lsof, or ss (in that order of preference).
+                This prevents duplicate servers that exhaust memory.
+            </important>
         </phase>
 
-        <phase name="validate">
+        <phase name="validate" condition="server is running">
+            <description>Perform browser validation if server is running.</description>
             <commands><![CDATA[
 agent-browser open "$DEV_URL/<path>"
 agent-browser snapshot -i
-# Interact as user would
+# Interact as user would based on acceptance criteria
 agent-browser fill @e1 "input"
 agent-browser click @e2
 agent-browser wait --load networkidle
@@ -81,9 +131,9 @@ agent-browser close
             <update field="retry_count">Increment</update>
         </phase>
 
-        <phase name="update_current_issue_json_skip" condition="no UI components">
+        <phase name="update_current_issue_json_skip" condition="no UI components OR server not running">
             <update field="step">code-review</update>
-            <log>Skipped browser validation: no UI in acceptance criteria</log>
+            <log>Skipped browser validation: [reason]</log>
         </phase>
 
         <phase name="log_and_exit">
@@ -100,6 +150,6 @@ echo "  Result: <PASS/FAIL/SKIP>" >> .claudesprint/project/current_issue.log
         <description>End your response with exactly one of these routing signals:</description>
         <signal value="pass">All UI validations passed</signal>
         <signal value="fail">UI validation failed</signal>
-        <signal value="skip">No UI components to validate (or agent-browser not available)</signal>
+        <signal value="skip">No UI components to validate, server not running, or agent-browser not available</signal>
         <format><![CDATA[<routing_signal>value</routing_signal>]]></format>
 {% endblock %}

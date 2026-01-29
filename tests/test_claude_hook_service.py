@@ -198,6 +198,66 @@ class TestHelperMethods:
         assert service.is_server_command("npm test") is False
 
 
+class TestServerCommandsAllowed:
+    """Tests verifying server commands are ALLOWED (not blocked).
+
+    Server commands are allowed because:
+    1. The model needs flexibility to start servers when needed
+    2. Duplicate prevention is handled via prompt guidance (check port before starting)
+    3. See _project_discovery.xml.j2 <server_management> section
+    """
+
+    def test_allows_npm_run_dev(self) -> None:
+        """Server commands are allowed - prompt handles duplicate prevention."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "npm run dev"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_yarn_dev(self) -> None:
+        """Server commands are allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "yarn dev"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_uvicorn(self) -> None:
+        """Server commands are allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "uvicorn main:app --reload"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_allows_flask_run(self) -> None:
+        """Server commands are allowed."""
+        service = ClaudeHookService()
+        hook_input = HookInput(tool_input={"command": "flask run --debug"})
+
+        result = service.execute_hook(HookType.SERVER_GUARD, hook_input)
+
+        assert result == HookResult.ALLOW
+
+    def test_is_server_command_detection_still_works(self) -> None:
+        """The is_server_command helper still detects server commands (for other uses)."""
+        service = ClaudeHookService()
+
+        # Detection works (even though we don't block)
+        assert service.is_server_command("npm run dev") is True
+        assert service.is_server_command("yarn dev") is True
+        assert service.is_server_command("uvicorn main:app") is True
+        assert service.is_server_command("flask run") is True
+
+        # Non-server commands
+        assert service.is_server_command("npm test") is False
+        assert service.is_server_command("npm run build") is False
+
+
 class TestHookTypes:
     """Tests for HookType enum."""
 
