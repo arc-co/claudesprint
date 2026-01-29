@@ -349,7 +349,11 @@ class SprintEngine:
 
         # Run Claude with the selection prompt
         if self.on_output:
-            self.on_output("\n=== Running agent-driven issue selection ===\n")
+            self.on_output(
+                f"\n{'=' * 60}\n"
+                f"SPRINT LOOP: Selecting next issue\n"
+                f"{'=' * 60}\n"
+            )
 
         result: ClaudeResult = self.claude_runner.run_prompt(
             prompt_file,
@@ -954,7 +958,28 @@ class SprintEngine:
                 if self.issue_engine_configurator:
                     self.issue_engine_configurator(issue_engine)
 
+                # Log transition: Sprint Loop → Issue Loop
+                if self.on_output:
+                    self.on_output(
+                        f"\n{'=' * 60}\n"
+                        f"ENTERING ISSUE LOOP: {issue.id}\n"
+                        f"  Title: {issue.title}\n"
+                        f"  Starting step: {current_issue.step.value}\n"
+                        f"{'=' * 60}\n"
+                    )
+
                 issue_result = issue_engine.run(current_issue)
+
+                # Log transition: Issue Loop → Sprint Loop
+                if self.on_output:
+                    self.on_output(
+                        f"\n{'-' * 60}\n"
+                        f"EXITING ISSUE LOOP: {issue.id}\n"
+                        f"  Exit reason: {issue_result.exit_reason.value}\n"
+                        f"  Steps completed: {issue_result.steps_completed}\n"
+                        f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
+                        f"{'-' * 60}\n"
+                    )
 
                 # Handle issue result
                 match issue_result.exit_reason:
