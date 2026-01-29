@@ -127,6 +127,39 @@ class SimpleLogsOutput:
         self.sprint_completed = completed
         self._log(f"[bold]SPRINT[/bold] {spec_id} | {completed}/{total} issues complete")
 
+    def on_sprint_entered(self, spec_id: str, total: int, completed: int) -> None:
+        """Log entering sprint loop with visual marker.
+
+        Args:
+            spec_id: The sprint spec ID.
+            total: Total number of issues in the sprint.
+            completed: Number of already completed issues.
+        """
+        if self.sprint_total == 0:
+            self.sprint_total = total
+            self.sprint_completed = completed
+        self._log("")
+        self._log("[bold blue]" + "=" * 50 + "[/bold blue]")
+        self._log("[bold blue]>>> ENTERING SPRINT LOOP[/bold blue]")
+        self._log(f"[bold blue]    Sprint: {spec_id}[/bold blue]")
+        self._log(f"[bold blue]    Issues: {self.sprint_completed}/{self.sprint_total} complete[/bold blue]")
+        self._log("[bold blue]" + "=" * 50 + "[/bold blue]")
+
+    def on_sprint_exited(self, spec_id: str, total: int, completed: int) -> None:
+        """Log exiting sprint loop with visual marker.
+
+        Args:
+            spec_id: The sprint spec ID.
+            total: Total number of issues in the sprint.
+            completed: Number of completed issues.
+        """
+        self._log("")
+        self._log("[bold green]" + "=" * 50 + "[/bold green]")
+        self._log("[bold green]<<< EXITING SPRINT LOOP[/bold green]")
+        self._log(f"[bold green]    Sprint: {spec_id}[/bold green]")
+        self._log(f"[bold green]    Completed: {completed}/{total} issues[/bold green]")
+        self._log("[bold green]" + "=" * 50 + "[/bold green]")
+
     def on_sprint_iteration(self, iteration: int, available_issues: int) -> None:
         """Log a new sprint iteration.
 
@@ -146,6 +179,35 @@ class SimpleLogsOutput:
 
     # Issue events
 
+    def on_issue_entered(self, issue_id: str, title: str) -> None:
+        """Log entering issue loop with visual marker.
+
+        Args:
+            issue_id: The issue ID.
+            title: The issue title.
+        """
+        self._log("")
+        self._log("[bold cyan]" + "-" * 40 + "[/bold cyan]")
+        self._log("[bold cyan]  >> ENTERING ISSUE LOOP[/bold cyan]")
+        self._log(f"[bold cyan]     Issue: {issue_id}[/bold cyan]")
+        self._log(f"[bold cyan]     Title: {title}[/bold cyan]")
+        self._log("[bold cyan]" + "-" * 40 + "[/bold cyan]")
+
+    def on_issue_exited(self, issue_id: str, exit_reason: str) -> None:
+        """Log exiting issue loop with visual marker.
+
+        Args:
+            issue_id: The issue ID.
+            exit_reason: The reason for exiting (e.g., "completed", "failed").
+        """
+        color = "green" if exit_reason == "completed" else "yellow"
+        self._log("")
+        self._log(f"[bold {color}]" + "-" * 40 + f"[/bold {color}]")
+        self._log(f"[bold {color}]  << EXITING ISSUE LOOP[/bold {color}]")
+        self._log(f"[bold {color}]     Issue: {issue_id}[/bold {color}]")
+        self._log(f"[bold {color}]     Reason: {exit_reason}[/bold {color}]")
+        self._log(f"[bold {color}]" + "-" * 40 + f"[/bold {color}]")
+
     def set_issue(self, issue_id: str, title: str) -> None:
         """Log starting work on an issue.
 
@@ -154,7 +216,7 @@ class SimpleLogsOutput:
             title: The issue title.
         """
         self.current_issue = issue_id
-        self._log(f"[cyan]ISSUE[/cyan] {issue_id} | {title}")
+        self._log(f"[cyan]ISSUE[/cyan] {issue_id} | {title}", indent=1)
 
     def on_issue_complete(self, issue_id: str) -> None:
         """Log issue completion.
@@ -165,7 +227,8 @@ class SimpleLogsOutput:
         self.sprint_completed += 1
         self._log(
             f"[green]ISSUE[/green] {issue_id} | "
-            f"Complete ({self.sprint_completed}/{self.sprint_total})"
+            f"Complete ({self.sprint_completed}/{self.sprint_total})",
+            indent=1,
         )
 
     def clear_issue(self) -> None:
@@ -251,7 +314,7 @@ class SimpleLogsOutput:
         if self.verbosity in (LogVerbosity.VERBOSE, LogVerbosity.DEBUG) and self.issue_iterations > 0:
             iter_info = f" [dim](iter {self.issue_iterations}/{self.max_iterations})[/dim]"
 
-        self._log(f"[yellow]STEP[/yellow] {step.value} | Starting... (model: {model}){iter_info}")
+        self._log(f"[yellow]STEP[/yellow] {step.value} | Starting... (model: {model}){iter_info}", indent=2)
 
     def on_step_complete(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
         """Log step completion.
@@ -261,7 +324,7 @@ class SimpleLogsOutput:
             next_step: The next step to execute, or None if done.
         """
         elapsed = self._format_elapsed(self.step_start_time)
-        self._log(f"[green]STEP[/green] {step.value} | Complete ({elapsed})")
+        self._log(f"[green]STEP[/green] {step.value} | Complete ({elapsed})", indent=2)
         self.step_start_time = None
         self.current_step = None
 
@@ -272,7 +335,7 @@ class SimpleLogsOutput:
             step: The skipped step.
             next_step: The next step to execute, or None if done.
         """
-        self._log(f"[dim]STEP[/dim] {step.value} | Skipped")
+        self._log(f"[dim]STEP[/dim] {step.value} | Skipped", indent=2)
 
     def on_step_failure(self, step: "IssueStep", retry_count: int, max_retry: int = 5) -> None:
         """Log step failure.
@@ -283,7 +346,7 @@ class SimpleLogsOutput:
             max_retry: Maximum retry limit for context.
         """
         color = "red" if retry_count >= max_retry * 0.6 else "yellow"
-        self._log(f"[{color}]STEP[/{color}] {step.value} | Failed (retry {retry_count}/{max_retry})")
+        self._log(f"[{color}]STEP[/{color}] {step.value} | Failed (retry {retry_count}/{max_retry})", indent=2)
 
     # Subprocess/agent output
 
@@ -303,11 +366,11 @@ class SimpleLogsOutput:
         Args:
             line: Output line from the subprocess.
         """
-        # Print agent output with indent
+        # Print agent output with indent (3 levels - under step)
         # Strip any trailing whitespace but preserve content
         line = line.rstrip()
         if line:
-            self._log(f"[dim]>[/dim] {line}", indent=1)
+            self._log(f"[dim]>[/dim] {line}", indent=3)
 
     def on_subprocess_end(self) -> None:
         """Log subprocess end (no-op for simple logs)."""
