@@ -2,7 +2,6 @@
 
 import json
 import re
-import shutil
 from pathlib import Path
 
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus
@@ -97,44 +96,6 @@ class SprintService:
 
             # Atomic rename
             temp_file.rename(file_path)
-            return True
-        except Exception:
-            return False
-
-    def backup_sprint(self, path: str | Path) -> bool:
-        """Create backup of a sprint.json file.
-
-        Args:
-            path: Path to the sprint.json file
-
-        Returns:
-            True if successful, False otherwise
-        """
-        file_path = Path(path)
-        if not file_path.exists():
-            return False
-        try:
-            backup_path = file_path.with_suffix(".backup.json")
-            shutil.copy2(file_path, backup_path)
-            return True
-        except Exception:
-            return False
-
-    def restore_sprint(self, path: str | Path) -> bool:
-        """Restore a sprint.json from backup.
-
-        Args:
-            path: Path to the sprint.json file
-
-        Returns:
-            True if successful, False otherwise
-        """
-        file_path = Path(path)
-        backup_path = file_path.with_suffix(".backup.json")
-        if not backup_path.exists():
-            return False
-        try:
-            shutil.copy2(backup_path, file_path)
             return True
         except Exception:
             return False

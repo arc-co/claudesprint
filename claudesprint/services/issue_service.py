@@ -1,7 +1,6 @@
 """Issue service for current issue session operations."""
 
 import json
-import shutil
 from datetime import datetime, UTC
 from pathlib import Path
 
@@ -19,7 +18,6 @@ class IssueService:
         """
         self.project_dir = Path(project_dir)
         self.current_issue_file = self.project_dir / "current_issue.json"
-        self.current_issue_backup = self.project_dir / "current_issue.backup.json"
         self.current_issue_log = self.project_dir / "current_issue.log"
 
     def read_current_issue(self) -> CurrentIssue | None:
@@ -63,34 +61,6 @@ class IssueService:
         except Exception:
             return False
 
-    def backup_current_issue(self) -> bool:
-        """Create backup of current_issue.json.
-
-        Returns:
-            True if successful, False otherwise
-        """
-        if not self.current_issue_file.exists():
-            return False
-        try:
-            shutil.copy2(self.current_issue_file, self.current_issue_backup)
-            return True
-        except Exception:
-            return False
-
-    def restore_current_issue(self) -> bool:
-        """Restore current_issue.json from backup.
-
-        Returns:
-            True if successful, False otherwise
-        """
-        if not self.current_issue_backup.exists():
-            return False
-        try:
-            shutil.copy2(self.current_issue_backup, self.current_issue_file)
-            return True
-        except Exception:
-            return False
-
     def is_current_issue_valid(self) -> bool:
         """Check if current_issue.json exists and is valid JSON.
 
@@ -110,24 +80,6 @@ class IssueService:
         except (json.JSONDecodeError, Exception):
             return False
 
-    def restore_current_issue_if_invalid(self) -> bool:
-        """Restore from backup if current_issue.json is invalid.
-
-        Returns:
-            True if current_issue is valid or restored, False otherwise
-        """
-        if not self.current_issue_file.exists():
-            if self.current_issue_backup.exists():
-                return self.restore_current_issue()
-            return False
-
-        if not self.is_current_issue_valid():
-            if self.current_issue_backup.exists():
-                return self.restore_current_issue()
-            return False
-
-        return True
-
     def clear_current_issue(self) -> bool:
         """Delete current_issue files (main, backup, log).
 
@@ -137,8 +89,6 @@ class IssueService:
         try:
             if self.current_issue_file.exists():
                 self.current_issue_file.unlink()
-            if self.current_issue_backup.exists():
-                self.current_issue_backup.unlink()
             if self.current_issue_log.exists():
                 self.current_issue_log.unlink()
             return True

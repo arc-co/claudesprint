@@ -204,9 +204,6 @@ class LlmStepExecutor(StepExecutor):
                 error=f"Prompt not found: PROMPT_{prompt_name}.xml.j2",
             )
 
-        # Backup current_issue before running
-        self.issue_service.backup_current_issue()
-
         # Get model for this step
         model = self.models_service.get_model_for_step(step)
 

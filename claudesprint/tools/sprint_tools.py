@@ -181,6 +181,97 @@ def list_available_issues(spec_id: str | None = None) -> ToolResult:
         )
 
 
+def start_issue(issue_id: str, spec_id: str | None = None) -> ToolResult:
+    """Mark an issue as in_progress in the sprint.
+
+    This should be called when selecting an issue to work on.
+    Updates the sprint.json status and adds history entry.
+
+    Args:
+        issue_id: The issue ID to start.
+        spec_id: Optional spec ID. If None, uses active sprint.
+
+    Returns:
+        ToolResult indicating success or failure.
+    """
+    try:
+        service = _get_service()
+
+        # Determine sprint path
+        if spec_id:
+            path = service.get_sprint_path(spec_id)
+            if not path.exists():
+                return ToolResult(
+                    success=False,
+                    message=f"Sprint not found for spec: {spec_id}",
+                )
+        else:
+            path, _ = service.get_active_sprint()
+            if not path:
+                return ToolResult(
+                    success=False,
+                    message="No active sprint found",
+                )
+
+        sprint = service.read_sprint(path)
+        if not sprint:
+            return ToolResult(
+                success=False,
+                message="Failed to parse sprint.json",
+            )
+
+        issue = sprint.get_issue(issue_id)
+        if not issue:
+            return ToolResult(
+                success=False,
+                message=f"Issue not found: {issue_id}",
+            )
+
+        # Check if issue can be started (not already completed)
+        if issue.status == IssueStatus.COMPLETED:
+            return ToolResult(
+                success=False,
+                message=f"Issue {issue_id} is already completed",
+            )
+
+        # Check if issue is already in progress
+        if issue.status == IssueStatus.IN_PROGRESS:
+            return ToolResult(
+                success=True,
+                message=f"Issue {issue_id} is already in progress",
+                data={"issue_id": issue_id, "status": "in_progress", "sprint_path": str(path)},
+            )
+
+        # Check dependencies
+        completed_ids = {i.id for i in sprint.issues if i.status == IssueStatus.COMPLETED}
+        missing_deps = [dep for dep in issue.dependencies if dep not in completed_ids]
+        if missing_deps:
+            return ToolResult(
+                success=False,
+                message=f"Issue {issue_id} is blocked by incomplete dependencies: {missing_deps}",
+            )
+
+        # Mark as in_progress
+        success = service.mark_issue_status(path, issue_id, IssueStatus.IN_PROGRESS)
+        if not success:
+            return ToolResult(
+                success=False,
+                message=f"Failed to update issue status for {issue_id}",
+            )
+
+        return ToolResult(
+            success=True,
+            message=f"Started issue {issue_id}",
+            data={"issue_id": issue_id, "status": "in_progress", "sprint_path": str(path)},
+        )
+
+    except Exception as e:
+        return ToolResult(
+            success=False,
+            message=f"Failed to start issue: {e}",
+        )
+
+
 def get_issue_details(issue_id: str, spec_id: str | None = None) -> ToolResult:
     """Get full details for a specific issue (including acceptance criteria).
 
