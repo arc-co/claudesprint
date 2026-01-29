@@ -242,8 +242,8 @@ class SprintEngine:
         If there's already an in_progress issue (from a previous interrupted
         session), that issue is resumed directly without running selection.
 
-        If current_issue.json exists with a pending issue (e.g., from
-        ISSUE_CHANGED transition), that issue is used directly.
+        If current_issue.json exists with a pending issue, that issue
+        is used directly.
 
         Args:
             sprint: Sprint model
@@ -258,7 +258,6 @@ class SprintEngine:
             return self._resume_in_progress_issue(in_progress_issue, current_issue)
 
         # Check if current_issue.json already has a valid pending issue
-        # (this happens after ISSUE_CHANGED when the select-issue step already picked an issue)
         existing_current = self.issue_service.read_current_issue()
         if existing_current and existing_current.issue_id:
             # Find this issue in the sprint
@@ -350,7 +349,11 @@ class SprintEngine:
 
         # Run Claude with the selection prompt
         if self.on_output:
-            self.on_output("\n=== Running agent-driven issue selection ===\n")
+            self.on_output(
+                f"\n{'=' * 60}\n"
+                f"SPRINT LOOP: Selecting next issue\n"
+                f"{'=' * 60}\n"
+            )
 
         result: ClaudeResult = self.claude_runner.run_prompt(
             prompt_file,
@@ -871,8 +874,7 @@ class SprintEngine:
                 )
 
                 if has_valid_context:
-                    # Use existing current_issue context (either resuming or continuing after
-                    # ISSUE_CHANGED from select-issue step)
+                    # Use existing current_issue context (resuming from previous session)
                     current_issue = existing_current_issue
 
                     # Ensure issue is marked as in_progress in sprint
@@ -956,7 +958,28 @@ class SprintEngine:
                 if self.issue_engine_configurator:
                     self.issue_engine_configurator(issue_engine)
 
+                # Log transition: Sprint Loop → Issue Loop
+                if self.on_output:
+                    self.on_output(
+                        f"\n{'=' * 60}\n"
+                        f"ENTERING ISSUE LOOP: {issue.id}\n"
+                        f"  Title: {issue.title}\n"
+                        f"  Starting step: {current_issue.step.value}\n"
+                        f"{'=' * 60}\n"
+                    )
+
                 issue_result = issue_engine.run(current_issue)
+
+                # Log transition: Issue Loop → Sprint Loop
+                if self.on_output:
+                    self.on_output(
+                        f"\n{'-' * 60}\n"
+                        f"EXITING ISSUE LOOP: {issue.id}\n"
+                        f"  Exit reason: {issue_result.exit_reason.value}\n"
+                        f"  Steps completed: {issue_result.steps_completed}\n"
+                        f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
+                        f"{'-' * 60}\n"
+                    )
 
                 # Handle issue result
                 match issue_result.exit_reason:
@@ -971,29 +994,6 @@ class SprintEngine:
                         # Callback: issue complete
                         if self.on_issue_complete:
                             self.on_issue_complete(issue)
-
-                    case IssueExitReason.ISSUE_CHANGED:
-                        # The select-issue step transitioned to a new issue
-                        # Mark the OLD issue as complete
-                        self._mark_issue_complete(issue.id)
-                        issues_completed += 1
-
-                        # Callback: old issue complete
-                        if self.on_issue_complete:
-                            self.on_issue_complete(issue)
-
-                        # Atomically mark new issue as IN_PROGRESS to prevent state
-                        # inconsistency if process crashes before next loop iteration
-                        new_current_issue = self.issue_service.read_current_issue()
-                        if new_current_issue and new_current_issue.issue_id:
-                            self.sprint_service.mark_issue_status(
-                                self.sprint_path,
-                                new_current_issue.issue_id,
-                                IssueStatus.IN_PROGRESS,
-                            )
-
-                        # DON'T clear current_issue - it already has the new issue data
-                        # The next loop iteration will pick up the new issue and fire on_issue_start
 
                     case IssueExitReason.RATE_LIMITED:
                         # Handle rate limiting with backoff
@@ -1051,6 +1051,23 @@ class SprintEngine:
                             message=issue_result.message,
                             error=issue_result.error,
                         )
+
+                    case IssueExitReason.MAX_ITERATIONS:
+                        # Issue hit total iteration limit (likely infinite loop between steps)
+                        # Mark as blocked and continue to next issue
+                        self.sprint_service.mark_issue_status(
+                            self.sprint_path,
+                            issue.id,
+                            IssueStatus.BLOCKED,
+                        )
+                        self.notification_service.notify_failure(
+                            f"Issue {issue.id} hit max iterations (possible infinite loop)"
+                        )
+                        if self.on_output:
+                            self.on_output(
+                                f"\nIssue {issue.id} exceeded max iterations limit "
+                                f"({self.config.max_total_iterations}), marking as blocked\n"
+                            )
 
                     case IssueExitReason.BLOCKED:
                         # Mark issue as blocked and continue to next

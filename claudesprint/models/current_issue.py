@@ -50,9 +50,8 @@ class IssueStep(StrEnum):
 
     @classmethod
     def ordered_steps(cls) -> list["IssueStep"]:
-        """Return steps in workflow order."""
+        """Return steps in workflow order (IssueEngine inner loop only)."""
         return [
-            cls.SELECT_ISSUE,
             cls.READ_DOCS,
             cls.IMPLEMENT,
             cls.WRITE_TESTS,
@@ -174,20 +173,20 @@ class CurrentIssue(BaseModel):
 
     # Workflow state
     chunk_type: ChunkType = Field(
-        default=ChunkType.SELECT,
+        default=ChunkType.IMPLEMENT,
         description="Current chunk/phase of work",
     )
     step: IssueStep = Field(
-        default=IssueStep.SELECT_ISSUE,
+        default=IssueStep.READ_DOCS,
         description="Current granular workflow step",
     )
     goal: str = Field(
-        default="Select next issue from sprint",
+        default="Initialize issue workflow",
         description="1-2 sentence description of the current goal",
         max_length=500,
     )
     next_action: str = Field(
-        default="Review sprint and select next issue to work on",
+        default="Read documentation and understand requirements",
         description="Single concrete instruction for the next session",
         min_length=1,
     )
@@ -310,10 +309,10 @@ class CurrentIssue(BaseModel):
             sprint_path=sprint_path,
             issue_id="",
             issue_title="",
-            chunk_type=ChunkType.SELECT,
-            step=IssueStep.SELECT_ISSUE,
-            goal="Select next issue from sprint",
-            next_action="Review sprint and select next issue to work on",
+            chunk_type=ChunkType.IMPLEMENT,
+            step=IssueStep.READ_DOCS,
+            goal="Initialize issue workflow",
+            next_action="Read documentation and understand requirements",
             repo_state=RepoState(git_head="", dirty=False),
             changes=[],
             commands_run=[],
