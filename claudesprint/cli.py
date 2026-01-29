@@ -25,7 +25,7 @@ from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MOD
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.services.path_service import PathService
 from claudesprint.services.prompt_service import PromptService
-from claudesprint.ui import WorkflowDashboard
+from claudesprint.simple_logs import SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
 
@@ -137,7 +137,7 @@ def _run_sprint_console(
     sprint_path: Path,
     max_iterations: int,
 ) -> None:
-    """Run the sprint workflow with console output and dashboard."""
+    """Run the sprint workflow with console output."""
     if not sprint_path.exists():
         console.print(f"[red]Sprint file not found: {sprint_path}[/red]")
         console.print("Run 'claudesprint init --spec <spec_file>' to create a sprint.")
@@ -181,28 +181,14 @@ def _run_sprint_console(
         if baseline_dirty_path.exists():
             baseline_dirty_path.unlink()
 
-    # Create dashboard with initial sprint info
-    dashboard = WorkflowDashboard()
+    # Create output handler
+    output = SimpleLogsOutput(console)
     stats = sprint.get_stats()
-    dashboard.set_sprint_info(
+    output.set_sprint_info(
         sprint.spec_id,
         stats["total"],
         stats["completed"],
     )
-
-    # Set issues for the board display
-    def refresh_issues_board() -> None:
-        # Reload sprint from disk to get current status
-        # (the sprint_engine updates the file, not our local object)
-        current_sprint = sprint_service.read_sprint(sprint_path)
-        if current_sprint:
-            issues_data = [
-                (issue.id, issue.title, issue.status.value)
-                for issue in current_sprint.issues
-            ]
-            dashboard.set_issues(issues_data)
-
-    refresh_issues_board()
 
     # Create all services for dependency injection
     issue_service = IssueService(config.project_dir)
@@ -252,36 +238,38 @@ def _run_sprint_console(
 
     # Set up callbacks
     def on_issue_start(issue: Issue) -> None:
-        dashboard.set_issue(issue.id, issue.title)
-        refresh_issues_board()
+        output.set_issue(issue.id, issue.title)
 
     def on_issue_complete(issue: Issue) -> None:
-        dashboard.increment_completed()
-        dashboard.clear_issue()
-        refresh_issues_board()
+        output.on_issue_complete(issue.id)
 
     def on_sprint_complete(result: SprintResult) -> None:
-        # Sprint complete message is now shown in the final panel
+        # Sprint complete message is now shown in the final output
         pass
 
     def configure_issue_engine(issue_engine: IssueEngine) -> None:
-        """Wire up dashboard callbacks to the issue engine."""
-        issue_engine.on_step_start = dashboard.on_step_start
-        issue_engine.on_step_complete = dashboard.on_step_complete
-        issue_engine.on_step_skip = dashboard.on_step_skip
-        issue_engine.on_step_failure = dashboard.on_step_failure
-        # Wire subprocess callbacks for real-time subprocess info
-        issue_engine.on_subprocess_start = dashboard.on_subprocess_start
-        issue_engine.on_subprocess_output = dashboard.on_subprocess_output
-        issue_engine.on_subprocess_end = dashboard.on_subprocess_end
+        """Wire up output callbacks to the issue engine."""
+        issue_engine.on_step_start = output.on_step_start
+        issue_engine.on_step_complete = output.on_step_complete
+        issue_engine.on_step_skip = output.on_step_skip
+        issue_engine.on_step_failure = output.on_step_failure
+        # Wire subprocess callbacks for agent output
+        issue_engine.on_subprocess_start = output.on_subprocess_start
+        issue_engine.on_subprocess_output = output.on_subprocess_output
+        issue_engine.on_subprocess_end = output.on_subprocess_end
 
     engine.on_issue_start = on_issue_start
     engine.on_issue_complete = on_issue_complete
     engine.on_sprint_complete = on_sprint_complete
     engine.issue_engine_configurator = configure_issue_engine
 
-    # Run with dashboard
-    with dashboard:
+    # Wire up the new outer loop callbacks
+    engine.on_sprint_iteration = output.on_sprint_iteration
+    engine.on_selecting_issue = output.on_selecting_issue
+    engine.on_output = output.on_output
+
+    # Run sprint
+    with output:
         result = engine.run(max_iterations=max_iterations)
 
     console.print("")
@@ -290,18 +278,15 @@ def _run_sprint_console(
         if result.message and "Manual PR submission" in result.message:
             console.print(result.message)
         else:
-            console.print(Panel.fit(
-                f"[bold green]v SPRINT COMPLETE[/bold green]\n"
-                f"Issues completed: {result.issues_completed}\n"
-                f"Runtime: {format_duration(result.elapsed_seconds)}",
-                style="green",
-            ))
+            console.print(
+                f"[bold green]SPRINT COMPLETE[/bold green] - "
+                f"Issues completed: {result.issues_completed}, "
+                f"Runtime: {format_duration(result.elapsed_seconds)}"
+            )
     elif result.exit_reason == SprintExitReason.ERROR:
-        console.print(Panel.fit(
-            f"[bold red]x Error: {result.message}[/bold red]\n"
-            f"{result.error or ''}",
-            style="red",
-        ))
+        console.print(f"[bold red]Error: {result.message}[/bold red]")
+        if result.error:
+            console.print(f"[red]{result.error}[/red]")
         raise typer.Exit(1)
     else:
         console.print(f"[yellow]Exit: {result.exit_reason.value} - {result.message}[/yellow]")

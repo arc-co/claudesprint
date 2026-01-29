@@ -129,6 +129,10 @@ class SprintEngine:
         self.on_sprint_complete: Callable[[SprintResult], None] | None = None
         self.issue_engine_configurator: Callable[[IssueEngine], None] | None = None
 
+        # New callbacks for outer loop visibility (simple-logs mode)
+        self.on_sprint_iteration: Callable[[int, int], None] | None = None
+        self.on_selecting_issue: Callable[[], None] | None = None
+
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
 
@@ -796,6 +800,11 @@ class SprintEngine:
                         error="Could not parse sprint.json",
                     )
 
+                # Iteration callback
+                if self.on_sprint_iteration:
+                    available_count = len(sprint.get_available_issues())
+                    self.on_sprint_iteration(iteration, available_count)
+
                 # Get bearings - output sprint status between issue cycles
                 bearings = self.get_bearings(sprint)
                 if self.on_output:
@@ -827,6 +836,8 @@ class SprintEngine:
                     return result
 
                 # Select next issue
+                if self.on_selecting_issue:
+                    self.on_selecting_issue()
                 selection = self.select_issue(sprint)
                 if not selection.success:
                     elapsed = int(time.time() - start_time)
