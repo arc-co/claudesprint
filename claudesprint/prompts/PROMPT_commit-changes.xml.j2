@@ -13,9 +13,9 @@ git status 2>/dev/null || echo "Not a git repo"
 git diff --staged --stat 2>/dev/null || echo "Nothing staged"
             ]]></commands>
             <fallback>If NOT a git repo or nothing staged:
-                - Set step to select-issue (issue complete, select next)
+                - Output: &lt;routing_signal&gt;pass&lt;/routing_signal&gt;
                 - Log: "Skipped commit: &lt;reason&gt;"
-                - Exit</fallback>
+                - Exit (engine handles completion)</fallback>
         </phase>
 
         <phase name="get_bearings">
@@ -53,21 +53,20 @@ git log --oneline -3
         </phase>
 
         <phase name="update_current_issue_json">
-            <update field="step">select-issue</update>
+            <note>Do NOT change the step field - engine routing handles transitions</note>
             <update field="repo_state.git_head">New SHA</update>
             <update field="repo_state.dirty">false</update>
             <update field="changes">Clear (now in git)</update>
-            <update field="goal">Select next issue from sprint</update>
-            <update field="next_action">Run select-issue to pick next issue</update>
             <update field="commands_run">Add: commit command</update>
         </phase>
 
         <phase name="log_and_exit">
             <commands><![CDATA[
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: commit-changes -> select-issue (ISSUE COMPLETE)" >> .claudesprint/project/current_issue.log
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] STEP: commit-changes DONE" >> .claudesprint/project/current_issue.log
 echo "  Commit: <short SHA>" >> .claudesprint/project/current_issue.log
-echo "  Completed: <issue_id> - <issue_title>" >> .claudesprint/project/current_issue.log
+echo "  Issue: <issue_id> - <issue_title>" >> .claudesprint/project/current_issue.log
             ]]></commands>
+            <output><![CDATA[<routing_signal>pass</routing_signal>]]></output>
         </phase>
 {% endblock %}
 

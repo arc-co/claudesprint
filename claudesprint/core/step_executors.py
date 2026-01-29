@@ -276,8 +276,13 @@ class LlmStepExecutor(StepExecutor):
         # Reload current_issue to get any updates made by Claude
         updated_issue = self.issue_service.read_current_issue()
         # Claude may have updated the step field directly
+        # But only allow steps that are part of the IssueEngine inner loop
+        # (prevents prompt bugs from setting step=select-issue which is outer loop only)
+        inner_loop_steps = set(IssueStep.ordered_steps())
         if updated_issue and updated_issue.step != current_issue.step:
-            next_step = updated_issue.step
+            if updated_issue.step in inner_loop_steps:
+                next_step = updated_issue.step
+            # else: ignore the override, use routing table
 
         # Check exit code
         if result.exit_code != 0 and not next_step:
