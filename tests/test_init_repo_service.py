@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from claudesprint.services.constants import PROMPTS_README_CONTENT
+from claudesprint.services.constants import CLAUDESPRINT_SKILL_CONTENT, PROMPTS_README_CONTENT
 from claudesprint.services.init_repo_service import (
     InitRepoService,
     InitRepoResult,
@@ -297,6 +297,101 @@ class TestInitRepoServiceOSError:
             assert result.success is False
             assert "Failed to create directory structure" in result.error
             assert "Disk full" in result.error
+
+
+class TestInitRepoServiceSkill:
+    """Tests for Claude Code skill creation."""
+
+    def test_creates_skill_directory_and_file(self) -> None:
+        """Test init creates .claude/skills/claudesprint/SKILL.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            skill_path = Path(tmpdir) / ".claude" / "skills" / "claudesprint" / "SKILL.md"
+            assert skill_path.exists()
+            assert skill_path.read_text() == CLAUDESPRINT_SKILL_CONTENT
+
+    def test_skill_in_created_items(self) -> None:
+        """Test skill directory and file are listed in result."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            assert ".claude/skills/claudesprint/" in result.created_dirs
+            assert ".claude/skills/claudesprint/SKILL.md" in result.created_files
+
+    def test_force_overwrites_skill(self) -> None:
+        """Test --force overwrites SKILL.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create initial structure with custom skill
+            skill_dir = Path(tmpdir) / ".claude" / "skills" / "claudesprint"
+            skill_dir.mkdir(parents=True)
+            skill_path = skill_dir / "SKILL.md"
+            skill_path.write_text("# Custom skill content")
+
+            # Also create .claudesprint to satisfy exists check
+            (Path(tmpdir) / ".claudesprint").mkdir()
+
+            service = InitRepoService(tmpdir)
+            result = service.init(force=True)
+
+            assert result.success is True
+            assert skill_path.read_text() == CLAUDESPRINT_SKILL_CONTENT
+
+    def test_preserves_skill_if_exists_without_force(self) -> None:
+        """Test init preserves existing SKILL.md when --force is not used."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create skill file and .claudesprint to satisfy exists check
+            skill_dir = Path(tmpdir) / ".claude" / "skills" / "claudesprint"
+            skill_dir.mkdir(parents=True)
+            skill_path = skill_dir / "SKILL.md"
+            skill_path.write_text("# Custom skill content")
+            (Path(tmpdir) / ".claudesprint").mkdir()
+
+            service = InitRepoService(tmpdir)
+            # Without force, init fails because .claudesprint exists
+            result = service.init(force=False)
+
+            assert result.success is False
+            # Skill file should be preserved since init failed
+            assert skill_path.read_text() == "# Custom skill content"
+
+    def test_skill_dir_not_listed_if_already_exists(self) -> None:
+        """Test skill directory not listed as created if it already exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create skill directory first
+            skill_dir = Path(tmpdir) / ".claude" / "skills" / "claudesprint"
+            skill_dir.mkdir(parents=True)
+
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            # Directory already existed, so not in created_dirs
+            assert ".claude/skills/claudesprint/" not in result.created_dirs
+            # But file is still created
+            assert ".claude/skills/claudesprint/SKILL.md" in result.created_files
+
+    def test_does_not_overwrite_existing_skill_without_force(self) -> None:
+        """Test init does not overwrite existing SKILL.md when force=False."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create skill file but NOT .claudesprint
+            skill_dir = Path(tmpdir) / ".claude" / "skills" / "claudesprint"
+            skill_dir.mkdir(parents=True)
+            skill_path = skill_dir / "SKILL.md"
+            skill_path.write_text("# Custom skill content")
+
+            service = InitRepoService(tmpdir)
+            result = service.init(force=False)
+
+            assert result.success is True
+            # Skill file should NOT be overwritten
+            assert skill_path.read_text() == "# Custom skill content"
+            # Skill file should NOT be in created_files (wasn't created)
+            assert ".claude/skills/claudesprint/SKILL.md" not in result.created_files
 
 
 class TestInitRepoResult:
