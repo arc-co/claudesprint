@@ -5,9 +5,18 @@ import logging
 from datetime import datetime, UTC
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from claudesprint.models.current_issue import CurrentIssue
+from claudesprint.services.base.json_store import JsonStore
+
+
+class CurrentIssueStore(JsonStore[CurrentIssue]):
+    """JSON store for CurrentIssue models."""
+
+    def _serialize(self, data: CurrentIssue) -> str:
+        return data.model_dump_json(indent=2, by_alias=True)
+
+    def _deserialize(self, raw: dict) -> CurrentIssue:
+        return CurrentIssue.model_validate(raw)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +33,7 @@ class IssueService:
         self.project_dir = Path(project_dir)
         self.current_issue_file = self.project_dir / "current_issue.json"
         self.current_issue_log = self.project_dir / "current_issue.log"
+        self._store = CurrentIssueStore()
 
     def read_current_issue(self) -> CurrentIssue | None:
         """Read and parse current_issue.json.
@@ -31,20 +41,7 @@ class IssueService:
         Returns:
             CurrentIssue model or None if not found/invalid
         """
-        if not self.current_issue_file.exists():
-            return None
-        try:
-            data = json.loads(self.current_issue_file.read_text())
-            return CurrentIssue.model_validate(data)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Invalid JSON in current_issue.json: {e}")
-            return None
-        except ValidationError as e:
-            logger.warning(f"Invalid current_issue data: {e}")
-            return None
-        except OSError as e:
-            logger.warning(f"Failed to read current_issue.json: {e}")
-            return None
+        return self._store.read(self.current_issue_file)
 
     def write_current_issue(self, issue: CurrentIssue) -> bool:
         """Write current_issue.json atomically.
@@ -55,24 +52,9 @@ class IssueService:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            # Ensure parent directory exists
-            self.project_dir.mkdir(parents=True, exist_ok=True)
-
-            # Update timestamp
-            issue.update_timestamp()
-
-            # Write to temp file first
-            temp_file = self.project_dir / "current_issue.tmp.json"
-            content = issue.model_dump_json(indent=2, by_alias=True)
-            temp_file.write_text(content)
-
-            # Atomic rename
-            temp_file.rename(self.current_issue_file)
-            return True
-        except OSError as e:
-            logger.warning(f"Failed to write current_issue.json: {e}")
-            return False
+        # Update timestamp before writing
+        issue.update_timestamp()
+        return self._store.write(self.current_issue_file, issue)
 
     def is_current_issue_valid(self) -> bool:
         """Check if current_issue.json exists and is valid JSON.
