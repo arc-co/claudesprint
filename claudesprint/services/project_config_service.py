@@ -276,6 +276,20 @@ class AdvancedConfig(BaseModel):
     )
 
 
+class BarkNotificationConfig(BaseModel):
+    """Bark push notification configuration."""
+
+    enabled: bool = Field(default=False, description="Enable Bark notifications")
+    url: str = Field(default="", description="Bark server URL")
+
+
+class NotificationsConfig(BaseModel):
+    """Notification settings."""
+
+    enabled: bool = Field(default=True, description="Enable notifications globally")
+    bark: BarkNotificationConfig = Field(default_factory=BarkNotificationConfig)
+
+
 class ProjectConfig(BaseModel):
     """Project configuration model with all sections."""
 
@@ -288,6 +302,7 @@ class ProjectConfig(BaseModel):
     debug: DebugConfig = Field(default_factory=DebugConfig)
     timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
     advanced: AdvancedConfig = Field(default_factory=AdvancedConfig)
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
 
 # Default config TOML template
@@ -391,6 +406,16 @@ version_check_timeout = 10
 
 # Health check dependency install timeout (seconds)
 install_timeout = 120
+
+[notifications]
+# Enable notifications globally
+enabled = true
+
+[notifications.bark]
+# Enable Bark push notifications
+enabled = false
+# Bark server URL (e.g., "https://api.day.app/YOUR_KEY")
+url = ""
 
 [hooks.test]
 command = "npm test"

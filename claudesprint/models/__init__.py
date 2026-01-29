@@ -1,6 +1,6 @@
 """Pydantic models for ClaudeSprint."""
 
-from claudesprint.models.config import NotificationConfig, BarkConfig, ClaudesprintConfig
+from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.sprint import (
     Sprint,
     Issue,
@@ -21,8 +21,6 @@ from claudesprint.models.current_issue import (
 
 __all__ = [
     # Config
-    "NotificationConfig",
-    "BarkConfig",
     "ClaudesprintConfig",
     # Sprint models
     "Sprint",

@@ -24,6 +24,7 @@ from claudesprint.services.global_config_service import GlobalConfigService
 from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MODELS
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.services.path_service import PathService
+from claudesprint.services.project_config_service import ProjectConfigService
 from claudesprint.services.prompt_service import PromptService
 from claudesprint.simple_logs import LogVerbosity, SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
@@ -213,7 +214,10 @@ def _run_sprint_console(
 
     # Create all services for dependency injection
     issue_service = IssueService(config.project_dir)
-    notification_service = NotificationService(config.notifications_file, http_timeout=config.http_timeout)
+    project_config_service = ProjectConfigService(project_root)
+    notification_service = NotificationService.from_project_config(
+        project_config_service, http_timeout=config.http_timeout
+    )
     path_service = PathService(project_root)
     prompt_service = PromptService(path_service, project_root)
 
@@ -399,7 +403,8 @@ def init_project(
         raise typer.Exit(1)
 
     # Get model for init step
-    models_service = ModelsService(config.models_file)
+    project_config_service = ProjectConfigService(project_root)
+    models_service = ModelsService.from_project_config(project_config_service)
     model = models_service.get_model_for_special_step("init")
 
     console.print(f"[cyan]▶ Running init agent to generate issues (model: {model})...[/cyan]")
@@ -474,7 +479,8 @@ def run_planner(
         raise typer.Exit(1)
 
     # Get model for plan step
-    models_service = ModelsService(config.models_file)
+    project_config_service = ProjectConfigService(project_root)
+    models_service = ModelsService.from_project_config(project_config_service)
     model = models_service.get_model_for_special_step("plan")
 
     console.print(f"[cyan]▶ Running planner (model: {model})...[/cyan]")
@@ -644,8 +650,10 @@ def show_status(
 @app.command("models")
 def show_models() -> None:
     """Show model configuration for each step."""
-    config = get_config()
-    models_service = ModelsService(config.models_file)
+    project_root = get_project_root()
+    project_config_service = ProjectConfigService(project_root)
+    models_service = ModelsService.from_project_config(project_config_service)
+    project_config = project_config_service.load()
 
     console.print(Panel.fit("Model Configuration", style="bold blue"))
     console.print("")
@@ -656,8 +664,8 @@ def show_models() -> None:
         console.print(f"[yellow]Environment override active: CLAUDESPRINT_MODEL_OVERRIDE={env_override}[/yellow]")
         console.print("")
 
-    if models_service.config.model_override:
-        console.print(f"[yellow]Config override active: model_override={models_service.config.model_override}[/yellow]")
+    if project_config.models.model_override:
+        console.print(f"[yellow]Config override active: model_override={project_config.models.model_override}[/yellow]")
         console.print("")
 
     # Show per-step models
@@ -721,7 +729,11 @@ def send_notification(
 ) -> None:
     """Send a notification via Bark."""
     config = get_config()
-    service = NotificationService(config.notifications_file, http_timeout=config.http_timeout)
+    project_root = get_project_root()
+    project_config_service = ProjectConfigService(project_root)
+    service = NotificationService.from_project_config(
+        project_config_service, http_timeout=config.http_timeout
+    )
 
     if not service.enabled:
         console.print("[yellow]Notifications are not enabled[/yellow]")

@@ -29,21 +29,10 @@ _ENV_VAR_MAP: dict[str, str] = {
     "min_output_length": "CLAUDESPRINT_MIN_OUTPUT_LENGTH",
     "version_check_timeout": "CLAUDESPRINT_VERSION_CHECK_TIMEOUT",
     "install_timeout": "CLAUDESPRINT_INSTALL_TIMEOUT",
+    "notifications_enabled": "CLAUDESPRINT_NOTIFICATIONS_ENABLED",
+    "bark_enabled": "CLAUDESPRINT_BARK_ENABLED",
+    "bark_url": "CLAUDESPRINT_BARK_URL",
 }
-
-
-class BarkConfig(BaseModel):
-    """Bark push notification configuration."""
-
-    enabled: bool = False
-    url: str = ""
-
-
-class NotificationConfig(BaseModel):
-    """Notification settings."""
-
-    enabled: bool = True
-    bark: BarkConfig = Field(default_factory=BarkConfig)
 
 
 class ClaudesprintConfig(BaseSettings):
@@ -182,8 +171,6 @@ class ClaudesprintConfig(BaseSettings):
     prompts_dir: str = Field(default="", description="Path to prompts directory (inside claudesprint)")
 
     model_config = {
-        "env_file": ".claudesprint/.env",
-        "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
 
@@ -384,16 +371,6 @@ class ClaudesprintConfig(BaseSettings):
     def claude_output_file(self) -> str:
         """Path to temp file for capturing Claude output."""
         return os.path.join(self.project_dir, ".claude_output.tmp")
-
-    @property
-    def notifications_file(self) -> str:
-        """Path to notifications config file."""
-        return os.path.join(self.claudesprint_dir, "config", "notifications.json")
-
-    @property
-    def models_file(self) -> str:
-        """Path to models config file for per-step model selection."""
-        return os.path.join(self.claudesprint_dir, "config", "models.json")
 
     @property
     def schemas_dir(self) -> str:

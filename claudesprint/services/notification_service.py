@@ -1,15 +1,20 @@
 """Notification service for Bark push notifications."""
 
+from __future__ import annotations
+
 import asyncio
-import json
 import logging
 from enum import StrEnum
-from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 import httpx
 
-from claudesprint.models.config import BarkConfig, NotificationConfig
+if TYPE_CHECKING:
+    from claudesprint.services.project_config_service import (
+        NotificationsConfig,
+        ProjectConfigService,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -42,39 +47,43 @@ class NotificationService:
 
     def __init__(
         self,
-        config_path: str | Path | None = None,
         http_timeout: float | None = None,
     ) -> None:
-        self.config: NotificationConfig | None = None
+        self._notifications_config: NotificationsConfig | None = None
         self._client: httpx.AsyncClient | None = None
         self._queue: asyncio.Queue[tuple[NotificationType, str, str | None]] | None = None
         self._worker_task: asyncio.Task[None] | None = None
         self._http_timeout = http_timeout if http_timeout is not None else self.DEFAULT_HTTP_TIMEOUT
 
-        if config_path:
-            self.load_config(config_path)
+    @classmethod
+    def from_project_config(
+        cls,
+        project_config_service: ProjectConfigService,
+        http_timeout: float | None = None,
+    ) -> NotificationService:
+        """Create NotificationService from ProjectConfigService (TOML).
 
-    def load_config(self, config_path: str | Path) -> bool:
-        """Load notification config from file."""
-        path = Path(config_path)
-        if not path.exists():
-            return False
+        Args:
+            project_config_service: The project config service to load from.
+            http_timeout: Optional HTTP timeout override.
 
-        try:
-            data = json.loads(path.read_text())
-            self.config = NotificationConfig.model_validate(data)
-            return True
-        except (json.JSONDecodeError, Exception):
-            return False
+        Returns:
+            Configured NotificationService instance.
+        """
+        instance = cls(http_timeout=http_timeout)
+        config = project_config_service.load()
+        instance._notifications_config = config.notifications
+        return instance
 
     @property
     def enabled(self) -> bool:
         """Check if notifications are enabled."""
+        if self._notifications_config is None:
+            return False
         return (
-            self.config is not None
-            and self.config.enabled
-            and self.config.bark.enabled
-            and bool(self.config.bark.url)
+            self._notifications_config.enabled
+            and self._notifications_config.bark.enabled
+            and bool(self._notifications_config.bark.url)
         )
 
     async def send(
@@ -84,13 +93,13 @@ class NotificationService:
         title: str | None = None,
     ) -> bool:
         """Send a notification asynchronously."""
-        if not self.enabled or not self.config:
+        if not self.enabled or not self._notifications_config:
             return False
 
         actual_title = title or self.TITLES.get(notification_type, "ClaudeSprint")
         encoded_title = quote(actual_title)
         encoded_message = quote(message)
-        url = f"{self.config.bark.url}/{encoded_title}/{encoded_message}"
+        url = f"{self._notifications_config.bark.url}/{encoded_title}/{encoded_message}"
 
         try:
             async with httpx.AsyncClient(timeout=self._http_timeout) as client:
@@ -112,13 +121,13 @@ class NotificationService:
         title: str | None = None,
     ) -> bool:
         """Send a notification synchronously (non-blocking, fire-and-forget)."""
-        if not self.enabled or not self.config:
+        if not self.enabled or not self._notifications_config:
             return False
 
         actual_title = title or self.TITLES.get(notification_type, "ClaudeSprint")
         encoded_title = quote(actual_title)
         encoded_message = quote(message)
-        url = f"{self.config.bark.url}/{encoded_title}/{encoded_message}"
+        url = f"{self._notifications_config.bark.url}/{encoded_title}/{encoded_message}"
 
         try:
             # Fire and forget - don't wait for response

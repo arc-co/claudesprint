@@ -7,10 +7,7 @@ preserving opus for critical judgment steps.
 
 from __future__ import annotations
 
-import json
 import os
-from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from claudesprint.models.current_issue import IssueStep
@@ -40,62 +37,20 @@ STEP_DEFAULT_MODELS: dict[IssueStep, ModelName] = {
 }
 
 
-@dataclass
-class ModelsConfig:
-    """Configuration for per-step model selection."""
-
-    default_model: ModelName = "opus"
-    model_override: ModelName | None = None  # Force all steps to use this model
-    step_models: dict[str, ModelName] | None = None
-    special_step_models: dict[str, ModelName] | None = None
-
-    @classmethod
-    def from_file(cls, config_path: str | Path) -> "ModelsConfig":
-        """Load configuration from JSON file.
-
-        Args:
-            config_path: Path to models.json config file.
-
-        Returns:
-            ModelsConfig instance, falling back to defaults if file missing.
-        """
-        path = Path(config_path)
-        if not path.exists():
-            return cls()
-
-        try:
-            with open(path) as f:
-                data = json.load(f)
-            return cls(
-                default_model=data.get("default_model", "opus"),
-                model_override=data.get("model_override"),
-                step_models=data.get("step_models"),
-                special_step_models=data.get("special_step_models"),
-            )
-        except (json.JSONDecodeError, OSError):
-            return cls()
-
-
 class ModelsService:
     """Service for determining which model to use for each step.
 
     Resolution order:
     1. CLAUDESPRINT_MODEL_OVERRIDE env var (if set, forces all steps to use this model)
-    2. models.json model_override field (if set)
-    3. models.json step_models for the specific step
+    2. config.toml model_override field (if set)
+    3. config.toml step models for the specific step
     4. STEP_DEFAULT_MODELS for the step
-    5. models.json default_model
+    5. config.toml default_model
     6. Fall back to "opus"
     """
 
-    def __init__(self, config_path: str | Path | None = None) -> None:
-        """Initialize the models service.
-
-        Args:
-            config_path: Path to models.json. If None, uses default location.
-        """
-        self.config_path = config_path
-        self._config: ModelsConfig | None = None
+    def __init__(self) -> None:
+        """Initialize the models service."""
         self._project_config_service: ProjectConfigService | None = None
 
     @classmethod
@@ -114,20 +69,6 @@ class ModelsService:
         instance._project_config_service = project_config_service
         return instance
 
-    @property
-    def config(self) -> ModelsConfig:
-        """Lazy load configuration."""
-        if self._config is None:
-            if self.config_path:
-                self._config = ModelsConfig.from_file(self.config_path)
-            else:
-                self._config = ModelsConfig()
-        return self._config
-
-    def reload_config(self) -> None:
-        """Force reload of configuration from file."""
-        self._config = None
-
     def get_model_for_step(self, step: IssueStep | str) -> ModelName:
         """Get the model to use for a workflow step.
 
@@ -135,11 +76,11 @@ class ModelsService:
             step: The workflow step (IssueStep or string).
 
         Returns:
-            Model name ("opus" or "sonnet").
+            Model name ("opus", "sonnet", or "haiku").
         """
         # 1. Check environment variable override
         env_override = os.environ.get("CLAUDESPRINT_MODEL_OVERRIDE", "").lower()
-        if env_override in ("opus", "sonnet"):
+        if env_override in ("opus", "sonnet", "haiku"):
             return env_override  # type: ignore
 
         # Normalize step to string
@@ -149,25 +90,11 @@ class ModelsService:
         if self._project_config_service is not None:
             return self._project_config_service.get_model_for_step(step_name)
 
-        # 3. Check JSON config file override
-        if self.config.model_override in ("opus", "sonnet"):
-            return self.config.model_override
-
-        # 4. Check JSON config file step_models
-        if self.config.step_models and step_name in self.config.step_models:
-            model = self.config.step_models[step_name]
-            if model in ("opus", "sonnet"):
-                return model  # type: ignore
-
-        # 5. Check STEP_DEFAULT_MODELS
+        # 3. Check STEP_DEFAULT_MODELS
         if isinstance(step, IssueStep) and step in STEP_DEFAULT_MODELS:
             return STEP_DEFAULT_MODELS[step]
 
-        # 6. Check JSON config file default_model
-        if self.config.default_model in ("opus", "sonnet"):
-            return self.config.default_model
-
-        # 7. Fall back to opus
+        # 4. Fall back to opus
         return "opus"
 
     def get_model_for_special_step(self, step_name: str) -> ModelName:
@@ -177,28 +104,18 @@ class ModelsService:
             step_name: The special step name (e.g., "init", "plan").
 
         Returns:
-            Model name ("opus" or "sonnet").
+            Model name ("opus", "sonnet", or "haiku").
         """
         # 1. Check environment variable override
         env_override = os.environ.get("CLAUDESPRINT_MODEL_OVERRIDE", "").lower()
-        if env_override in ("opus", "sonnet"):
+        if env_override in ("opus", "sonnet", "haiku"):
             return env_override  # type: ignore
 
         # 2. Check TOML project config if available
         if self._project_config_service is not None:
             return self._project_config_service.get_model_for_special_step(step_name)
 
-        # 3. Check JSON config file override
-        if self.config.model_override in ("opus", "sonnet"):
-            return self.config.model_override
-
-        # 4. Check JSON config file special_step_models
-        if self.config.special_step_models and step_name in self.config.special_step_models:
-            model = self.config.special_step_models[step_name]
-            if model in ("opus", "sonnet"):
-                return model  # type: ignore
-
-        # 5. Fall back to defaults (init=opus, plan=sonnet)
+        # 3. Fall back to defaults (init=opus, plan=sonnet)
         defaults = {"init": "opus", "plan": "sonnet"}
         return defaults.get(step_name, "opus")  # type: ignore
 
@@ -221,3 +138,10 @@ class ModelsService:
             summary[special] = self.get_model_for_special_step(special)
 
         return summary
+
+    @property
+    def config(self) -> "ProjectConfigService":
+        """Get the project config service (for backward compatibility with CLI models command)."""
+        if self._project_config_service is None:
+            raise ValueError("ModelsService not initialized with project config")
+        return self._project_config_service

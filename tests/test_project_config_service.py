@@ -6,12 +6,14 @@ from pathlib import Path
 import pytest
 
 from claudesprint.services.project_config_service import (
+    BarkNotificationConfig,
     DEFAULT_PROJECT_CONFIG_TOML,
     HookConfig,
     HooksConfig,
     ModelsConfig,
     ModelsSpecialConfig,
     ModelsStepsConfig,
+    NotificationsConfig,
     ProjectConfig,
     ProjectConfigService,
     ServerConfig,
@@ -407,9 +409,89 @@ class TestDefaultProjectConfigToml:
         assert "[debug]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[timeouts]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[advanced]" in DEFAULT_PROJECT_CONFIG_TOML
+        # Notifications
+        assert "[notifications]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[notifications.bark]" in DEFAULT_PROJECT_CONFIG_TOML
         # Hooks
         assert "[hooks.test]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.lint]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.typecheck]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.build]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.validate]" in DEFAULT_PROJECT_CONFIG_TOML
+
+
+class TestBarkNotificationConfig:
+    """Tests for BarkNotificationConfig model."""
+
+    def test_default_values(self) -> None:
+        """Test BarkNotificationConfig has expected defaults."""
+        config = BarkNotificationConfig()
+
+        assert config.enabled is False
+        assert config.url == ""
+
+    def test_custom_values(self) -> None:
+        """Test BarkNotificationConfig with custom values."""
+        config = BarkNotificationConfig(
+            enabled=True,
+            url="https://api.day.app/YOUR_KEY",
+        )
+
+        assert config.enabled is True
+        assert config.url == "https://api.day.app/YOUR_KEY"
+
+
+class TestNotificationsConfig:
+    """Tests for NotificationsConfig model."""
+
+    def test_default_values(self) -> None:
+        """Test NotificationsConfig has expected defaults."""
+        config = NotificationsConfig()
+
+        assert config.enabled is True
+        assert isinstance(config.bark, BarkNotificationConfig)
+        assert config.bark.enabled is False
+        assert config.bark.url == ""
+
+    def test_custom_values(self) -> None:
+        """Test NotificationsConfig with custom values."""
+        config = NotificationsConfig(
+            enabled=False,
+            bark=BarkNotificationConfig(enabled=True, url="https://example.com"),
+        )
+
+        assert config.enabled is False
+        assert config.bark.enabled is True
+        assert config.bark.url == "https://example.com"
+
+
+class TestProjectConfigWithNotifications:
+    """Tests for ProjectConfig with notifications section."""
+
+    def test_project_config_includes_notifications(self) -> None:
+        """Test ProjectConfig includes notifications section."""
+        config = ProjectConfig()
+
+        assert hasattr(config, "notifications")
+        assert isinstance(config.notifications, NotificationsConfig)
+
+    def test_load_notifications_from_toml(self) -> None:
+        """Test loading notifications from TOML file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / ".claudesprint" / "config.toml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text("""
+[notifications]
+enabled = false
+
+[notifications.bark]
+enabled = true
+url = "https://api.day.app/TEST_KEY"
+""")
+
+            service = ProjectConfigService(tmpdir)
+            config = service.load()
+
+            assert config.notifications.enabled is False
+            assert config.notifications.bark.enabled is True
+            assert config.notifications.bark.url == "https://api.day.app/TEST_KEY"
