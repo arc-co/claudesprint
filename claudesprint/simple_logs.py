@@ -135,6 +135,8 @@ class SimpleLogsOutput:
             total: Total number of issues in the sprint.
             completed: Number of already completed issues.
         """
+        self.sprint_total = total
+        self.sprint_completed = completed
         self._log("")
         self._log("[bold blue]" + "=" * 50 + "[/bold blue]")
         self._log("[bold blue]>>> ENTERING SPRINT LOOP[/bold blue]")
