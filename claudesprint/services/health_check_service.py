@@ -101,9 +101,9 @@ OPTIONAL_DEPS: list[tuple[str, str, str]] = [
     ("npm", "system", "Required for agent-browser installation"),
 ]
 
-# Timeout constants (in seconds)
-VERSION_CHECK_TIMEOUT = 10
-INSTALL_TIMEOUT = 120
+# Default timeout constants (in seconds) - can be overridden via config
+DEFAULT_VERSION_CHECK_TIMEOUT = 10
+DEFAULT_INSTALL_TIMEOUT = 120
 
 
 class HealthCheckService:
@@ -113,13 +113,22 @@ class HealthCheckService:
     correctly for ClaudeSprint to function.
     """
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        version_check_timeout: int | None = None,
+        install_timeout: int | None = None,
+    ) -> None:
         """Initialize the service.
 
         Args:
             project_root: Optional project root path. Defaults to cwd.
+            version_check_timeout: Timeout for version checks (from config).
+            install_timeout: Timeout for install commands (from config).
         """
         self.project_root = project_root or Path.cwd()
+        self.version_check_timeout = version_check_timeout or DEFAULT_VERSION_CHECK_TIMEOUT
+        self.install_timeout = install_timeout or DEFAULT_INSTALL_TIMEOUT
 
     def run_all_checks(self, verbose: bool = False) -> HealthReport:
         """Run all health checks.
@@ -246,7 +255,7 @@ class HealthCheckService:
                 ["claude", "--version"],
                 capture_output=True,
                 text=True,
-                timeout=VERSION_CHECK_TIMEOUT,
+                timeout=self.version_check_timeout,
             )
             version = result.stdout.strip() or result.stderr.strip()
             return CheckResult(
@@ -451,7 +460,7 @@ class HealthCheckService:
                 shlex.split(cmd),
                 capture_output=True,
                 text=True,
-                timeout=INSTALL_TIMEOUT,
+                timeout=self.install_timeout,
             )
             if on_output:
                 if result.stdout:

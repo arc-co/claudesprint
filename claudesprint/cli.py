@@ -172,7 +172,7 @@ def _run_sprint_console(
         raise typer.Exit(1)
 
     # Pre-flight git check: warn if working directory has uncommitted changes
-    git_service = GitService(project_root)
+    git_service = GitService(project_root, git_timeout=config.git_timeout)
     git_status = git_service.get_status()
     baseline_dirty_path = Path(config.project_dir) / "baseline_dirty.json"
 
@@ -213,7 +213,7 @@ def _run_sprint_console(
 
     # Create all services for dependency injection
     issue_service = IssueService(config.project_dir)
-    notification_service = NotificationService(config.notifications_file)
+    notification_service = NotificationService(config.notifications_file, http_timeout=config.http_timeout)
     path_service = PathService(project_root)
     prompt_service = PromptService(path_service, project_root)
 
@@ -221,6 +221,8 @@ def _run_sprint_console(
     claude_runner = ClaudeRunner(
         project_root=project_root,
         timeout=config.claude_timeout,
+        kill_timeout=config.kill_timeout,
+        min_output_length=config.min_output_length,
         common_prompt_file=config.get_prompt_file("common"),
         conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
     )
@@ -232,6 +234,8 @@ def _run_sprint_console(
         issue_claude_runner = ClaudeRunner(
             project_root=project_root,
             timeout=config.claude_timeout,
+            kill_timeout=config.kill_timeout,
+            min_output_length=config.min_output_length,
             common_prompt_file=config.get_prompt_file("common"),
             conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
@@ -418,6 +422,8 @@ Read the spec file and populate the sprint.json with all required issues.
     runner = ClaudeRunner(
         project_root,
         config.claude_timeout,
+        kill_timeout=config.kill_timeout,
+        min_output_length=config.min_output_length,
         conversation_log_file=(
             config.conversation_log_file if debug_conversations else None
         ),
@@ -479,6 +485,8 @@ def run_planner(
     runner = ClaudeRunner(
         project_root,
         config.claude_timeout,
+        kill_timeout=config.kill_timeout,
+        min_output_length=config.min_output_length,
         conversation_log_file=(
             config.conversation_log_file if debug_conversations else None
         ),
@@ -511,7 +519,7 @@ def show_status(
     """Show current sprint workflow status."""
     project_root = get_project_root()
     config = get_config()
-    git_service = GitService(project_root)
+    git_service = GitService(project_root, git_timeout=config.git_timeout)
 
     # Determine sprint path
     if sprint:
@@ -715,7 +723,7 @@ def send_notification(
 ) -> None:
     """Send a notification via Bark."""
     config = get_config()
-    service = NotificationService(config.notifications_file)
+    service = NotificationService(config.notifications_file, http_timeout=config.http_timeout)
 
     if not service.enabled:
         console.print("[yellow]Notifications are not enabled[/yellow]")
@@ -1060,7 +1068,12 @@ def doctor(
     )
 
     project_root = get_project_root()
-    service = HealthCheckService(project_root)
+    config = get_config()
+    service = HealthCheckService(
+        project_root,
+        version_check_timeout=config.version_check_timeout,
+        install_timeout=config.install_timeout,
+    )
 
     console.print(Panel.fit("ClaudeSprint Doctor", style="bold blue"))
     console.print("")

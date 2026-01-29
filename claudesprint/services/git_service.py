@@ -20,18 +20,27 @@ class GitStatus:
 class GitService:
     """Service for Git operations with graceful degradation."""
 
-    def __init__(self, project_root: str | Path) -> None:
-        self.project_root = Path(project_root)
+    # Default git timeout (can be overridden via config)
+    DEFAULT_GIT_TIMEOUT = 60
 
-    def _run(self, *args: str, timeout: int = 60) -> tuple[bool, str, str]:
+    def __init__(
+        self,
+        project_root: str | Path,
+        git_timeout: int | None = None,
+    ) -> None:
+        self.project_root = Path(project_root)
+        self._git_timeout = git_timeout if git_timeout is not None else self.DEFAULT_GIT_TIMEOUT
+
+    def _run(self, *args: str, timeout: int | None = None) -> tuple[bool, str, str]:
         """Run a git command and return (success, stdout, stderr)."""
+        effective_timeout = timeout if timeout is not None else self._git_timeout
         try:
             result = subprocess.run(
                 ["git", *args],
                 cwd=self.project_root,
                 capture_output=True,
                 text=True,
-                timeout=timeout,
+                timeout=effective_timeout,
                 env={"GIT_TERMINAL_PROMPT": "0"},
             )
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
@@ -101,7 +110,7 @@ class GitService:
                 ["git", "status", "-z"],
                 cwd=self.project_root,
                 capture_output=True,
-                timeout=60,
+                timeout=self._git_timeout,
             )
             if result.returncode != 0 or not result.stdout:
                 return set()

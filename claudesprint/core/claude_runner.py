@@ -81,23 +81,25 @@ class ClaudeRunner:
         r"no.*tasks",
     ]
 
-    # Minimum output length to consider non-crash for unknown exit codes
-    MIN_OUTPUT_LENGTH = 50
+    # Default minimum output length to consider non-crash for unknown exit codes
+    DEFAULT_MIN_OUTPUT_LENGTH = 50
+    # Default grace period before SIGKILL
+    DEFAULT_KILL_TIMEOUT = 10
 
     def __init__(
         self,
         project_root: str | Path,
         timeout: int = 1800,  # 30 minutes default
-        kill_timeout: int = 10,  # Grace period before SIGKILL
-        min_output_length: int | None = None,  # Override MIN_OUTPUT_LENGTH
+        kill_timeout: int | None = None,  # Grace period before SIGKILL (from config)
+        min_output_length: int | None = None,  # Override min output length (from config)
         common_prompt_file: str | Path | None = None,  # Prepended to all prompts
         conversation_log_file: str | Path | None = None,  # Debug conversation logging
         conversation_logger: ConversationLogger | None = None,  # Injected logger (for testing)
     ) -> None:
         self.project_root = Path(project_root)
         self.timeout = timeout
-        self.kill_timeout = kill_timeout
-        self.min_output_length = min_output_length or self.MIN_OUTPUT_LENGTH
+        self.kill_timeout = kill_timeout if kill_timeout is not None else self.DEFAULT_KILL_TIMEOUT
+        self.min_output_length = min_output_length if min_output_length is not None else self.DEFAULT_MIN_OUTPUT_LENGTH
         self.common_prompt_file = Path(common_prompt_file) if common_prompt_file else None
         self._rate_limit_patterns = [
             re.compile(p, re.IGNORECASE) for p in self.RATE_LIMIT_PATTERNS

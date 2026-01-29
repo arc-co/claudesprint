@@ -18,11 +18,15 @@ class HeartbeatService:
     a callback when no activity is detected for a configured timeout period.
     """
 
+    # Default check interval (can be overridden via config)
+    DEFAULT_CHECK_INTERVAL = 10.0
+
     def __init__(
         self,
         timeout_seconds: int = 600,
         enabled: bool = True,
         on_hung: Callable[[str, int], None] | None = None,
+        check_interval: float | None = None,
     ) -> None:
         """Initialize the heartbeat service.
 
@@ -30,10 +34,12 @@ class HeartbeatService:
             timeout_seconds: Seconds of inactivity before triggering hung detection.
             enabled: Whether heartbeat monitoring is enabled.
             on_hung: Callback when hung process detected (step_name, seconds_inactive).
+            check_interval: How often to check for inactivity (from config).
         """
         self._timeout_seconds = timeout_seconds
         self._enabled = enabled
         self._on_hung = on_hung
+        self._check_interval = check_interval if check_interval is not None else self.DEFAULT_CHECK_INTERVAL
 
         self._last_pulse: float = 0
         self._current_step: str = ""
@@ -88,8 +94,8 @@ class HeartbeatService:
     def _monitor_loop(self) -> None:
         """Background thread loop that checks for inactivity."""
         while not self._stop_event.is_set():
-            # Check every 10 seconds
-            self._stop_event.wait(10.0)
+            # Check at configured interval
+            self._stop_event.wait(self._check_interval)
 
             if self._stop_event.is_set():
                 break
@@ -144,6 +150,7 @@ def get_heartbeat_service(
     timeout_seconds: int = 600,
     enabled: bool = True,
     on_hung: Callable[[str, int], None] | None = None,
+    check_interval: float | None = None,
 ) -> HeartbeatService:
     """Get or create the global heartbeat service instance.
 
@@ -151,6 +158,7 @@ def get_heartbeat_service(
         timeout_seconds: Seconds of inactivity before triggering hung detection.
         enabled: Whether heartbeat monitoring is enabled.
         on_hung: Callback when hung process detected.
+        check_interval: How often to check for inactivity (from config).
 
     Returns:
         The global HeartbeatService instance.
@@ -161,6 +169,7 @@ def get_heartbeat_service(
             timeout_seconds=timeout_seconds,
             enabled=enabled,
             on_hung=on_hung,
+            check_interval=check_interval,
         )
     return _heartbeat_service
 
