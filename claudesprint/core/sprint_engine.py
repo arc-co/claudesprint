@@ -17,6 +17,11 @@ import re
 
 from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
 from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
+from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
+from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
+from claudesprint.core.rate_limit_handler import RateLimitConfig, RateLimitHandler
+from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+from claudesprint.exceptions import RateLimitExceeded, StateCorruptionError
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus, ResolvedConfig
@@ -25,6 +30,7 @@ from claudesprint.services.issue_service import IssueService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.prompt_service import PromptService, PromptContext
+from claudesprint.services.state_manager import StateManager
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
 
@@ -94,6 +100,9 @@ class SprintEngine:
         claude_runner: ClaudeRunner,
         # Injected Factory
         issue_engine_factory: IssueEngineFactory,
+        # Optional integrations
+        event_bus: WorkflowEventBus | None = None,
+        state_manager: StateManager | None = None,
     ) -> None:
         """Initialize SprintEngine.
 
@@ -107,6 +116,8 @@ class SprintEngine:
             prompt_service: Injected PromptService instance
             claude_runner: Injected ClaudeRunner instance
             issue_engine_factory: Factory function to create IssueEngine instances
+            event_bus: Optional WorkflowEventBus for event emission
+            state_manager: Optional StateManager for safe state operations
         """
         self.sprint_path = sprint_path
         self.config = config
@@ -123,8 +134,29 @@ class SprintEngine:
         # Injected factory
         self.issue_engine_factory = issue_engine_factory
 
-        # Rate limit tracking
-        self._rate_limit_retries = 0
+        # Optional integrations
+        self.event_bus = event_bus
+        self.state_manager = state_manager
+
+        # Iteration tracker for categorized failure handling
+        self._iteration_tracker = IterationTracker(
+            max_iterations=config.max_total_iterations,
+            max_logic_errors=3,
+            max_infra_errors=10,
+            max_consecutive_failures=5,
+        )
+
+        # Rate limit handler (replaces self._rate_limit_retries)
+        self._rate_limit_handler = RateLimitHandler(
+            RateLimitConfig(
+                max_retries=config.rate_limit_retries,
+                base_delay_seconds=float(config.rate_limit_base_wait),
+                max_delay_seconds=float(config.rate_limit_max_wait),
+            )
+        )
+
+        # Issue state machine for result handling
+        self._state_machine = IssueStateMachine()
 
         # Callbacks
         self.on_issue_start: Callable[[Issue], None] | None = None
@@ -136,6 +168,18 @@ class SprintEngine:
         # New callbacks for outer loop visibility (simple-logs mode)
         self.on_sprint_iteration: Callable[[int, int], None] | None = None
         self.on_selecting_issue: Callable[[], None] | None = None
+
+    def _emit_event(self, event: WorkflowEvent, payload: dict) -> None:
+        """Emit an event to the event bus if configured.
+
+        Args:
+            event: The WorkflowEvent type to emit
+            payload: Event payload dictionary
+        """
+        if self.event_bus:
+            from datetime import datetime, UTC
+            payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+            self.event_bus.emit(event, payload)
 
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
@@ -683,25 +727,6 @@ class SprintEngine:
 
         return success
 
-    def _calculate_rate_limit_backoff(self) -> int:
-        """Calculate exponential backoff wait time for rate limiting.
-
-        Uses exponential backoff: base * 2^(retries-1), capped at max_wait.
-
-        Returns:
-            Wait time in seconds
-        """
-        base = self.config.rate_limit_base_wait
-        max_wait = self.config.rate_limit_max_wait
-
-        # Exponential backoff: base * 2^(retries-1)
-        # First retry: base, second: base*2, third: base*4, etc.
-        exponent = max(0, self._rate_limit_retries - 1)
-        wait = base * (2 ** exponent)
-
-        # Cap at max_wait
-        return min(wait, max_wait)
-
     def _get_pr_instructions(self, sprint: Sprint) -> str:
         """Get instructions for manually creating a PR.
 
@@ -743,11 +768,570 @@ class SprintEngine:
 
         return "\n".join(lines)
 
+    def _prepare_sprint(self) -> tuple[Sprint | None, SprintResult | None]:
+        """Prepare sprint for execution.
+
+        Runs preflight checks, loads sprint, and sets up the branch.
+
+        Returns:
+            Tuple of (sprint, error_result). If sprint is None, error_result
+            contains the failure result. If sprint is valid, error_result is None.
+        """
+        # Pre-flight checks
+        valid, errors = self.preflight_check()
+        if not valid:
+            return None, SprintResult(
+                exit_reason=SprintExitReason.ERROR,
+                issues_completed=0,
+                iterations=0,
+                elapsed_seconds=0,
+                message="Pre-flight checks failed",
+                error="; ".join(errors),
+            )
+
+        # Load sprint
+        sprint = self.sprint_service.read_sprint(self.sprint_path)
+        if not sprint:
+            return None, SprintResult(
+                exit_reason=SprintExitReason.ERROR,
+                issues_completed=0,
+                iterations=0,
+                elapsed_seconds=0,
+                message="Failed to load sprint",
+                error="Could not parse sprint.json",
+            )
+
+        # Setup sprint branch
+        branch_success, branch_msg = self._setup_sprint_branch(sprint)
+        if not branch_success:
+            return None, SprintResult(
+                exit_reason=SprintExitReason.ERROR,
+                issues_completed=0,
+                iterations=0,
+                elapsed_seconds=0,
+                message="Failed to setup sprint branch",
+                error=branch_msg,
+            )
+
+        return sprint, None
+
+    def _should_stop(
+        self,
+        iteration: int,
+        max_iterations: int,
+        start_time: float,
+        issues_completed: int,
+    ) -> SprintResult | None:
+        """Check if the sprint loop should stop.
+
+        Args:
+            iteration: Current iteration number
+            max_iterations: Maximum iterations allowed (0 = unlimited)
+            start_time: Start time of the sprint run
+            issues_completed: Number of issues completed so far
+
+        Returns:
+            SprintResult if should stop, None if should continue.
+        """
+        if max_iterations > 0 and iteration > max_iterations:
+            elapsed = int(time.time() - start_time)
+            self.notification_service.notify_exit(
+                f"Max iterations ({max_iterations}) reached"
+            )
+            return SprintResult(
+                exit_reason=SprintExitReason.MAX_ITERATIONS,
+                issues_completed=issues_completed,
+                iterations=iteration - 1,
+                elapsed_seconds=elapsed,
+                message=f"Max iterations ({max_iterations}) reached",
+            )
+        return None
+
+    def _handle_issue_result(
+        self,
+        issue_result: IssueResult,
+        issue: Issue,
+        start_time: float,
+        iteration: int,
+        issues_completed: int,
+    ) -> tuple[SprintResult | None, int, bool]:
+        """Handle the result of an issue execution using the state machine.
+
+        Args:
+            issue_result: Result from running the issue engine
+            issue: The issue that was executed
+            start_time: Start time of the sprint run
+            iteration: Current iteration number
+            issues_completed: Number of issues completed so far
+
+        Returns:
+            Tuple of (exit_result, updated_issues_completed, should_retry_same_issue).
+            exit_result is None if sprint should continue, otherwise contains the
+            final SprintResult. should_retry_same_issue is True for rate limiting.
+        """
+        action = self._state_machine.get_action(issue_result.exit_reason)
+
+        if action == SprintAction.CONTINUE_NEXT_ISSUE:
+            return self._handle_continue_action(
+                issue_result, issue, issues_completed
+            )
+
+        elif action == SprintAction.RETRY_SAME_ISSUE:
+            return self._handle_retry_action(
+                issue_result, issue, start_time, iteration, issues_completed
+            )
+
+        elif action == SprintAction.EXIT_SPRINT_FAILURE:
+            return self._handle_exit_failure_action(
+                issue_result, issue, start_time, iteration, issues_completed
+            )
+
+        # Shouldn't reach here if state machine is complete
+        return None, issues_completed, False
+
+    def _handle_continue_action(
+        self,
+        issue_result: IssueResult,
+        issue: Issue,
+        issues_completed: int,
+    ) -> tuple[SprintResult | None, int, bool]:
+        """Handle CONTINUE_NEXT_ISSUE action."""
+        if issue_result.exit_reason == IssueExitReason.COMPLETED:
+            # Mark issue complete in sprint
+            self._mark_issue_complete(issue.id)
+            issues_completed += 1
+
+            # Clear current_issue artifacts
+            self.issue_service.clear_current_issue()
+
+            # Emit issue completed event
+            self._emit_event(WorkflowEvent.ISSUE_COMPLETED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "completed",
+            })
+
+            # Callback: issue complete
+            if self.on_issue_complete:
+                self.on_issue_complete(issue)
+
+            # Reset rate limit handler and iteration tracker on successful completion
+            self._rate_limit_handler.reset()
+            self._iteration_tracker.record_success()
+
+        elif issue_result.exit_reason == IssueExitReason.MAX_ITERATIONS:
+            # Mark as blocked (likely infinite loop between steps)
+            self.sprint_service.mark_issue_status(
+                self.sprint_path,
+                issue.id,
+                IssueStatus.BLOCKED,
+            )
+            self.notification_service.notify_failure(
+                f"Issue {issue.id} hit max iterations (possible infinite loop)"
+            )
+            if self.on_output:
+                self.on_output(
+                    f"\nIssue {issue.id} exceeded max iterations limit "
+                    f"({self.config.max_total_iterations}), marking as blocked\n"
+                )
+
+            # Emit issue failed event
+            self._emit_event(WorkflowEvent.ISSUE_FAILED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "max_iterations",
+            })
+
+            # Record as logic error (infinite loop is a logic bug)
+            self._iteration_tracker.record_failure(
+                FailureCategory.LOGIC_ERROR,
+                f"Issue {issue.id} exceeded max iterations",
+            )
+
+        elif issue_result.exit_reason == IssueExitReason.BLOCKED:
+            # Mark issue as blocked and continue to next
+            self.sprint_service.mark_issue_status(
+                self.sprint_path,
+                issue.id,
+                IssueStatus.BLOCKED,
+            )
+            if self.on_output:
+                self.on_output(f"\nIssue {issue.id} is blocked, moving to next\n")
+
+            # Emit issue failed event
+            self._emit_event(WorkflowEvent.ISSUE_FAILED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "blocked",
+            })
+
+        return None, issues_completed, False
+
+    def _handle_retry_action(
+        self,
+        issue_result: IssueResult,
+        issue: Issue,
+        start_time: float,
+        iteration: int,
+        issues_completed: int,
+    ) -> tuple[SprintResult | None, int, bool]:
+        """Handle RETRY_SAME_ISSUE action (rate limiting)."""
+        self._rate_limit_handler.record_rate_limit()
+
+        # Emit rate limited event
+        self._emit_event(WorkflowEvent.RATE_LIMITED, {
+            "sprint_id": str(self.sprint_path.parent.name),
+            "completed_count": issues_completed,
+            "total_count": 0,  # Will be populated by caller
+        })
+
+        # Record as rate limit in iteration tracker (doesn't count toward limits)
+        self._iteration_tracker.record_failure(
+            FailureCategory.RATE_LIMIT,
+            "Claude API rate limited",
+        )
+
+        if not self._rate_limit_handler.should_retry():
+            elapsed = int(time.time() - start_time)
+            self.notification_service.notify_rate_limit(
+                f"Max rate limit retries ({self._rate_limit_handler.config.max_retries}) exceeded"
+            )
+            return SprintResult(
+                exit_reason=SprintExitReason.RATE_LIMITED,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=elapsed,
+                message="Rate limit retries exceeded",
+                error="Claude API rate limited",
+            ), issues_completed, False
+
+        # Calculate backoff and wait
+        backoff = self._rate_limit_handler.get_backoff_seconds()
+        self.notification_service.notify_rate_limit(
+            f"Rate limited, waiting {backoff}s (retry {self._rate_limit_handler.retry_count})"
+        )
+        if self.on_output:
+            self.on_output(f"\nRate limited, waiting {backoff} seconds...\n")
+        time.sleep(backoff)
+
+        # Signal to retry same issue
+        return None, issues_completed, True
+
+    def _handle_exit_failure_action(
+        self,
+        issue_result: IssueResult,
+        issue: Issue,
+        start_time: float,
+        iteration: int,
+        issues_completed: int,
+    ) -> tuple[SprintResult | None, int, bool]:
+        """Handle EXIT_SPRINT_FAILURE action."""
+        elapsed = int(time.time() - start_time)
+
+        if issue_result.exit_reason == IssueExitReason.MAX_RETRY:
+            self.notification_service.notify_failure(
+                f"Max retry limit reached on {issue.id}"
+            )
+            return SprintResult(
+                exit_reason=SprintExitReason.MAX_RETRY,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=elapsed,
+                message=f"Max retry limit reached on issue {issue.id}",
+                error=issue_result.error,
+            ), issues_completed, False
+
+        # CRASHED or ERROR
+        self.notification_service.notify_failure(
+            f"Issue {issue.id} failed: {issue_result.message}"
+        )
+        return SprintResult(
+            exit_reason=SprintExitReason.ERROR,
+            issues_completed=issues_completed,
+            iterations=iteration,
+            elapsed_seconds=elapsed,
+            message=issue_result.message,
+            error=issue_result.error,
+        ), issues_completed, False
+
+    def _finalize_sprint(
+        self,
+        sprint: Sprint,
+        start_time: float,
+        iteration: int,
+        issues_completed: int,
+    ) -> SprintResult:
+        """Finalize a completed sprint.
+
+        Args:
+            sprint: The sprint that completed
+            start_time: Start time of the sprint run
+            iteration: Final iteration count
+            issues_completed: Total issues completed
+
+        Returns:
+            SprintResult for completed sprint.
+        """
+        elapsed = int(time.time() - start_time)
+        pr_instructions = self._get_pr_instructions(sprint)
+
+        self.notification_service.notify_exit(
+            f"Sprint complete: {issues_completed} issues in {format_duration(elapsed)}"
+        )
+
+        result = SprintResult(
+            exit_reason=SprintExitReason.COMPLETED,
+            issues_completed=issues_completed,
+            iterations=iteration,
+            elapsed_seconds=elapsed,
+            message=pr_instructions if pr_instructions else f"All {len(sprint.issues)} issues completed",
+            pr_url=None,
+        )
+
+        # Emit sprint completed event
+        self._emit_event(WorkflowEvent.SPRINT_COMPLETED, {
+            "sprint_id": sprint.spec_id,
+            "completed_count": issues_completed,
+            "total_count": len(sprint.issues),
+        })
+
+        if self.on_sprint_complete:
+            self.on_sprint_complete(result)
+
+        return result
+
+    def _execute_iteration(
+        self,
+        sprint: Sprint,
+        iteration: int,
+        start_time: float,
+        issues_completed: int,
+    ) -> tuple[IssueResult | None, Issue | None, CurrentIssue | None, SprintResult | None]:
+        """Execute a single sprint iteration.
+
+        Handles issue selection, context setup, and issue engine execution.
+
+        Args:
+            sprint: Current sprint state
+            iteration: Current iteration number
+            start_time: Start time of the sprint run
+            issues_completed: Issues completed so far
+
+        Returns:
+            Tuple of (issue_result, issue, current_issue, error_result).
+            If error_result is not None, the sprint should exit with that result.
+        """
+        # Iteration callback
+        if self.on_sprint_iteration:
+            available_count = len(sprint.get_available_issues())
+            self.on_sprint_iteration(iteration, available_count)
+
+        # Get bearings - output sprint status between issue cycles
+        bearings = self.get_bearings(sprint)
+        if self.on_output:
+            self.on_output(bearings)
+
+        # Select next issue
+        if self.on_selecting_issue:
+            self.on_selecting_issue()
+        selection = self.select_issue(sprint)
+        if not selection.success:
+            elapsed = int(time.time() - start_time)
+            return None, None, None, SprintResult(
+                exit_reason=SprintExitReason.NO_ISSUES,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=elapsed,
+                message="No issues available to work on",
+                error=selection.error,
+            )
+
+        # Get the selected issue
+        issue = sprint.get_issue(selection.issue_id)
+        if not issue:
+            return None, None, None, SprintResult(
+                exit_reason=SprintExitReason.ERROR,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=int(time.time() - start_time),
+                message="Selected issue not found",
+                error=f"Issue {selection.issue_id} not found in sprint",
+            )
+
+        # Setup current_issue context
+        current_issue, error_result = self._setup_issue_context(
+            issue, sprint, iteration, start_time, issues_completed
+        )
+        if error_result:
+            return None, issue, None, error_result
+
+        # Emit issue started event
+        self._emit_event(WorkflowEvent.ISSUE_STARTED, {
+            "issue_id": issue.id,
+            "issue_name": issue.title,
+            "exit_reason": None,
+        })
+
+        # Record iteration
+        self._iteration_tracker.record_iteration()
+
+        # Callback: issue start
+        if self.on_issue_start:
+            self.on_issue_start(issue)
+
+        # Notify issue selection
+        self.notification_service.notify_step(
+            f"Selected issue: {issue.id} - {issue.title}"
+        )
+
+        # Run issue engine
+        issue_result = self._run_issue_engine(issue, current_issue, sprint)
+
+        return issue_result, issue, current_issue, None
+
+    def _setup_issue_context(
+        self,
+        issue: Issue,
+        sprint: Sprint,
+        iteration: int,
+        start_time: float,
+        issues_completed: int,
+    ) -> tuple[CurrentIssue | None, SprintResult | None]:
+        """Set up the current_issue context for an issue.
+
+        Args:
+            issue: The selected issue
+            sprint: Current sprint state
+            iteration: Current iteration number
+            start_time: Start time of the sprint run
+            issues_completed: Issues completed so far
+
+        Returns:
+            Tuple of (current_issue, error_result). If error_result is not None,
+            context setup failed.
+        """
+        is_resuming = issue.status == IssueStatus.IN_PROGRESS
+        existing_current_issue = self.issue_service.read_current_issue()
+        has_valid_context = (
+            existing_current_issue
+            and existing_current_issue.issue_id == issue.id
+        )
+
+        if has_valid_context:
+            current_issue = existing_current_issue
+            if not is_resuming:
+                self.sprint_service.mark_issue_status(
+                    self.sprint_path,
+                    issue.id,
+                    IssueStatus.IN_PROGRESS,
+                )
+            if self.on_output:
+                self.on_output(
+                    f"\nResuming issue {issue.id} at step: {current_issue.step.value}\n"
+                )
+        else:
+            # Warn about state mismatch
+            if is_resuming:
+                mismatched_id = (
+                    existing_current_issue.issue_id
+                    if existing_current_issue
+                    else "missing"
+                )
+                if self.on_output:
+                    self.on_output(
+                        f"\nWarning: State mismatch detected. "
+                        f"Sprint has {issue.id} in_progress but current_issue.json "
+                        f"has {mismatched_id}. Creating fresh context.\n"
+                    )
+                self.issue_service.log_step_transition(
+                    "resume",
+                    "fresh-context",
+                    f"State mismatch: sprint={issue.id}, current_issue={mismatched_id}",
+                )
+
+            if not is_resuming:
+                self.sprint_service.mark_issue_status(
+                    self.sprint_path,
+                    issue.id,
+                    IssueStatus.IN_PROGRESS,
+                )
+
+            current_issue = self._create_current_issue(issue, sprint)
+            if not self.issue_service.write_current_issue(current_issue):
+                return None, SprintResult(
+                    exit_reason=SprintExitReason.ERROR,
+                    issues_completed=issues_completed,
+                    iterations=iteration,
+                    elapsed_seconds=int(time.time() - start_time),
+                    message="Failed to write current_issue.json",
+                    error="Failed to write current_issue.json after issue selection",
+                )
+
+            self.issue_service.log_step_transition(
+                "select-issue",
+                current_issue.step.value,
+                f"Selected: {issue.id}",
+            )
+
+        return current_issue, None
+
+    def _run_issue_engine(
+        self,
+        issue: Issue,
+        current_issue: CurrentIssue,
+        sprint: Sprint,
+    ) -> IssueResult:
+        """Run the issue engine for an issue.
+
+        Args:
+            issue: The issue to run
+            current_issue: The current issue context
+            sprint: Current sprint state
+
+        Returns:
+            IssueResult from the issue engine.
+        """
+        resolved_config = self._resolve_issue_config(sprint, issue)
+        issue_engine = self.issue_engine_factory(resolved_config)
+        issue_engine.on_output = self.on_output
+
+        if self.issue_engine_configurator:
+            self.issue_engine_configurator(issue_engine)
+
+        if self.on_output:
+            self.on_output(
+                f"\n{'=' * 60}\n"
+                f"ENTERING ISSUE LOOP: {issue.id}\n"
+                f"  Title: {issue.title}\n"
+                f"  Starting step: {current_issue.step.value}\n"
+                f"{'=' * 60}\n"
+            )
+
+        issue_result = issue_engine.run(current_issue)
+
+        if self.on_output:
+            self.on_output(
+                f"\n{'-' * 60}\n"
+                f"EXITING ISSUE LOOP: {issue.id}\n"
+                f"  Exit reason: {issue_result.exit_reason.value}\n"
+                f"  Steps completed: {issue_result.steps_completed}\n"
+                f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
+                f"{'-' * 60}\n"
+            )
+
+        return issue_result
+
     def run(
         self,
         max_iterations: int = 0,
     ) -> SprintResult:
         """Run the sprint loop.
+
+        This is the main entry point for sprint execution. It orchestrates:
+        1. Sprint preparation (preflight, load, branch setup)
+        2. Main iteration loop with issue selection and execution
+        3. Result handling via state machine
+        4. Sprint finalization
 
         Args:
             max_iterations: Maximum iterations (0 = unlimited)
@@ -773,59 +1357,31 @@ class SprintEngine:
             )
 
         try:
-            # Pre-flight checks
-            valid, errors = self.preflight_check()
-            if not valid:
-                return SprintResult(
-                    exit_reason=SprintExitReason.ERROR,
-                    issues_completed=0,
-                    iterations=0,
-                    elapsed_seconds=0,
-                    message="Pre-flight checks failed",
-                    error="; ".join(errors),
-                )
+            # Prepare sprint
+            sprint, error_result = self._prepare_sprint()
+            if error_result:
+                return error_result
 
-            # Load sprint
-            sprint = self.sprint_service.read_sprint(self.sprint_path)
-            if not sprint:
-                return SprintResult(
-                    exit_reason=SprintExitReason.ERROR,
-                    issues_completed=0,
-                    iterations=0,
-                    elapsed_seconds=0,
-                    message="Failed to load sprint",
-                    error="Could not parse sprint.json",
-                )
+            # Emit sprint started event
+            self._emit_event(WorkflowEvent.SPRINT_STARTED, {
+                "sprint_id": sprint.spec_id,
+                "completed_count": 0,
+                "total_count": len(sprint.issues),
+            })
 
-            # Setup sprint branch
-            branch_success, branch_msg = self._setup_sprint_branch(sprint)
-            if not branch_success:
-                return SprintResult(
-                    exit_reason=SprintExitReason.ERROR,
-                    issues_completed=0,
-                    iterations=0,
-                    elapsed_seconds=0,
-                    message="Failed to setup sprint branch",
-                    error=branch_msg,
-                )
+            # Reset iteration tracker for this sprint run
+            self._iteration_tracker.reset()
 
             # Main sprint loop
             while True:
                 iteration += 1
 
-                # Check iteration limit
-                if max_iterations > 0 and iteration > max_iterations:
-                    elapsed = int(time.time() - start_time)
-                    self.notification_service.notify_exit(
-                        f"Max iterations ({max_iterations}) reached"
-                    )
-                    return SprintResult(
-                        exit_reason=SprintExitReason.MAX_ITERATIONS,
-                        issues_completed=issues_completed,
-                        iterations=iteration - 1,
-                        elapsed_seconds=elapsed,
-                        message=f"Max iterations ({max_iterations}) reached",
-                    )
+                # Check if should stop
+                stop_result = self._should_stop(
+                    iteration, max_iterations, start_time, issues_completed
+                )
+                if stop_result:
+                    return stop_result
 
                 # Reload sprint to get current state
                 sprint = self.sprint_service.read_sprint(self.sprint_path)
@@ -839,287 +1395,32 @@ class SprintEngine:
                         error="Could not parse sprint.json",
                     )
 
-                # Iteration callback
-                if self.on_sprint_iteration:
-                    available_count = len(sprint.get_available_issues())
-                    self.on_sprint_iteration(iteration, available_count)
-
-                # Get bearings - output sprint status between issue cycles
-                bearings = self.get_bearings(sprint)
-                if self.on_output:
-                    self.on_output(bearings)
-
                 # Check if sprint is complete
                 if sprint.is_complete():
-                    elapsed = int(time.time() - start_time)
-
-                    # Get PR instructions for manual submission
-                    pr_instructions = self._get_pr_instructions(sprint)
-
-                    self.notification_service.notify_exit(
-                        f"Sprint complete: {issues_completed} issues in {format_duration(elapsed)}"
+                    return self._finalize_sprint(
+                        sprint, start_time, iteration, issues_completed
                     )
 
-                    result = SprintResult(
-                        exit_reason=SprintExitReason.COMPLETED,
-                        issues_completed=issues_completed,
-                        iterations=iteration,
-                        elapsed_seconds=elapsed,
-                        message=pr_instructions if pr_instructions else f"All {len(sprint.issues)} issues completed",
-                        pr_url=None,
-                    )
-
-                    if self.on_sprint_complete:
-                        self.on_sprint_complete(result)
-
-                    return result
-
-                # Select next issue
-                if self.on_selecting_issue:
-                    self.on_selecting_issue()
-                selection = self.select_issue(sprint)
-                if not selection.success:
-                    elapsed = int(time.time() - start_time)
-                    return SprintResult(
-                        exit_reason=SprintExitReason.NO_ISSUES,
-                        issues_completed=issues_completed,
-                        iterations=iteration,
-                        elapsed_seconds=elapsed,
-                        message="No issues available to work on",
-                        error=selection.error,
-                    )
-
-                # Get the selected issue
-                issue = sprint.get_issue(selection.issue_id)
-                if not issue:
-                    return SprintResult(
-                        exit_reason=SprintExitReason.ERROR,
-                        issues_completed=issues_completed,
-                        iterations=iteration,
-                        elapsed_seconds=int(time.time() - start_time),
-                        message="Selected issue not found",
-                        error=f"Issue {selection.issue_id} not found in sprint",
-                    )
-
-                # Check if this is a resumed in_progress issue
-                is_resuming = issue.status == IssueStatus.IN_PROGRESS
-                existing_current_issue = self.issue_service.read_current_issue()
-                has_valid_context = (
-                    existing_current_issue
-                    and existing_current_issue.issue_id == issue.id
+                # Execute iteration
+                issue_result, issue, current_issue, error_result = self._execute_iteration(
+                    sprint, iteration, start_time, issues_completed
                 )
-
-                if has_valid_context:
-                    # Use existing current_issue context (resuming from previous session)
-                    current_issue = existing_current_issue
-
-                    # Ensure issue is marked as in_progress in sprint
-                    if not is_resuming:
-                        self.sprint_service.mark_issue_status(
-                            self.sprint_path,
-                            issue.id,
-                            IssueStatus.IN_PROGRESS,
-                        )
-
-                    if self.on_output:
-                        self.on_output(
-                            f"\nResuming issue {issue.id} at step: {current_issue.step.value}\n"
-                        )
-                else:
-                    # New issue or no valid context: mark in_progress and create fresh context
-
-                    # Warn if sprint has IN_PROGRESS issue but current_issue.json doesn't match
-                    if is_resuming:
-                        mismatched_id = (
-                            existing_current_issue.issue_id
-                            if existing_current_issue
-                            else "missing"
-                        )
-                        if self.on_output:
-                            self.on_output(
-                                f"\nWarning: State mismatch detected. "
-                                f"Sprint has {issue.id} in_progress but current_issue.json "
-                                f"has {mismatched_id}. Creating fresh context.\n"
-                            )
-                        # Log the mismatch for debugging
-                        self.issue_service.log_step_transition(
-                            "resume",
-                            "fresh-context",
-                            f"State mismatch: sprint={issue.id}, current_issue={mismatched_id}",
-                        )
-
-                    if not is_resuming:
-                        self.sprint_service.mark_issue_status(
-                            self.sprint_path,
-                            issue.id,
-                            IssueStatus.IN_PROGRESS,
-                        )
-
-                    # Create current_issue context
-                    current_issue = self._create_current_issue(issue, sprint)
-                    if not self.issue_service.write_current_issue(current_issue):
-                        return SprintResult(
-                            exit_reason=SprintExitReason.ERROR,
-                            issues_completed=issues_completed,
-                            iterations=iteration,
-                            elapsed_seconds=int(time.time() - start_time),
-                            message="Failed to write current_issue.json",
-                            error="Failed to write current_issue.json after issue selection",
-                        )
-
-                    # Log step transition
-                    self.issue_service.log_step_transition(
-                        "select-issue",
-                        current_issue.step.value,
-                        f"Selected: {issue.id}",
-                    )
-
-                # Callback: issue start
-                if self.on_issue_start:
-                    self.on_issue_start(issue)
-
-                # Notify issue selection
-                self.notification_service.notify_step(
-                    f"Selected issue: {issue.id} - {issue.title}"
-                )
-
-                # Resolve execution configuration for this issue
-                resolved_config = self._resolve_issue_config(sprint, issue)
-
-                # Create and run issue engine
-                issue_engine = self.issue_engine_factory(resolved_config)
-                issue_engine.on_output = self.on_output
-
-                # Allow external configuration of the issue engine (e.g., for dashboard callbacks)
-                if self.issue_engine_configurator:
-                    self.issue_engine_configurator(issue_engine)
-
-                # Log transition: Sprint Loop → Issue Loop
-                if self.on_output:
-                    self.on_output(
-                        f"\n{'=' * 60}\n"
-                        f"ENTERING ISSUE LOOP: {issue.id}\n"
-                        f"  Title: {issue.title}\n"
-                        f"  Starting step: {current_issue.step.value}\n"
-                        f"{'=' * 60}\n"
-                    )
-
-                issue_result = issue_engine.run(current_issue)
-
-                # Log transition: Issue Loop → Sprint Loop
-                if self.on_output:
-                    self.on_output(
-                        f"\n{'-' * 60}\n"
-                        f"EXITING ISSUE LOOP: {issue.id}\n"
-                        f"  Exit reason: {issue_result.exit_reason.value}\n"
-                        f"  Steps completed: {issue_result.steps_completed}\n"
-                        f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
-                        f"{'-' * 60}\n"
-                    )
+                if error_result:
+                    return error_result
 
                 # Handle issue result
-                match issue_result.exit_reason:
-                    case IssueExitReason.COMPLETED:
-                        # Mark issue complete in sprint
-                        self._mark_issue_complete(issue.id)
-                        issues_completed += 1
+                exit_result, issues_completed, should_retry = self._handle_issue_result(
+                    issue_result, issue, start_time, iteration, issues_completed
+                )
 
-                        # Clear current_issue artifacts
-                        self.issue_service.clear_current_issue()
+                if exit_result:
+                    return exit_result
 
-                        # Callback: issue complete
-                        if self.on_issue_complete:
-                            self.on_issue_complete(issue)
+                if should_retry:
+                    # Don't increment iteration for rate limit retry
+                    iteration -= 1
 
-                    case IssueExitReason.RATE_LIMITED:
-                        # Handle rate limiting with backoff
-                        self._rate_limit_retries += 1
-
-                        if self._rate_limit_retries > self.config.rate_limit_retries:
-                            elapsed = int(time.time() - start_time)
-                            self.notification_service.notify_rate_limit(
-                                f"Max rate limit retries ({self.config.rate_limit_retries}) exceeded"
-                            )
-                            return SprintResult(
-                                exit_reason=SprintExitReason.RATE_LIMITED,
-                                issues_completed=issues_completed,
-                                iterations=iteration,
-                                elapsed_seconds=elapsed,
-                                message="Rate limit retries exceeded",
-                                error="Claude API rate limited",
-                            )
-
-                        # Calculate backoff and wait
-                        backoff = self._calculate_rate_limit_backoff()
-                        self.notification_service.notify_rate_limit(
-                            f"Rate limited, waiting {backoff}s (retry {self._rate_limit_retries})"
-                        )
-                        if self.on_output:
-                            self.on_output(f"\nRate limited, waiting {backoff} seconds...\n")
-                        time.sleep(backoff)
-                        # Don't increment iteration, retry same issue
-                        iteration -= 1
-
-                    case IssueExitReason.MAX_RETRY:
-                        elapsed = int(time.time() - start_time)
-                        self.notification_service.notify_failure(
-                            f"Max retry limit reached on {issue.id}"
-                        )
-                        return SprintResult(
-                            exit_reason=SprintExitReason.MAX_RETRY,
-                            issues_completed=issues_completed,
-                            iterations=iteration,
-                            elapsed_seconds=elapsed,
-                            message=f"Max retry limit reached on issue {issue.id}",
-                            error=issue_result.error,
-                        )
-
-                    case IssueExitReason.CRASHED | IssueExitReason.ERROR:
-                        elapsed = int(time.time() - start_time)
-                        self.notification_service.notify_failure(
-                            f"Issue {issue.id} failed: {issue_result.message}"
-                        )
-                        return SprintResult(
-                            exit_reason=SprintExitReason.ERROR,
-                            issues_completed=issues_completed,
-                            iterations=iteration,
-                            elapsed_seconds=elapsed,
-                            message=issue_result.message,
-                            error=issue_result.error,
-                        )
-
-                    case IssueExitReason.MAX_ITERATIONS:
-                        # Issue hit total iteration limit (likely infinite loop between steps)
-                        # Mark as blocked and continue to next issue
-                        self.sprint_service.mark_issue_status(
-                            self.sprint_path,
-                            issue.id,
-                            IssueStatus.BLOCKED,
-                        )
-                        self.notification_service.notify_failure(
-                            f"Issue {issue.id} hit max iterations (possible infinite loop)"
-                        )
-                        if self.on_output:
-                            self.on_output(
-                                f"\nIssue {issue.id} exceeded max iterations limit "
-                                f"({self.config.max_total_iterations}), marking as blocked\n"
-                            )
-
-                    case IssueExitReason.BLOCKED:
-                        # Mark issue as blocked and continue to next
-                        self.sprint_service.mark_issue_status(
-                            self.sprint_path,
-                            issue.id,
-                            IssueStatus.BLOCKED,
-                        )
-                        if self.on_output:
-                            self.on_output(f"\nIssue {issue.id} is blocked, moving to next\n")
-
-                # Reset rate limit counter on successful completion
-                if issue_result.exit_reason == IssueExitReason.COMPLETED:
-                    self._rate_limit_retries = 0
-
-                # Small delay between issues (configurable via config.issue_delay)
+                # Small delay between issues
                 time.sleep(self.config.issue_delay)
 
         finally:

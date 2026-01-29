@@ -1,10 +1,23 @@
 """Sprint service for sprint file operations."""
 
 import json
-import re
+import logging
 from pathlib import Path
 
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus
+from claudesprint.services.base.json_store import JsonStore
+
+
+class SprintStore(JsonStore[Sprint]):
+    """JSON store for Sprint models."""
+
+    def _serialize(self, data: Sprint) -> str:
+        return data.model_dump_json(indent=2, by_alias=True)
+
+    def _deserialize(self, raw: dict) -> Sprint:
+        return Sprint.model_validate(raw)
+
+logger = logging.getLogger(__name__)
 
 
 class SprintService:
@@ -17,6 +30,7 @@ class SprintService:
             sprints_dir: Base directory for sprint files (default: .claudesprint/sprints)
         """
         self.sprints_dir = Path(sprints_dir)
+        self._store = SprintStore()
 
     def get_sprint_path(self, spec_id: str) -> Path:
         """Get the path to a sprint.json file for a given spec_id.
@@ -62,14 +76,7 @@ class SprintService:
         Returns:
             Sprint model or None if not found/invalid
         """
-        file_path = Path(path)
-        if not file_path.exists():
-            return None
-        try:
-            data = json.loads(file_path.read_text())
-            return Sprint.model_validate(data)
-        except (json.JSONDecodeError, Exception):
-            return None
+        return self._store.read(Path(path))
 
     def write_sprint(self, sprint: Sprint, path: str | Path) -> bool:
         """Write a sprint to a sprint.json file atomically.
@@ -81,24 +88,9 @@ class SprintService:
         Returns:
             True if successful, False otherwise
         """
-        file_path = Path(path)
-        try:
-            # Ensure parent directory exists
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Update last_modified
-            sprint.update_last_modified()
-
-            # Write to temp file first
-            temp_file = file_path.with_suffix(".tmp.json")
-            content = sprint.model_dump_json(indent=2, by_alias=True)
-            temp_file.write_text(content)
-
-            # Atomic rename
-            temp_file.rename(file_path)
-            return True
-        except Exception:
-            return False
+        # Update last_modified before writing
+        sprint.update_last_modified()
+        return self._store.write(Path(path), sprint)
 
     def is_sprint_valid(self, path: str | Path) -> bool:
         """Check if a sprint.json exists and is valid JSON with required structure.
@@ -121,7 +113,11 @@ class SprintService:
                 and isinstance(data["issues"], list)
                 and "spec_id" in data
             )
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.debug(f"Invalid JSON in sprint file {file_path}: {e}")
+            return False
+        except OSError as e:
+            logger.debug(f"Failed to read sprint file {file_path}: {e}")
             return False
 
     def get_available_issues(self, sprint: Sprint) -> list[Issue]:

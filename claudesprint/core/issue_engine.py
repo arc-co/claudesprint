@@ -303,7 +303,16 @@ class IssueEngine:
                     self.on_step_skip(current_issue.step, skip_result.next_step)
 
                 if skip_result.next_step:
-                    self._transition_step(current_issue, skip_result.next_step, skipped=True)
+                    if not self._transition_step(current_issue, skip_result.next_step, skipped=True):
+                        return IssueResult(
+                            exit_reason=IssueExitReason.ERROR,
+                            issue_id=issue_id,
+                            steps_completed=steps_completed,
+                            elapsed_seconds=int(time.time() - start_time),
+                            final_step=current_issue.step,
+                            message=f"Failed to transition from {current_issue.step} to {skip_result.next_step}",
+                            error="Step transition failed",
+                        )
                     steps_completed += 1
                     continue
                 else:
@@ -402,7 +411,16 @@ class IssueEngine:
             completed_step = current_issue.step
 
             # Transition to next step
-            self._transition_step(current_issue, next_step)
+            if not self._transition_step(current_issue, next_step):
+                return IssueResult(
+                    exit_reason=IssueExitReason.ERROR,
+                    issue_id=issue_id,
+                    steps_completed=steps_completed,
+                    elapsed_seconds=int(time.time() - start_time),
+                    final_step=completed_step,
+                    message=f"Failed to transition from {completed_step} to {next_step}",
+                    error="Step transition failed",
+                )
 
             # Notify step completion with rich context
             self.notification_service.notify_step_with_context(
@@ -568,40 +586,127 @@ class IssueEngine:
         next_step: IssueStep,
         *,
         skipped: bool = False,
-    ) -> None:
-        """Transition to the next step.
+    ) -> bool:
+        """Transition to the next step with validate-before-mutate pattern.
+
+        Creates a backup of mutable state before mutation. If the write fails,
+        the state is rolled back to prevent corruption.
 
         Args:
             current_issue: CurrentIssue to update
             next_step: New step to transition to
             skipped: If True, the step was skipped (don't fire on_step_complete)
+
+        Returns:
+            True if transition succeeded, False if it failed (state is unchanged).
         """
         from_step = current_issue.step
 
-        # Update current_issue
-        current_issue.step = next_step
-        current_issue.chunk_type = next_step.to_chunk_type()
-        current_issue.session_id = current_issue.generate_session_id()
-        current_issue.next_action = self._get_next_action(next_step, current_issue)
+        # 1. Pre-validation: Check if transition is valid
+        if not self._validate_step_transition(from_step, next_step):
+            self._log_invalid_transition(from_step, next_step)
+            return False
 
-        # Prune arrays to prevent unbounded growth
-        current_issue.prune_arrays()
+        # 2. Create backup of mutable fields before any changes
+        backup = {
+            "step": current_issue.step,
+            "chunk_type": current_issue.chunk_type,
+            "session_id": current_issue.session_id,
+            "next_action": current_issue.next_action,
+        }
 
-        # Write updated state
-        if not self.issue_service.write_current_issue(current_issue):
-            raise RuntimeError(
-                f"Failed to write current_issue.json during transition to {next_step}"
+        # 3. Mutate state
+        try:
+            current_issue.step = next_step
+            current_issue.chunk_type = next_step.to_chunk_type()
+            current_issue.session_id = current_issue.generate_session_id()
+            current_issue.next_action = self._get_next_action(next_step, current_issue)
+
+            # Prune arrays to prevent unbounded growth
+            current_issue.prune_arrays()
+
+            # 4. Write and validate
+            if not self.issue_service.write_current_issue(current_issue):
+                raise RuntimeError("Write failed")
+
+            # 5. Success - log transition and fire callback
+            self.issue_service.log_step_transition(
+                from_step.value,
+                next_step.value,
             )
 
-        # Log transition
+            if self.on_step_complete and not skipped:
+                self.on_step_complete(from_step, next_step)
+
+            return True
+
+        except Exception as e:
+            # 6. Rollback on failure
+            current_issue.step = backup["step"]
+            current_issue.chunk_type = backup["chunk_type"]
+            current_issue.session_id = backup["session_id"]
+            current_issue.next_action = backup["next_action"]
+            self._log_rollback(current_issue, next_step, e)
+            return False
+
+    def _validate_step_transition(
+        self,
+        from_step: IssueStep,
+        to_step: IssueStep,
+    ) -> bool:
+        """Validate that a step transition is allowed.
+
+        Checks against the STEP_ROUTING table to ensure the transition
+        is a valid path in the workflow.
+
+        Args:
+            from_step: Current step
+            to_step: Target step
+
+        Returns:
+            True if the transition is valid.
+        """
+        routing = self.STEP_ROUTING.get(from_step, {})
+
+        # Check if to_step is reachable from from_step
+        valid_targets = set(routing.values())
+        return to_step in valid_targets
+
+    def _log_invalid_transition(
+        self,
+        from_step: IssueStep,
+        to_step: IssueStep,
+    ) -> None:
+        """Log an invalid step transition attempt.
+
+        Args:
+            from_step: Current step
+            to_step: Attempted target step
+        """
         self.issue_service.log_step_transition(
             from_step.value,
-            next_step.value,
+            to_step.value,
+            f"INVALID TRANSITION: {from_step.value} -> {to_step.value} not allowed",
         )
 
-        # Callback (only for completed steps, not skipped ones)
-        if self.on_step_complete and not skipped:
-            self.on_step_complete(from_step, next_step)
+    def _log_rollback(
+        self,
+        current_issue: CurrentIssue,
+        target_step: IssueStep,
+        error: Exception,
+    ) -> None:
+        """Log a rollback after a failed transition.
+
+        Args:
+            current_issue: The issue whose state was rolled back
+            target_step: The step we were trying to transition to
+            error: The exception that caused the rollback
+        """
+        self.issue_service.log_step_transition(
+            current_issue.step.value,
+            target_step.value,
+            f"ROLLBACK: Transition failed, state restored. Error: {error}",
+        )
 
     def _get_next_action(self, step: IssueStep, current_issue: CurrentIssue) -> str:
         """Get the next_action description for a step.

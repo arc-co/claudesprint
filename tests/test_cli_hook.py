@@ -23,7 +23,7 @@ class TestHookSessionAwareness:
 
             # Mock discover_project_root to return our temp directory
             with patch(
-                "claudesprint.services.path_service.PathService.discover_project_root",
+                "claudesprint.services.configuration_manager.ConfigurationManager.discover_project_root",
                 return_value=project_root,
             ):
                 # Input that would normally be blocked (watch command)
@@ -48,7 +48,7 @@ class TestHookSessionAwareness:
 
             # Mock discover_project_root to return our temp directory
             with patch(
-                "claudesprint.services.path_service.PathService.discover_project_root",
+                "claudesprint.services.configuration_manager.ConfigurationManager.discover_project_root",
                 return_value=project_root,
             ):
                 # Input that should be blocked (watch command)
@@ -73,7 +73,7 @@ class TestHookSessionAwareness:
 
             # Mock discover_project_root to return our temp directory
             with patch(
-                "claudesprint.services.path_service.PathService.discover_project_root",
+                "claudesprint.services.configuration_manager.ConfigurationManager.discover_project_root",
                 return_value=project_root,
             ):
                 # Input that should be allowed (normal command)

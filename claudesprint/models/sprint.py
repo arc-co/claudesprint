@@ -6,6 +6,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, model_validator
 
+from claudesprint.utils.graph import detect_cycles
+
 
 class IssueStatus(StrEnum):
     """Issue status values."""
@@ -341,45 +343,21 @@ class Sprint(BaseModel):
     def detect_circular_dependencies(self) -> list[list[str]]:
         """Detect circular dependencies in the issue graph.
 
-        Uses Tarjan's algorithm variant to find all cycles.
+        Uses DFS to find all cycles with normalization to avoid duplicates.
 
         Returns:
             List of cycles, where each cycle is a list of issue IDs.
             Empty list if no cycles found.
         """
         issue_map = {i.id: i for i in self.issues}
-        cycles: list[list[str]] = []
-
-        def find_cycle_from(start_id: str, path: list[str], visited: set[str]) -> None:
-            """DFS to find cycles starting from an issue."""
-            if start_id in path:
-                # Found a cycle - extract it
-                cycle_start = path.index(start_id)
-                cycle = path[cycle_start:] + [start_id]
-                # Normalize cycle (start from smallest ID) to avoid duplicates
-                min_idx = cycle.index(min(cycle[:-1]))  # Exclude last (duplicate of first)
-                normalized = cycle[min_idx:-1] + cycle[:min_idx] + [cycle[min_idx]]
-                if normalized not in cycles:
-                    cycles.append(normalized)
-                return
-
-            if start_id in visited:
-                return
-
-            visited.add(start_id)
-            issue = issue_map.get(start_id)
-            if not issue:
-                return
-
-            for dep_id in issue.dependencies:
-                if dep_id in issue_map:
-                    find_cycle_from(dep_id, path + [start_id], visited)
-
-        # Check from each issue
-        for issue in self.issues:
-            find_cycle_from(issue.id, [], set())
-
-        return cycles
+        return detect_cycles(
+            nodes=list(issue_map.keys()),
+            get_dependencies=lambda node_id: list(
+                issue_map.get(node_id, Issue(
+                    id="", title="", priority=IssuePriority.LOW, acceptance_criteria=[""]
+                )).dependencies
+            ),
+        )
 
     def has_circular_dependencies(self) -> bool:
         """Check if there are any circular dependencies.

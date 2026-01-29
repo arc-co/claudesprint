@@ -1,8 +1,7 @@
-"""Path resolution service for ClaudeSprint.
+"""Resource service for ClaudeSprint package assets.
 
-This module provides centralized path resolution for ClaudeSprint:
-- Package assets (prompts, schemas) are read via importlib.resources
-- Local configuration is resolved relative to discovered project root
+This module provides access to package-bundled resources (prompts, schemas)
+via importlib.resources. For path resolution, use ConfigurationManager.
 """
 
 from functools import cached_property
@@ -15,28 +14,29 @@ if TYPE_CHECKING:
 
 
 class PathService:
-    """Centralized path resolution for ClaudeSprint.
+    """Package asset service for ClaudeSprint.
 
-    Package assets are read from the installed package via importlib.resources.
-    Local configuration is resolved relative to discovered project root.
+    Provides access to package-bundled resources (prompts, schemas) via
+    importlib.resources.
+
+    For path resolution, use ConfigurationManager instead.
 
     Example:
         >>> paths = PathService()
         >>> content = paths.get_prompt_content("init")
         >>> schema = paths.get_schema_content("sprint")
-        >>> current_issue = paths.current_issue_file
     """
 
     def __init__(self, project_root: Path | str | None = None) -> None:
         """Initialize PathService.
 
         Args:
-            project_root: Explicit project root path. If None, attempts to
-                discover project root by walking up from cwd looking for .claude/.
-                Falls back to cwd if not found.
+            project_root: Optional project root path (kept for compatibility
+                with PromptService which needs it for hierarchical loading).
         """
         if project_root is None:
-            discovered = self.discover_project_root()
+            from claudesprint.services.configuration_manager import ConfigurationManager
+            discovered = ConfigurationManager.discover_project_root()
             self._project_root = discovered or Path.cwd()
         else:
             self._project_root = Path(project_root)
@@ -144,147 +144,13 @@ class PathService:
         result: bool = resource.is_file()
         return result
 
-    # === Local Config Paths (relative to project root) ===
+    # === Kept for PromptService compatibility ===
 
     @property
     def project_root(self) -> Path:
-        """The discovered or configured project root directory."""
+        """The discovered or configured project root directory.
+
+        Note: Kept for PromptService which needs project_root for
+        hierarchical prompt loading.
+        """
         return self._project_root
-
-    @property
-    def claude_dir(self) -> Path:
-        """Path to .claude directory."""
-        return self._project_root / ".claude"
-
-    @property
-    def config_dir(self) -> Path:
-        """Main claudesprint config directory (.claudesprint/)."""
-        return self._project_root / ".claudesprint"
-
-    @property
-    def project_dir(self) -> Path:
-        """Project state directory (.claudesprint/project/)."""
-        return self.config_dir / "project"
-
-    @property
-    def sprints_dir(self) -> Path:
-        """Sprints directory (.claudesprint/sprints/)."""
-        return self.config_dir / "sprints"
-
-    @property
-    def specs_dir(self) -> Path:
-        """Specs directory (.claudesprint/specs/)."""
-        return self.config_dir / "specs"
-
-    @property
-    def config_files_dir(self) -> Path:
-        """Config files directory (.claudesprint/config/)."""
-        return self.config_dir / "config"
-
-    # === File Paths ===
-
-    @property
-    def current_issue_file(self) -> Path:
-        """Path to current_issue.json."""
-        return self.project_dir / "current_issue.json"
-
-    @property
-    def current_issue_log_file(self) -> Path:
-        """Path to current_issue.log."""
-        return self.project_dir / "current_issue.log"
-
-    @property
-    def lock_file(self) -> Path:
-        """Path to loop lock file."""
-        return self.project_dir / ".loop.lock"
-
-    @property
-    def log_file(self) -> Path:
-        """Path to loop log file."""
-        return self.project_dir / "loop.log"
-
-    @property
-    def step_marker_file(self) -> Path:
-        """Path to current step marker file."""
-        return self.project_dir / ".current_step"
-
-    @property
-    def claude_output_file(self) -> Path:
-        """Path to temp file for capturing Claude output."""
-        return self.project_dir / ".claude_output.tmp"
-
-    @property
-    def notifications_file(self) -> Path:
-        """Path to notifications config file."""
-        return self.config_files_dir / "notifications.json"
-
-    @property
-    def models_file(self) -> Path:
-        """Path to models config file for per-step model selection."""
-        return self.config_files_dir / "models.json"
-
-    @property
-    def project_config_file(self) -> Path:
-        """Path to project config.toml file (.claudesprint/config.toml)."""
-        return self._project_root / ".claudesprint" / "config.toml"
-
-    @property
-    def sprint_lock_file(self) -> Path:
-        """Path to sprint session lock file (.claudesprint/state/sprint.lock)."""
-        return self._project_root / ".claudesprint" / "state" / "sprint.lock"
-
-    @property
-    def conversation_log_file(self) -> Path:
-        """Path to agent_conversations.log for debug mode."""
-        return self.project_dir / "agent_conversations.log"
-
-    # === Sprint-specific ===
-
-    def get_sprint_dir(self, spec_id: str) -> Path:
-        """Get the directory for a specific sprint.
-
-        Args:
-            spec_id: The spec identifier (e.g., "SPEC_01")
-
-        Returns:
-            Path to the sprint directory
-        """
-        return self.sprints_dir / spec_id
-
-    def get_sprint_path(self, spec_id: str) -> Path:
-        """Get the path to a sprint.json file.
-
-        Args:
-            spec_id: The spec identifier (e.g., "SPEC_01")
-
-        Returns:
-            Path to sprint.json
-        """
-        return self.get_sprint_dir(spec_id) / "sprint.json"
-
-    # === Discovery ===
-
-    @classmethod
-    def discover_project_root(cls, start: Path | None = None) -> Path | None:
-        """Walk up from start (or cwd) looking for .claude directory.
-
-        Args:
-            start: Starting directory for search. Defaults to cwd.
-
-        Returns:
-            Path to project root if .claude found, None otherwise
-        """
-        cwd = start or Path.cwd()
-        for parent in [cwd] + list(cwd.parents):
-            if (parent / ".claude").exists():
-                return parent
-        return None
-
-    # === Directory Creation ===
-
-    def ensure_directories(self) -> None:
-        """Create all required directories if they don't exist."""
-        self.project_dir.mkdir(parents=True, exist_ok=True)
-        self.sprints_dir.mkdir(parents=True, exist_ok=True)
-        self.specs_dir.mkdir(parents=True, exist_ok=True)
-        self.config_files_dir.mkdir(parents=True, exist_ok=True)
