@@ -324,9 +324,9 @@ class SprintEngine:
         """
         # Prepare current_issue.json for the agent with sprint context
         current_issue = CurrentIssue.create_initial(str(self.sprint_path))
-        current_issue.step = IssueStep.SELECT_ISSUE
-        current_issue.goal = "Select next issue from sprint"
-        current_issue.next_action = "Review sprint and select next issue to work on"
+        current_issue.step = IssueStep.READ_DOCS
+        current_issue.goal = "Initialize issue workflow"
+        current_issue.next_action = "Read documentation and understand requirements"
         if not self.issue_service.write_current_issue(current_issue):
             return IssueSelectionResult(
                 success=False,
