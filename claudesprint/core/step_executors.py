@@ -292,6 +292,7 @@ class LlmStepExecutor(StepExecutor):
             success=True,
             next_step=next_step,
             output=result.output,
+            matched_signal=parse_result.matched_signal,
         )
 
     def _get_prompt_name(self, step: IssueStep) -> str:

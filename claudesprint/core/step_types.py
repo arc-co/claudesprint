@@ -19,6 +19,7 @@ class StepResult:
     rate_limited: bool = False
     crashed: bool = False
     error: str | None = None
+    matched_signal: str | None = None  # The routing signal that matched, or None if default
 
 
 @dataclass

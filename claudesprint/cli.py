@@ -25,7 +25,7 @@ from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MOD
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.services.path_service import PathService
 from claudesprint.services.prompt_service import PromptService
-from claudesprint.simple_logs import SimpleLogsOutput
+from claudesprint.simple_logs import LogVerbosity, SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
 
@@ -73,6 +73,22 @@ def main(
         show_status()
 
 
+def _get_verbosity(count: int) -> LogVerbosity:
+    """Map verbose flag count to LogVerbosity level.
+
+    Args:
+        count: Number of -v flags provided.
+
+    Returns:
+        Corresponding LogVerbosity level.
+    """
+    if count == 0:
+        return LogVerbosity.NORMAL
+    if count == 1:
+        return LogVerbosity.VERBOSE
+    return LogVerbosity.DEBUG
+
+
 @app.command("run")
 def run_workflow(
     max_iterations: Annotated[
@@ -94,6 +110,10 @@ def run_workflow(
             help="Log raw agent inputs/outputs to agent_conversations.log",
         ),
     ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv, -vvv)"),
+    ] = 0,
 ) -> None:
     """Run the sprint workflow loop.
 
@@ -128,7 +148,7 @@ def run_workflow(
             console.print("  claudesprint run --sprint path/to/sprint.json")
             raise typer.Exit(1)
 
-    _run_sprint_console(project_root, config, sprint_path, max_iterations)
+    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose))
 
 
 def _run_sprint_console(
@@ -136,6 +156,7 @@ def _run_sprint_console(
     config: ClaudesprintConfig,
     sprint_path: Path,
     max_iterations: int,
+    verbosity: LogVerbosity = LogVerbosity.NORMAL,
 ) -> None:
     """Run the sprint workflow with console output."""
     if not sprint_path.exists():
@@ -181,8 +202,8 @@ def _run_sprint_console(
         if baseline_dirty_path.exists():
             baseline_dirty_path.unlink()
 
-    # Create output handler
-    output = SimpleLogsOutput(console)
+    # Create output handler with verbosity level
+    output = SimpleLogsOutput(console, verbosity=verbosity)
     stats = sprint.get_stats()
     output.set_sprint_info(
         sprint.spec_id,
@@ -252,11 +273,15 @@ def _run_sprint_console(
         issue_engine.on_step_start = output.on_step_start
         issue_engine.on_step_complete = output.on_step_complete
         issue_engine.on_step_skip = output.on_step_skip
-        issue_engine.on_step_failure = output.on_step_failure
+        # Pass max_retry for context in failure logging
+        issue_engine.on_step_failure = lambda s, r: output.on_step_failure(s, r, config.max_retry)
         # Wire subprocess callbacks for agent output
         issue_engine.on_subprocess_start = output.on_subprocess_start
         issue_engine.on_subprocess_output = output.on_subprocess_output
         issue_engine.on_subprocess_end = output.on_subprocess_end
+        # New callbacks for iteration tracking and routing visibility
+        issue_engine.on_routing_signal = output.on_routing_signal
+        issue_engine.on_issue_iteration = output.on_issue_iteration
 
     engine.on_issue_start = on_issue_start
     engine.on_issue_complete = on_issue_complete
