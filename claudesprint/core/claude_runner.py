@@ -6,6 +6,8 @@ import os
 import re
 import signal
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional
@@ -309,14 +311,15 @@ class ClaudeRunner:
             ClaudeResult with exit code, duration, and status flags.
         """
 
-        import threading
-        import time
-
         start_time = time.time()
         output_lines: list[str] = []
         reader_exception: Exception | None = None
 
         process_manager = get_process_manager()
+
+        # Event to signal crash detected in reader thread
+        crash_detected = threading.Event()
+        crash_error_type: list[str] = []  # Use list to allow mutation from thread
 
         try:
             # Start Claude in its own process group for clean termination
@@ -340,7 +343,7 @@ class ClaudeRunner:
             if self.on_subprocess_start and process.pid:
                 self.on_subprocess_start(process.pid, " ".join(cmd))
 
-            # Stream output while capturing (with exception handling)
+            # Stream output while capturing (with exception handling and inline crash detection)
             def stream_reader() -> None:
                 nonlocal reader_exception
                 try:
@@ -353,6 +356,14 @@ class ClaudeRunner:
                         output_lines.append(line)
                         if on_output:
                             on_output(line.rstrip())
+
+                        # Inline crash detection - signal main thread immediately
+                        # This prevents waiting for full timeout when Claude crashes but doesn't exit
+                        crashed, error_type = self._check_crash(line)
+                        if crashed and not crash_detected.is_set():
+                            crash_error_type.append(error_type or "crash_detected")
+                            crash_detected.set()
+                            logger.debug(f"Crash pattern detected in output: {error_type}")
                 except BrokenPipeError:
                     # Expected when process dies - not an error
                     logger.debug("Reader thread: broken pipe (process died)")
@@ -375,13 +386,40 @@ class ClaudeRunner:
                 # Claude died before reading input
                 pass
 
-            # Wait for completion with timeout
-            try:
-                exit_code = process.wait(timeout=self.timeout)
-                timed_out = False
-            except subprocess.TimeoutExpired:
+            # Wait for completion with timeout, but also check for crash detection
+            # Use shorter poll intervals to detect crashes faster
+            poll_interval = 1.0  # Check every second
+            elapsed_wait = 0.0
+            timed_out = False
+            exit_code = None
+
+            while exit_code is None and elapsed_wait < self.timeout:
+                # Check if crash was detected - give brief grace period for clean exit
+                if crash_detected.is_set():
+                    logger.debug("Crash detected, giving 5s grace period for clean exit")
+                    try:
+                        exit_code = process.wait(timeout=5)
+                        break
+                    except subprocess.TimeoutExpired:
+                        logger.debug("Process didn't exit after crash, force killing")
+                        exit_code = 1
+                        break
+
+                # Poll process status
+                exit_code = process.poll()
+                if exit_code is not None:
+                    break
+
+                time.sleep(poll_interval)
+                elapsed_wait += poll_interval
+
+            # Handle timeout case
+            if exit_code is None:
                 timed_out = True
                 exit_code = 124  # Standard timeout exit code
+
+            # If we need to kill the process (timeout or crash didn't exit cleanly)
+            if process.poll() is None:
                 # IMPORTANT: Close stdout FIRST to unblock reader thread immediately
                 # This must happen BEFORE _force_kill_process which can take up to
                 # kill_timeout seconds. Otherwise the reader thread stays blocked
@@ -602,8 +640,6 @@ class ClaudeRunner:
         Returns:
             ClaudeResult with exit code, duration, and status flags.
         """
-        import time
-
         prompt_path = Path(prompt_file)
         if not prompt_path.exists():
             return ClaudeResult(
@@ -763,8 +799,6 @@ class ClaudeRunner:
         Yields:
             Output lines from Claude.
         """
-        import time
-
         prompt_path = Path(prompt_file)
         if not prompt_path.exists():
             yield f"Error: Prompt file not found: {prompt_path}"

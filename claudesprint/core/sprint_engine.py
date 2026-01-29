@@ -1027,6 +1027,23 @@ class SprintEngine:
                             error=issue_result.error,
                         )
 
+                    case IssueExitReason.MAX_ITERATIONS:
+                        # Issue hit total iteration limit (likely infinite loop between steps)
+                        # Mark as blocked and continue to next issue
+                        self.sprint_service.mark_issue_status(
+                            self.sprint_path,
+                            issue.id,
+                            IssueStatus.BLOCKED,
+                        )
+                        self.notification_service.notify_failure(
+                            f"Issue {issue.id} hit max iterations (possible infinite loop)"
+                        )
+                        if self.on_output:
+                            self.on_output(
+                                f"\nIssue {issue.id} exceeded max iterations limit "
+                                f"({self.config.max_total_iterations}), marking as blocked\n"
+                            )
+
                     case IssueExitReason.BLOCKED:
                         # Mark issue as blocked and continue to next
                         self.sprint_service.mark_issue_status(
