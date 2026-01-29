@@ -1,11 +1,17 @@
 """Heartbeat service for detecting hung processes."""
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Callable
 
+from claudesprint.events.workflow_event_bus import WorkflowEvent
+
 if TYPE_CHECKING:
+    from claudesprint.events.workflow_event_bus import WorkflowEventBus
     from claudesprint.models.current_issue import IssueStep as WorkflowStep
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,7 @@ class HeartbeatService:
         enabled: bool = True,
         on_hung: Callable[[str, int], None] | None = None,
         check_interval: float | None = None,
+        event_bus: WorkflowEventBus | None = None,
     ) -> None:
         """Initialize the heartbeat service.
 
@@ -35,11 +42,13 @@ class HeartbeatService:
             enabled: Whether heartbeat monitoring is enabled.
             on_hung: Callback when hung process detected (step_name, seconds_inactive).
             check_interval: How often to check for inactivity (from config).
+            event_bus: Optional event bus for emitting PROCESS_HUNG events.
         """
         self._timeout_seconds = timeout_seconds
         self._enabled = enabled
         self._on_hung = on_hung
         self._check_interval = check_interval if check_interval is not None else self.DEFAULT_CHECK_INTERVAL
+        self._event_bus = event_bus
 
         self._last_pulse: float = 0
         self._current_step: str = ""
@@ -108,16 +117,30 @@ class HeartbeatService:
                     continue
 
                 elapsed = time.time() - self._last_pulse
-                if elapsed >= self._timeout_seconds and not self._hung_notified:
+                should_notify = elapsed >= self._timeout_seconds and not self._hung_notified
+                if should_notify:
                     step = self._current_step
                     self._hung_notified = True
 
-            # Call callback outside of lock
-            if elapsed >= self._timeout_seconds and self._on_hung:
-                try:
-                    self._on_hung(step, int(elapsed))
-                except Exception as e:
-                    logger.warning(f"Heartbeat callback failed: {e}")
+            # Call callback and emit event outside of lock (only once per hung state)
+            if should_notify:
+                # Emit PROCESS_HUNG event
+                if self._event_bus:
+                    try:
+                        self._event_bus.emit(WorkflowEvent.PROCESS_HUNG, {
+                            "step_name": step,
+                            "seconds_inactive": int(elapsed),
+                            "timestamp": datetime.now(UTC).isoformat(),
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to emit PROCESS_HUNG event: {e}")
+
+                # Call callback
+                if self._on_hung:
+                    try:
+                        self._on_hung(step, int(elapsed))
+                    except Exception as e:
+                        logger.warning(f"Heartbeat callback failed: {e}")
 
     @property
     def is_running(self) -> bool:
@@ -151,6 +174,7 @@ def get_heartbeat_service(
     enabled: bool = True,
     on_hung: Callable[[str, int], None] | None = None,
     check_interval: float | None = None,
+    event_bus: WorkflowEventBus | None = None,
 ) -> HeartbeatService:
     """Get or create the global heartbeat service instance.
 
@@ -159,6 +183,7 @@ def get_heartbeat_service(
         enabled: Whether heartbeat monitoring is enabled.
         on_hung: Callback when hung process detected.
         check_interval: How often to check for inactivity (from config).
+        event_bus: Optional event bus for emitting PROCESS_HUNG events.
 
     Returns:
         The global HeartbeatService instance.
@@ -170,6 +195,7 @@ def get_heartbeat_service(
             enabled=enabled,
             on_hung=on_hung,
             check_interval=check_interval,
+            event_bus=event_bus,
         )
     return _heartbeat_service
 

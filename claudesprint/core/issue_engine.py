@@ -7,13 +7,22 @@ The IssueEngine manages the inner loop:
 4. Respect execution gates (require_testing, require_browser_qa)
 """
 
+from __future__ import annotations
+
 import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from claudesprint.core.claude_runner import ClaudeRunner
+
+if TYPE_CHECKING:
+    from claudesprint.events.workflow_event_bus import WorkflowEventBus
+
+from claudesprint.events.workflow_event_bus import WorkflowEvent, IssueIterationPayload, RoutingSignalPayload
 from claudesprint.core.step_executors import (
     CompletionStepExecutor,
     LlmStepExecutor,
@@ -165,6 +174,7 @@ class IssueEngine:
         notification_service: NotificationService,
         prompt_service: PromptService,
         claude_runner: ClaudeRunner,
+        event_bus: WorkflowEventBus | None = None,
     ) -> None:
         """Initialize IssueEngine.
 
@@ -176,6 +186,7 @@ class IssueEngine:
             notification_service: Service for sending notifications
             prompt_service: Service for loading prompt templates
             claude_runner: Runner for executing Claude commands
+            event_bus: Optional event bus for emitting workflow events
         """
         self.config = config
         self.execution_config = execution_config
@@ -184,19 +195,7 @@ class IssueEngine:
         self.notification_service = notification_service
         self.prompt_service = prompt_service
         self.claude_runner = claude_runner
-
-        # Callbacks
-        self.on_output: Callable[[str], None] | None = None
-        self.on_step_complete: Callable[[IssueStep, IssueStep | None], None] | None = None
-        self.on_step_start: Callable[[IssueStep, str], None] | None = None  # (step, model)
-        self.on_step_skip: Callable[[IssueStep, IssueStep | None], None] | None = None
-        self.on_step_failure: Callable[[IssueStep, int], None] | None = None  # (step, retry_count)
-        self.on_subprocess_start: Callable[[int, str], None] | None = None  # (pid, command)
-        self.on_subprocess_output: Callable[[str], None] | None = None  # (line)
-        self.on_subprocess_end: Callable[[], None] | None = None
-        # New callbacks for iteration tracking and routing visibility
-        self.on_issue_iteration: Callable[[int, int, int, int], None] | None = None  # (total_iters, max_iters, retry, max_retry)
-        self.on_routing_signal: Callable[[IssueStep, str | None, IssueStep | None], None] | None = None  # (step, signal, next_step)
+        self.event_bus = event_bus
 
         # Step executors registry
         self._step_executors: dict[IssueStep, StepExecutor] = {}
@@ -211,8 +210,7 @@ class IssueEngine:
         models_service = ModelsService(self.config.models_file)
 
         # Create executor instances
-        # Note: Lambdas are used to defer callback lookup to execution time,
-        # since callbacks are set on IssueEngine after __init__ but before run()
+        # Event-driven: callbacks emit events via the event bus
         executor_instances: dict[type, StepExecutor] = {
             LlmStepExecutor: LlmStepExecutor(
                 prompt_service=self.prompt_service,
@@ -222,10 +220,10 @@ class IssueEngine:
                 parse_step_output=self._parse_step_output,
                 requires_explicit_signal=self.REQUIRES_EXPLICIT_SIGNAL,
                 output_patterns=self.OUTPUT_PATTERNS,
-                on_step_start=lambda s, m: self.on_step_start and self.on_step_start(s, m),
-                on_subprocess_start=lambda p, c: self.on_subprocess_start and self.on_subprocess_start(p, c),
-                on_subprocess_end=lambda: self.on_subprocess_end and self.on_subprocess_end(),
-                on_subprocess_output=lambda ln: self.on_subprocess_output and self.on_subprocess_output(ln),
+                on_step_start=lambda s, m: self._emit_step_started(s, m),
+                on_subprocess_start=lambda p, c: self._emit_subprocess_started(p, c),
+                on_subprocess_end=lambda: self._emit_subprocess_ended(),
+                on_subprocess_output=lambda ln: self._emit_subprocess_output(ln),
             ),
             CompletionStepExecutor: CompletionStepExecutor(
                 sprint_service=self.sprint_service,
@@ -242,6 +240,75 @@ class IssueEngine:
         missing_steps = set(IssueStep) - set(self._step_executors.keys())
         if missing_steps:
             raise RuntimeError(f"No executor registered for steps: {missing_steps}")
+
+    def _emit_event(self, event: WorkflowEvent, payload: dict) -> None:
+        """Emit an event to the event bus if configured.
+
+        Args:
+            event: The workflow event type to emit
+            payload: Event payload dict (timestamp will be added if missing)
+        """
+        if self.event_bus:
+            payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+            self.event_bus.emit(event, payload)
+
+    def _emit_step_started(self, step: IssueStep, model: str) -> None:
+        """Emit STEP_STARTED event.
+
+        Args:
+            step: The step that is starting
+            model: The model being used for the step
+        """
+        current_issue = self.issue_service.read_current_issue()
+        issue_id = current_issue.issue_id if current_issue else "unknown"
+        self._emit_event(WorkflowEvent.STEP_STARTED, {
+            "issue_id": issue_id,
+            "step_name": step.value,
+            "step_index": 0,
+            "model": model,
+        })
+
+    def _emit_subprocess_started(self, pid: int, command: str) -> None:
+        """Emit SUBPROCESS_STARTED event.
+
+        Args:
+            pid: Process ID
+            command: Command being run
+        """
+        current_issue = self.issue_service.read_current_issue()
+        issue_id = current_issue.issue_id if current_issue else "unknown"
+        step_name = current_issue.step.value if current_issue else "unknown"
+        self._emit_event(WorkflowEvent.SUBPROCESS_STARTED, {
+            "pid": pid,
+            "command": command,
+            "issue_id": issue_id,
+            "step_name": step_name,
+        })
+
+    def _emit_subprocess_output(self, line: str) -> None:
+        """Emit SUBPROCESS_OUTPUT event.
+
+        Args:
+            line: Output line from the subprocess
+        """
+        current_issue = self.issue_service.read_current_issue()
+        issue_id = current_issue.issue_id if current_issue else "unknown"
+        step_name = current_issue.step.value if current_issue else "unknown"
+        self._emit_event(WorkflowEvent.SUBPROCESS_OUTPUT, {
+            "line": line,
+            "issue_id": issue_id,
+            "step_name": step_name,
+        })
+
+    def _emit_subprocess_ended(self) -> None:
+        """Emit SUBPROCESS_ENDED event."""
+        current_issue = self.issue_service.read_current_issue()
+        issue_id = current_issue.issue_id if current_issue else "unknown"
+        step_name = current_issue.step.value if current_issue else "unknown"
+        self._emit_event(WorkflowEvent.SUBPROCESS_ENDED, {
+            "issue_id": issue_id,
+            "step_name": step_name,
+        })
 
     def run(self, current_issue: CurrentIssue) -> IssueResult:
         """Run the issue through the workflow until completion or exit.
@@ -276,14 +343,14 @@ class IssueEngine:
             current_issue.total_iterations += 1
             self.issue_service.write_current_issue(current_issue)
 
-            # Emit iteration callback for logging/tracking
-            if self.on_issue_iteration:
-                self.on_issue_iteration(
-                    current_issue.total_iterations,
-                    self.config.max_total_iterations,
-                    current_issue.retry_count,
-                    self.config.max_retry,
-                )
+            # Emit ISSUE_ITERATION event for logging/tracking
+            self._emit_event(WorkflowEvent.ISSUE_ITERATION, {
+                "total_iterations": current_issue.total_iterations,
+                "max_iterations": self.config.max_total_iterations,
+                "retry_count": current_issue.retry_count,
+                "max_retry": self.config.max_retry,
+                "issue_id": issue_id,
+            })
 
             # Check if we should skip the current step
             if self._should_skip_step(current_issue.step):
@@ -298,9 +365,12 @@ class IssueEngine:
                     status="SKIPPED ⏭️",
                 )
 
-                # Callback: step skipped
-                if self.on_step_skip:
-                    self.on_step_skip(current_issue.step, skip_result.next_step)
+                # Emit STEP_SKIPPED event
+                self._emit_event(WorkflowEvent.STEP_SKIPPED, {
+                    "issue_id": issue_id,
+                    "step_name": current_issue.step.value,
+                    "next_step": skip_result.next_step.value if skip_result.next_step else None,
+                })
 
                 if skip_result.next_step:
                     if not self._transition_step(current_issue, skip_result.next_step, skipped=True):
@@ -359,9 +429,15 @@ class IssueEngine:
                 if not self.issue_service.write_current_issue(current_issue):
                     raise RuntimeError("Failed to write current_issue.json after step failure")
 
-                # Callback: step failure
-                if self.on_step_failure:
-                    self.on_step_failure(current_issue.step, current_issue.retry_count)
+                # Emit STEP_FAILED event
+                self._emit_event(WorkflowEvent.STEP_FAILED, {
+                    "issue_id": issue_id,
+                    "step_name": current_issue.step.value,
+                    "step_index": current_issue.retry_count,
+                    "retry_count": current_issue.retry_count,
+                    "max_retry": self.config.max_retry,
+                    "error": step_result.error,
+                })
 
                 if current_issue.retry_count >= self.config.max_retry:
                     self.notification_service.notify_failure(
@@ -388,9 +464,13 @@ class IssueEngine:
             # Determine next step
             next_step = step_result.next_step
 
-            # Emit routing signal callback
-            if self.on_routing_signal:
-                self.on_routing_signal(current_issue.step, step_result.matched_signal, next_step)
+            # Emit ROUTING_SIGNAL event
+            self._emit_event(WorkflowEvent.ROUTING_SIGNAL, {
+                "step_name": current_issue.step.value,
+                "signal": step_result.matched_signal,
+                "next_step": next_step.value if next_step else None,
+                "issue_id": issue_id,
+            })
 
             # Check if we're done
             if next_step is None:
@@ -431,6 +511,14 @@ class IssueEngine:
                 status="DONE ✅",
             )
 
+            # Emit STEP_COMPLETED event
+            self._emit_event(WorkflowEvent.STEP_COMPLETED, {
+                "issue_id": issue_id,
+                "step_name": completed_step.value,
+                "step_index": steps_completed,
+                "next_step": next_step.value,
+            })
+
             # Small delay between steps to avoid hammering API
             time.sleep(1)
 
@@ -458,7 +546,8 @@ class IssueEngine:
             )
 
         # Delegate execution to the executor
-        return executor.execute(current_issue, on_output=self.on_output)
+        # Note: on_output is None - output is streamed via SUBPROCESS_OUTPUT events
+        return executor.execute(current_issue, on_output=None)
 
     def _parse_step_output(self, step: IssueStep, output: str) -> ParseResult:
         """Parse step output to determine next step based on signals.
@@ -595,7 +684,7 @@ class IssueEngine:
         Args:
             current_issue: CurrentIssue to update
             next_step: New step to transition to
-            skipped: If True, the step was skipped (don't fire on_step_complete)
+            skipped: If True, the step was skipped (for logging purposes)
 
         Returns:
             True if transition succeeded, False if it failed (state is unchanged).
@@ -629,14 +718,11 @@ class IssueEngine:
             if not self.issue_service.write_current_issue(current_issue):
                 raise RuntimeError("Write failed")
 
-            # 5. Success - log transition and fire callback
+            # 5. Success - log transition
             self.issue_service.log_step_transition(
                 from_step.value,
                 next_step.value,
             )
-
-            if self.on_step_complete and not skipped:
-                self.on_step_complete(from_step, next_step)
 
             return True
 

@@ -20,7 +20,13 @@ from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitRe
 from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
 from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
 from claudesprint.core.rate_limit_handler import RateLimitConfig, RateLimitHandler
-from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+from claudesprint.events.workflow_event_bus import (
+    WorkflowEventBus,
+    WorkflowEvent,
+    SprintIterationPayload,
+    SelectingIssuePayload,
+    OutputPayload,
+)
 from claudesprint.exceptions import RateLimitExceeded, StateCorruptionError
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
@@ -158,17 +164,6 @@ class SprintEngine:
         # Issue state machine for result handling
         self._state_machine = IssueStateMachine()
 
-        # Callbacks
-        self.on_issue_start: Callable[[Issue], None] | None = None
-        self.on_issue_complete: Callable[[Issue], None] | None = None
-        self.on_output: Callable[[str], None] | None = None
-        self.on_sprint_complete: Callable[[SprintResult], None] | None = None
-        self.issue_engine_configurator: Callable[[IssueEngine], None] | None = None
-
-        # New callbacks for outer loop visibility (simple-logs mode)
-        self.on_sprint_iteration: Callable[[int, int], None] | None = None
-        self.on_selecting_issue: Callable[[], None] | None = None
-
     def _emit_event(self, event: WorkflowEvent, payload: dict) -> None:
         """Emit an event to the event bus if configured.
 
@@ -180,6 +175,31 @@ class SprintEngine:
             from datetime import datetime, UTC
             payload.setdefault("timestamp", datetime.now(UTC).isoformat())
             self.event_bus.emit(event, payload)
+
+    def _emit_output(self, text: str, source: str = "sprint_engine") -> None:
+        """Emit an OUTPUT event for general text output.
+
+        Args:
+            text: The output text
+            source: Source identifier for the output
+        """
+        self._emit_event(WorkflowEvent.OUTPUT, {
+            "text": text,
+            "source": source,
+        })
+
+    def _emit_subprocess_output(self, line: str, step_name: str = "select-issue") -> None:
+        """Emit a SUBPROCESS_OUTPUT event for subprocess output lines.
+
+        Args:
+            line: The output line from the subprocess
+            step_name: The step name for context
+        """
+        self._emit_event(WorkflowEvent.SUBPROCESS_OUTPUT, {
+            "line": line,
+            "issue_id": "selecting",
+            "step_name": step_name,
+        })
 
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
@@ -427,17 +447,16 @@ class SprintEngine:
             )
 
         # Run Claude with the selection prompt
-        if self.on_output:
-            self.on_output(
-                f"\n{'=' * 60}\n"
-                f"SPRINT LOOP: Selecting next issue\n"
-                f"{'=' * 60}\n"
-            )
+        self._emit_output(
+            f"\n{'=' * 60}\n"
+            f"SPRINT LOOP: Selecting next issue\n"
+            f"{'=' * 60}\n"
+        )
 
         result: ClaudeResult = self.claude_runner.run_with_content(
             prompt_content,
             source_name="PROMPT_select-issue.xml.j2",
-            on_output=self.on_output,
+            on_output=self._emit_subprocess_output,
         )
 
         # Handle rate limiting
@@ -572,10 +591,9 @@ class SprintEngine:
         Returns:
             IssueSelectionResult with selected issue
         """
-        if self.on_output:
-            self.on_output(
-                f"\nAgent selection failed ({error}), using priority-based fallback\n"
-            )
+        self._emit_output(
+            f"\nAgent selection failed ({error}), using priority-based fallback\n"
+        )
 
         priority_order = ["critical", "high", "medium", "low"]
         for priority in priority_order:
@@ -911,10 +929,6 @@ class SprintEngine:
                 "exit_reason": "completed",
             })
 
-            # Callback: issue complete
-            if self.on_issue_complete:
-                self.on_issue_complete(issue)
-
             # Reset rate limit handler and iteration tracker on successful completion
             self._rate_limit_handler.reset()
             self._iteration_tracker.record_success()
@@ -929,11 +943,10 @@ class SprintEngine:
             self.notification_service.notify_failure(
                 f"Issue {issue.id} hit max iterations (possible infinite loop)"
             )
-            if self.on_output:
-                self.on_output(
-                    f"\nIssue {issue.id} exceeded max iterations limit "
-                    f"({self.config.max_total_iterations}), marking as blocked\n"
-                )
+            self._emit_output(
+                f"\nIssue {issue.id} exceeded max iterations limit "
+                f"({self.config.max_total_iterations}), marking as blocked\n"
+            )
 
             # Emit issue failed event
             self._emit_event(WorkflowEvent.ISSUE_FAILED, {
@@ -955,8 +968,7 @@ class SprintEngine:
                 issue.id,
                 IssueStatus.BLOCKED,
             )
-            if self.on_output:
-                self.on_output(f"\nIssue {issue.id} is blocked, moving to next\n")
+            self._emit_output(f"\nIssue {issue.id} is blocked, moving to next\n")
 
             # Emit issue failed event
             self._emit_event(WorkflowEvent.ISSUE_FAILED, {
@@ -1010,8 +1022,7 @@ class SprintEngine:
         self.notification_service.notify_rate_limit(
             f"Rate limited, waiting {backoff}s (retry {self._rate_limit_handler.retry_count})"
         )
-        if self.on_output:
-            self.on_output(f"\nRate limited, waiting {backoff} seconds...\n")
+        self._emit_output(f"\nRate limited, waiting {backoff} seconds...\n")
         time.sleep(backoff)
 
         # Signal to retry same issue
@@ -1095,9 +1106,6 @@ class SprintEngine:
             "total_count": len(sprint.issues),
         })
 
-        if self.on_sprint_complete:
-            self.on_sprint_complete(result)
-
         return result
 
     def _execute_iteration(
@@ -1121,19 +1129,25 @@ class SprintEngine:
             Tuple of (issue_result, issue, current_issue, error_result).
             If error_result is not None, the sprint should exit with that result.
         """
-        # Iteration callback
-        if self.on_sprint_iteration:
-            available_count = len(sprint.get_available_issues())
-            self.on_sprint_iteration(iteration, available_count)
+        # Emit SPRINT_ITERATION event
+        available_count = len(sprint.get_available_issues())
+        stats = sprint.get_stats()
+        self._emit_event(WorkflowEvent.SPRINT_ITERATION, {
+            "iteration": iteration,
+            "available_issues": available_count,
+            "completed_count": stats["completed"],
+            "total_count": stats["total"],
+            "sprint_id": sprint.spec_id,
+        })
 
         # Get bearings - output sprint status between issue cycles
         bearings = self.get_bearings(sprint)
-        if self.on_output:
-            self.on_output(bearings)
+        self._emit_output(bearings)
 
-        # Select next issue
-        if self.on_selecting_issue:
-            self.on_selecting_issue()
+        # Emit SELECTING_ISSUE event
+        self._emit_event(WorkflowEvent.SELECTING_ISSUE, {
+            "sprint_id": sprint.spec_id,
+        })
         selection = self.select_issue(sprint)
         if not selection.success:
             elapsed = int(time.time() - start_time)
@@ -1174,10 +1188,6 @@ class SprintEngine:
 
         # Record iteration
         self._iteration_tracker.record_iteration()
-
-        # Callback: issue start
-        if self.on_issue_start:
-            self.on_issue_start(issue)
 
         # Notify issue selection
         self.notification_service.notify_step(
@@ -1225,10 +1235,9 @@ class SprintEngine:
                     issue.id,
                     IssueStatus.IN_PROGRESS,
                 )
-            if self.on_output:
-                self.on_output(
-                    f"\nResuming issue {issue.id} at step: {current_issue.step.value}\n"
-                )
+            self._emit_output(
+                f"\nResuming issue {issue.id} at step: {current_issue.step.value}\n"
+            )
         else:
             # Warn about state mismatch
             if is_resuming:
@@ -1237,12 +1246,11 @@ class SprintEngine:
                     if existing_current_issue
                     else "missing"
                 )
-                if self.on_output:
-                    self.on_output(
-                        f"\nWarning: State mismatch detected. "
-                        f"Sprint has {issue.id} in_progress but current_issue.json "
-                        f"has {mismatched_id}. Creating fresh context.\n"
-                    )
+                self._emit_output(
+                    f"\nWarning: State mismatch detected. "
+                    f"Sprint has {issue.id} in_progress but current_issue.json "
+                    f"has {mismatched_id}. Creating fresh context.\n"
+                )
                 self.issue_service.log_step_transition(
                     "resume",
                     "fresh-context",
@@ -1293,31 +1301,25 @@ class SprintEngine:
         """
         resolved_config = self._resolve_issue_config(sprint, issue)
         issue_engine = self.issue_engine_factory(resolved_config)
-        issue_engine.on_output = self.on_output
 
-        if self.issue_engine_configurator:
-            self.issue_engine_configurator(issue_engine)
-
-        if self.on_output:
-            self.on_output(
-                f"\n{'=' * 60}\n"
-                f"ENTERING ISSUE LOOP: {issue.id}\n"
-                f"  Title: {issue.title}\n"
-                f"  Starting step: {current_issue.step.value}\n"
-                f"{'=' * 60}\n"
-            )
+        self._emit_output(
+            f"\n{'=' * 60}\n"
+            f"ENTERING ISSUE LOOP: {issue.id}\n"
+            f"  Title: {issue.title}\n"
+            f"  Starting step: {current_issue.step.value}\n"
+            f"{'=' * 60}\n"
+        )
 
         issue_result = issue_engine.run(current_issue)
 
-        if self.on_output:
-            self.on_output(
-                f"\n{'-' * 60}\n"
-                f"EXITING ISSUE LOOP: {issue.id}\n"
-                f"  Exit reason: {issue_result.exit_reason.value}\n"
-                f"  Steps completed: {issue_result.steps_completed}\n"
-                f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
-                f"{'-' * 60}\n"
-            )
+        self._emit_output(
+            f"\n{'-' * 60}\n"
+            f"EXITING ISSUE LOOP: {issue.id}\n"
+            f"  Exit reason: {issue_result.exit_reason.value}\n"
+            f"  Steps completed: {issue_result.steps_completed}\n"
+            f"  Final step: {issue_result.final_step.value if issue_result.final_step else 'N/A'}\n"
+            f"{'-' * 60}\n"
+        )
 
         return issue_result
 

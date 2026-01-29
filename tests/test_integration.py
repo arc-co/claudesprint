@@ -483,3 +483,285 @@ class TestConfigBackwardCompatibility:
             project_root = Path(tmpdir)
             manager = ConfigurationManager(project_root)
             assert manager is not None
+
+
+class TestIssueEngineEventEmission:
+    """Test that IssueEngine emits events when event_bus is provided."""
+
+    def test_issue_engine_accepts_event_bus(self):
+        """IssueEngine should accept event_bus parameter."""
+        from claudesprint.core.issue_engine import IssueEngine
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+
+        # Just verify the class accepts the parameter without error
+        # Full initialization requires many dependencies
+        assert hasattr(IssueEngine.__init__, '__code__')
+        params = IssueEngine.__init__.__code__.co_varnames
+        assert 'event_bus' in params
+
+    def test_emit_event_helper_exists(self):
+        """IssueEngine should have _emit_event helper method."""
+        from claudesprint.core.issue_engine import IssueEngine
+
+        assert hasattr(IssueEngine, '_emit_event')
+
+    def test_event_emission_with_bus(self):
+        """Events should be emitted when event_bus is configured."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+
+        bus = WorkflowEventBus()
+        received_events: list[tuple[WorkflowEvent, dict]] = []
+
+        # Subscribe to all step events
+        for event in [WorkflowEvent.STEP_STARTED, WorkflowEvent.STEP_COMPLETED,
+                      WorkflowEvent.STEP_SKIPPED, WorkflowEvent.STEP_FAILED]:
+            bus.subscribe(event, lambda p, e=event: received_events.append((e, p)))
+
+        # Manually emit to verify bus works
+        bus.emit(WorkflowEvent.STEP_SKIPPED, {
+            "issue_id": "test-1",
+            "step_name": "write-tests",
+            "next_step": "browser-validation",
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        assert len(received_events) == 1
+        assert received_events[0][0] == WorkflowEvent.STEP_SKIPPED
+
+
+class TestHeartbeatServiceEventEmission:
+    """Test that HeartbeatService emits PROCESS_HUNG events."""
+
+    def test_heartbeat_service_accepts_event_bus(self):
+        """HeartbeatService should accept event_bus parameter."""
+        from claudesprint.services.heartbeat_service import HeartbeatService
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+
+        bus = WorkflowEventBus()
+        service = HeartbeatService(
+            timeout_seconds=600,
+            enabled=True,
+            event_bus=bus,
+        )
+
+        assert service._event_bus is bus
+
+    def test_get_heartbeat_service_accepts_event_bus(self):
+        """get_heartbeat_service factory should accept event_bus parameter."""
+        from claudesprint.services.heartbeat_service import (
+            get_heartbeat_service,
+            reset_heartbeat_service,
+        )
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+
+        # Reset to ensure clean state
+        reset_heartbeat_service()
+
+        bus = WorkflowEventBus()
+        service = get_heartbeat_service(
+            timeout_seconds=600,
+            enabled=True,
+            event_bus=bus,
+        )
+
+        assert service._event_bus is bus
+
+        # Cleanup
+        reset_heartbeat_service()
+
+    def test_heartbeat_emits_process_hung_event(self):
+        """HeartbeatService should emit PROCESS_HUNG event when hung detected."""
+        import time
+        from claudesprint.services.heartbeat_service import HeartbeatService
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+
+        bus = WorkflowEventBus()
+        received_events: list[dict] = []
+
+        bus.subscribe(WorkflowEvent.PROCESS_HUNG, lambda p: received_events.append(p))
+
+        # Create service with very short timeout for testing
+        service = HeartbeatService(
+            timeout_seconds=0,  # Immediate timeout
+            enabled=True,
+            check_interval=0.05,  # Check every 50ms
+            event_bus=bus,
+        )
+
+        # Start and pulse
+        service.start()
+        service.pulse("test-step")
+
+        # Wait for check to run
+        time.sleep(0.15)
+
+        service.stop()
+
+        # Should have received a PROCESS_HUNG event
+        assert len(received_events) >= 1
+        assert received_events[0]["step_name"] == "test-step"
+        assert "seconds_inactive" in received_events[0]
+        assert "timestamp" in received_events[0]
+
+
+class TestLogsEventSubscriber:
+    """Test that LogsEventSubscriber correctly bridges events to SimpleLogsOutput."""
+
+    def test_subscriber_connect_and_disconnect(self):
+        """LogsEventSubscriber should connect and disconnect from event bus."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.simple_logs import SimpleLogsOutput
+        from rich.console import Console
+        from io import StringIO
+
+        bus = WorkflowEventBus()
+        console = Console(file=StringIO(), force_terminal=True)
+        output = SimpleLogsOutput(console)
+
+        subscriber = LogsEventSubscriber(output, bus)
+
+        # Initially not connected
+        assert not subscriber._connected
+
+        # Connect
+        subscriber.connect()
+        assert subscriber._connected
+
+        # Disconnect
+        subscriber.disconnect()
+        assert not subscriber._connected
+
+    def test_subscriber_forwards_step_started_event(self):
+        """LogsEventSubscriber should forward STEP_STARTED events to output."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.simple_logs import SimpleLogsOutput
+        from rich.console import Console
+        from io import StringIO
+
+        bus = WorkflowEventBus()
+        string_io = StringIO()
+        console = Console(file=string_io, force_terminal=True)
+        output = SimpleLogsOutput(console)
+
+        subscriber = LogsEventSubscriber(output, bus)
+        subscriber.connect()
+
+        # Emit STEP_STARTED event
+        bus.emit(WorkflowEvent.STEP_STARTED, {
+            "issue_id": "test-1",
+            "step_name": "implement",
+            "step_index": 0,
+            "model": "opus",
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        # Check output was generated
+        output_text = string_io.getvalue()
+        assert "STEP" in output_text
+        assert "implement" in output_text
+
+        subscriber.disconnect()
+
+    def test_subscriber_forwards_issue_completed_event(self):
+        """LogsEventSubscriber should forward ISSUE_COMPLETED events to output."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.simple_logs import SimpleLogsOutput
+        from rich.console import Console
+        from io import StringIO
+        import re
+
+        bus = WorkflowEventBus()
+        string_io = StringIO()
+        console = Console(file=string_io, force_terminal=True)
+        output = SimpleLogsOutput(console)
+        output.sprint_total = 5  # Set up sprint tracking
+
+        subscriber = LogsEventSubscriber(output, bus)
+        subscriber.connect()
+
+        # Emit ISSUE_COMPLETED event
+        bus.emit(WorkflowEvent.ISSUE_COMPLETED, {
+            "issue_id": "test-1",
+            "issue_name": "Test Issue",
+            "exit_reason": "completed",
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        # Check output was generated - strip ANSI codes for comparison
+        output_text = string_io.getvalue()
+        # Remove ANSI escape codes
+        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', output_text)
+        assert "ISSUE" in clean_output
+        assert "test-1" in clean_output
+
+        subscriber.disconnect()
+
+    def test_subscriber_forwards_sprint_iteration_event(self):
+        """LogsEventSubscriber should forward SPRINT_ITERATION events to output."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.simple_logs import SimpleLogsOutput
+        from rich.console import Console
+        from io import StringIO
+
+        bus = WorkflowEventBus()
+        string_io = StringIO()
+        console = Console(file=string_io, force_terminal=True)
+        output = SimpleLogsOutput(console)
+
+        subscriber = LogsEventSubscriber(output, bus)
+        subscriber.connect()
+
+        # Emit SPRINT_ITERATION event
+        bus.emit(WorkflowEvent.SPRINT_ITERATION, {
+            "iteration": 3,
+            "available_issues": 5,
+            "completed_count": 2,
+            "total_count": 7,
+            "sprint_id": "SPEC_01",
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        # Check output was generated
+        output_text = string_io.getvalue()
+        assert "ITERATION" in output_text
+
+        subscriber.disconnect()
+
+    def test_subscriber_multiple_connect_calls_are_idempotent(self):
+        """Multiple connect() calls should not create duplicate subscriptions."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.simple_logs import SimpleLogsOutput
+        from rich.console import Console
+        from io import StringIO
+
+        bus = WorkflowEventBus()
+        string_io = StringIO()
+        console = Console(file=string_io, force_terminal=True)
+        output = SimpleLogsOutput(console)
+
+        subscriber = LogsEventSubscriber(output, bus)
+
+        # Connect multiple times
+        subscriber.connect()
+        subscriber.connect()
+        subscriber.connect()
+
+        # Should still only be connected once
+        assert subscriber._connected
+
+        # Emit event - should only appear once in output
+        bus.emit(WorkflowEvent.SELECTING_ISSUE, {
+            "sprint_id": "SPEC_01",
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        output_text = string_io.getvalue()
+        # Count occurrences of "Selecting" - should be exactly 1
+        assert output_text.count("Selecting") == 1
+
+        subscriber.disconnect()

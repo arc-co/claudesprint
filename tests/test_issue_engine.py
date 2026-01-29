@@ -106,10 +106,7 @@ class TestMaxTotalIterations:
             engine.config = mock_config
             engine.notification_service = MagicMock()
             engine.issue_service = MagicMock()
-            engine.on_step_start = None
-            engine.on_step_complete = None
-            engine.on_issue_iteration = None
-            engine.on_routing_signal = None
+            engine.event_bus = None
 
             # Mock _execute_step to return success with no next step (complete)
             engine._execute_step = MagicMock(
@@ -161,10 +158,7 @@ class TestMaxTotalIterations:
             engine.notification_service = MagicMock()
             engine.issue_service = MagicMock()
             engine.issue_service.write_current_issue = capture_write
-            engine.on_step_start = None
-            engine.on_step_complete = None
-            engine.on_issue_iteration = None
-            engine.on_routing_signal = None
+            engine.event_bus = None
 
             engine._execute_step = MagicMock(
                 return_value=StepResult(success=True, next_step=None, output="Done")
@@ -209,10 +203,7 @@ class TestMaxTotalIterations:
             engine.notification_service = MagicMock()
             engine.issue_service = MagicMock()
             engine.issue_service.write_current_issue = MagicMock(return_value=True)
-            engine.on_step_start = None
-            engine.on_step_complete = None
-            engine.on_issue_iteration = None
-            engine.on_routing_signal = None
+            engine.event_bus = None
 
             engine._execute_step = mock_execute_step
             engine._should_skip_step = MagicMock(return_value=False)
@@ -255,10 +246,7 @@ class TestMaxTotalIterations:
             engine.notification_service = MagicMock()
             engine.issue_service = MagicMock()
             engine.issue_service.write_current_issue = MagicMock(return_value=True)
-            engine.on_step_start = None
-            engine.on_step_complete = None
-            engine.on_issue_iteration = None
-            engine.on_routing_signal = None
+            engine.event_bus = None
 
             engine._execute_step = mock_execute_step
             engine._should_skip_step = MagicMock(return_value=False)

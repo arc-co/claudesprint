@@ -14,9 +14,10 @@ from claudesprint import __version__
 from claudesprint.core.claude_runner import ClaudeRunner
 from claudesprint.core.issue_engine import IssueEngine
 from claudesprint.core.sprint_engine import SprintEngine, SprintExitReason, SprintResult, IssueEngineFactory
+from claudesprint.events.workflow_event_bus import WorkflowEventBus
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import IssueStep
-from claudesprint.models.sprint import Sprint, Issue, ResolvedConfig
+from claudesprint.models.sprint import Sprint, ResolvedConfig
 from claudesprint.services.configuration_manager import ConfigurationManager
 from claudesprint.services.git_service import GitService
 from claudesprint.services.sprint_service import SprintService
@@ -218,6 +219,9 @@ def _run_sprint_console(
     path_service = PathService(project_root)
     prompt_service = PromptService(path_service, project_root)
 
+    # Create shared event bus for workflow events
+    event_bus = WorkflowEventBus()
+
     # Create ClaudeRunner for sprint-level operations
     claude_runner = ClaudeRunner(
         project_root=project_root,
@@ -246,6 +250,7 @@ def _run_sprint_console(
             notification_service=notification_service,
             prompt_service=prompt_service,
             claude_runner=issue_claude_runner,
+            event_bus=event_bus,
         )
 
     # Create SprintEngine with all dependencies
@@ -259,47 +264,21 @@ def _run_sprint_console(
         prompt_service=prompt_service,
         claude_runner=claude_runner,
         issue_engine_factory=issue_engine_factory,
+        event_bus=event_bus,
     )
 
-    # Set up callbacks
-    def on_issue_start(issue: Issue) -> None:
-        output.set_issue(issue.id, issue.title)
+    # Connect event bus to log output via subscriber
+    from claudesprint.events.logs_subscriber import LogsEventSubscriber
 
-    def on_issue_complete(issue: Issue) -> None:
-        output.on_issue_complete(issue.id)
-
-    def on_sprint_complete(result: SprintResult) -> None:
-        # Sprint complete message is now shown in the final output
-        pass
-
-    def configure_issue_engine(issue_engine: IssueEngine) -> None:
-        """Wire up output callbacks to the issue engine."""
-        issue_engine.on_step_start = output.on_step_start
-        issue_engine.on_step_complete = output.on_step_complete
-        issue_engine.on_step_skip = output.on_step_skip
-        # Pass max_retry for context in failure logging
-        issue_engine.on_step_failure = lambda s, r: output.on_step_failure(s, r, config.max_retry)
-        # Wire subprocess callbacks for agent output
-        issue_engine.on_subprocess_start = output.on_subprocess_start
-        issue_engine.on_subprocess_output = output.on_subprocess_output
-        issue_engine.on_subprocess_end = output.on_subprocess_end
-        # New callbacks for iteration tracking and routing visibility
-        issue_engine.on_routing_signal = output.on_routing_signal
-        issue_engine.on_issue_iteration = output.on_issue_iteration
-
-    engine.on_issue_start = on_issue_start
-    engine.on_issue_complete = on_issue_complete
-    engine.on_sprint_complete = on_sprint_complete
-    engine.issue_engine_configurator = configure_issue_engine
-
-    # Wire up the new outer loop callbacks
-    engine.on_sprint_iteration = output.on_sprint_iteration
-    engine.on_selecting_issue = output.on_selecting_issue
-    engine.on_output = output.on_output
+    logs_subscriber = LogsEventSubscriber(output, event_bus)
+    logs_subscriber.connect()
 
     # Run sprint
     with output:
         result = engine.run(max_iterations=max_iterations)
+
+    # Disconnect subscriber after sprint completes
+    logs_subscriber.disconnect()
 
     console.print("")
     if result.exit_reason == SprintExitReason.COMPLETED:
