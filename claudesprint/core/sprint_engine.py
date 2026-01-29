@@ -18,7 +18,10 @@ import re
 from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
 from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
 from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
+from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
 from claudesprint.core.rate_limit_handler import RateLimitConfig, RateLimitHandler
+from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+from claudesprint.exceptions import RateLimitExceeded, StateCorruptionError
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus, ResolvedConfig
@@ -27,6 +30,7 @@ from claudesprint.services.issue_service import IssueService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.prompt_service import PromptService, PromptContext
+from claudesprint.services.state_manager import StateManager
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
 
@@ -96,6 +100,9 @@ class SprintEngine:
         claude_runner: ClaudeRunner,
         # Injected Factory
         issue_engine_factory: IssueEngineFactory,
+        # Optional integrations
+        event_bus: WorkflowEventBus | None = None,
+        state_manager: StateManager | None = None,
     ) -> None:
         """Initialize SprintEngine.
 
@@ -109,6 +116,8 @@ class SprintEngine:
             prompt_service: Injected PromptService instance
             claude_runner: Injected ClaudeRunner instance
             issue_engine_factory: Factory function to create IssueEngine instances
+            event_bus: Optional WorkflowEventBus for event emission
+            state_manager: Optional StateManager for safe state operations
         """
         self.sprint_path = sprint_path
         self.config = config
@@ -124,6 +133,18 @@ class SprintEngine:
 
         # Injected factory
         self.issue_engine_factory = issue_engine_factory
+
+        # Optional integrations
+        self.event_bus = event_bus
+        self.state_manager = state_manager
+
+        # Iteration tracker for categorized failure handling
+        self._iteration_tracker = IterationTracker(
+            max_iterations=config.max_total_iterations,
+            max_logic_errors=3,
+            max_infra_errors=10,
+            max_consecutive_failures=5,
+        )
 
         # Rate limit handler (replaces self._rate_limit_retries)
         self._rate_limit_handler = RateLimitHandler(
@@ -147,6 +168,18 @@ class SprintEngine:
         # New callbacks for outer loop visibility (simple-logs mode)
         self.on_sprint_iteration: Callable[[int, int], None] | None = None
         self.on_selecting_issue: Callable[[], None] | None = None
+
+    def _emit_event(self, event: WorkflowEvent, payload: dict) -> None:
+        """Emit an event to the event bus if configured.
+
+        Args:
+            event: The WorkflowEvent type to emit
+            payload: Event payload dictionary
+        """
+        if self.event_bus:
+            from datetime import datetime, UTC
+            payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+            self.event_bus.emit(event, payload)
 
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
@@ -871,12 +904,20 @@ class SprintEngine:
             # Clear current_issue artifacts
             self.issue_service.clear_current_issue()
 
+            # Emit issue completed event
+            self._emit_event(WorkflowEvent.ISSUE_COMPLETED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "completed",
+            })
+
             # Callback: issue complete
             if self.on_issue_complete:
                 self.on_issue_complete(issue)
 
-            # Reset rate limit handler on successful completion
+            # Reset rate limit handler and iteration tracker on successful completion
             self._rate_limit_handler.reset()
+            self._iteration_tracker.record_success()
 
         elif issue_result.exit_reason == IssueExitReason.MAX_ITERATIONS:
             # Mark as blocked (likely infinite loop between steps)
@@ -894,6 +935,19 @@ class SprintEngine:
                     f"({self.config.max_total_iterations}), marking as blocked\n"
                 )
 
+            # Emit issue failed event
+            self._emit_event(WorkflowEvent.ISSUE_FAILED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "max_iterations",
+            })
+
+            # Record as logic error (infinite loop is a logic bug)
+            self._iteration_tracker.record_failure(
+                FailureCategory.LOGIC_ERROR,
+                f"Issue {issue.id} exceeded max iterations",
+            )
+
         elif issue_result.exit_reason == IssueExitReason.BLOCKED:
             # Mark issue as blocked and continue to next
             self.sprint_service.mark_issue_status(
@@ -903,6 +957,13 @@ class SprintEngine:
             )
             if self.on_output:
                 self.on_output(f"\nIssue {issue.id} is blocked, moving to next\n")
+
+            # Emit issue failed event
+            self._emit_event(WorkflowEvent.ISSUE_FAILED, {
+                "issue_id": issue.id,
+                "issue_name": issue.title,
+                "exit_reason": "blocked",
+            })
 
         return None, issues_completed, False
 
@@ -916,6 +977,19 @@ class SprintEngine:
     ) -> tuple[SprintResult | None, int, bool]:
         """Handle RETRY_SAME_ISSUE action (rate limiting)."""
         self._rate_limit_handler.record_rate_limit()
+
+        # Emit rate limited event
+        self._emit_event(WorkflowEvent.RATE_LIMITED, {
+            "sprint_id": str(self.sprint_path.parent.name),
+            "completed_count": issues_completed,
+            "total_count": 0,  # Will be populated by caller
+        })
+
+        # Record as rate limit in iteration tracker (doesn't count toward limits)
+        self._iteration_tracker.record_failure(
+            FailureCategory.RATE_LIMIT,
+            "Claude API rate limited",
+        )
 
         if not self._rate_limit_handler.should_retry():
             elapsed = int(time.time() - start_time)
@@ -1014,6 +1088,13 @@ class SprintEngine:
             pr_url=None,
         )
 
+        # Emit sprint completed event
+        self._emit_event(WorkflowEvent.SPRINT_COMPLETED, {
+            "sprint_id": sprint.spec_id,
+            "completed_count": issues_completed,
+            "total_count": len(sprint.issues),
+        })
+
         if self.on_sprint_complete:
             self.on_sprint_complete(result)
 
@@ -1083,6 +1164,16 @@ class SprintEngine:
         )
         if error_result:
             return None, issue, None, error_result
+
+        # Emit issue started event
+        self._emit_event(WorkflowEvent.ISSUE_STARTED, {
+            "issue_id": issue.id,
+            "issue_name": issue.title,
+            "exit_reason": None,
+        })
+
+        # Record iteration
+        self._iteration_tracker.record_iteration()
 
         # Callback: issue start
         if self.on_issue_start:
@@ -1270,6 +1361,16 @@ class SprintEngine:
             sprint, error_result = self._prepare_sprint()
             if error_result:
                 return error_result
+
+            # Emit sprint started event
+            self._emit_event(WorkflowEvent.SPRINT_STARTED, {
+                "sprint_id": sprint.spec_id,
+                "completed_count": 0,
+                "total_count": len(sprint.issues),
+            })
+
+            # Reset iteration tracker for this sprint run
+            self._iteration_tracker.reset()
 
             # Main sprint loop
             while True:
