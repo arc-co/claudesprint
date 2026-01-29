@@ -37,7 +37,6 @@ class IssueExitReason(StrEnum):
     """Reasons for issue loop exit."""
 
     COMPLETED = "completed"
-    ISSUE_CHANGED = "issue_changed"  # Issue transitioned to a new issue (select-issue step)
     MAX_RETRY = "max_retry"
     MAX_ITERATIONS = "max_iterations"  # Total iteration limit (prevents infinite loops)
     RATE_LIMITED = "rate_limited"
@@ -68,7 +67,6 @@ class IssueEngine:
 
     # Step routing table - maps step to possible next steps based on output signals
     STEP_ROUTING: dict[IssueStep, dict[str, IssueStep | None]] = {
-        IssueStep.SELECT_ISSUE: {"default": IssueStep.READ_DOCS},
         IssueStep.READ_DOCS: {"default": IssueStep.IMPLEMENT},
         IssueStep.IMPLEMENT: {"default": IssueStep.WRITE_TESTS},
         IssueStep.WRITE_TESTS: {"default": IssueStep.RUN_TESTS},
@@ -378,22 +376,6 @@ class IssueEngine:
             current_issue.retry_count = 0
             current_issue.current_failures = ""
 
-            # Check if the issue changed after SELECT_ISSUE step
-            # (the select-issue step may have selected a new issue via init_issue tool)
-            if current_issue.step == IssueStep.SELECT_ISSUE:
-                updated_issue = self.issue_service.read_current_issue()
-                if updated_issue and updated_issue.issue_id != issue_id:
-                    # Issue changed - return control to sprint engine for proper transition
-                    elapsed = int(time.time() - start_time)
-                    return IssueResult(
-                        exit_reason=IssueExitReason.ISSUE_CHANGED,
-                        issue_id=issue_id,  # Return the OLD issue_id
-                        steps_completed=steps_completed,
-                        elapsed_seconds=elapsed,
-                        final_step=current_issue.step,
-                        message=f"Issue transitioned to {updated_issue.issue_id}",
-                    )
-
             # Determine next step
             next_step = step_result.next_step
 
@@ -634,7 +616,6 @@ class IssueEngine:
         issue_title = current_issue.issue_title or current_issue.issue_id
 
         actions = {
-            IssueStep.SELECT_ISSUE: "Review sprint and select next issue to work on",
             IssueStep.READ_DOCS: f"Read documentation for: {issue_title}",
             IssueStep.IMPLEMENT: f"Implement changes for: {issue_title}",
             IssueStep.WRITE_TESTS: f"Write tests for: {issue_title}",
