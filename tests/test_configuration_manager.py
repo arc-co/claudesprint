@@ -200,8 +200,8 @@ class TestConfigurationManagerSave:
             assert loaded.models.default_model == "sonnet"
 
 
-class TestConfigurationManagerInit:
-    """Tests for config initialization."""
+class TestConfigurationManagerInitConfig:
+    """Tests for init_config method."""
 
     def test_init_creates_file(self) -> None:
         """Test init_config creates file with template."""
@@ -264,39 +264,6 @@ class TestConfigurationManagerReload:
             cm.reload()
             config2 = cm.project
             assert config2.server.url == "http://localhost:9000"
-
-
-class TestConfigurationManagerHookConfig:
-    """Tests for get_hook_config method."""
-
-    def test_get_existing_hook(self) -> None:
-        """Test get_hook_config returns config for existing hook."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cm = ConfigurationManager(project_root=tmpdir)
-
-            hook = cm.get_hook_config("test")
-
-            assert hook is not None
-            assert hook.command == "npm test"
-
-    def test_get_nonexistent_hook(self) -> None:
-        """Test get_hook_config returns None for nonexistent hook."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cm = ConfigurationManager(project_root=tmpdir)
-
-            hook = cm.get_hook_config("nonexistent")
-
-            assert hook is None
-
-    def test_get_validate_hook(self) -> None:
-        """Test get_hook_config handles validate -> validate_hook mapping."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cm = ConfigurationManager(project_root=tmpdir)
-
-            hook = cm.get_hook_config("validate")
-
-            assert hook is not None
-            assert "validate" in hook.command
 
 
 class TestConfigurationManagerModelSelection:

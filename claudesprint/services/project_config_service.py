@@ -71,80 +71,6 @@ class ModelsConfig(BaseModel):
     special: ModelsSpecialConfig = Field(default_factory=ModelsSpecialConfig)
 
 
-class HookConfig(BaseModel):
-    """Configuration for a single hook."""
-
-    command: str = Field(description="Shell command to execute")
-    timeout: int = Field(default=300, ge=1, description="Timeout in seconds")
-    success_exit_codes: list[int] = Field(
-        default_factory=lambda: [0],
-        description="Exit codes that indicate success",
-    )
-    failure_patterns: list[str] = Field(
-        default_factory=list,
-        description="Patterns in output that indicate failure",
-    )
-    success_patterns: list[str] = Field(
-        default_factory=list,
-        description="Patterns in output that indicate success",
-    )
-
-
-class HooksConfig(BaseModel):
-    """Hooks configuration section.
-
-    Note: The 'validate' hook uses 'validate_hook' as the attribute name
-    because 'validate' conflicts with Pydantic's BaseModel.validate method.
-    The alias="validate" ensures TOML files use [hooks.validate] as expected.
-    """
-
-    model_config = {"protected_namespaces": ()}  # Allow 'validate' field name
-
-    test: HookConfig = Field(
-        default_factory=lambda: HookConfig(
-            command="npm test",
-            timeout=300,
-            success_exit_codes=[0],
-            failure_patterns=["FAIL", "failed", "Error:"],
-            success_patterns=["passed", "PASS"],
-        )
-    )
-    lint: HookConfig = Field(
-        default_factory=lambda: HookConfig(
-            command="npm run lint",
-            timeout=120,
-            success_exit_codes=[0],
-            failure_patterns=["error", "warning"],
-        )
-    )
-    typecheck: HookConfig = Field(
-        default_factory=lambda: HookConfig(
-            command="npm run typecheck",
-            timeout=120,
-            success_exit_codes=[0],
-            failure_patterns=["error TS", "Error:"],
-        )
-    )
-    build: HookConfig = Field(
-        default_factory=lambda: HookConfig(
-            command="npm run build",
-            timeout=300,
-            success_exit_codes=[0],
-            failure_patterns=["error", "Error:", "failed"],
-            success_patterns=["Successfully", "Built"],
-        )
-    )
-    validate_hook: HookConfig = Field(
-        default_factory=lambda: HookConfig(
-            command="npm run validate",
-            timeout=600,
-            success_exit_codes=[0],
-            failure_patterns=["FAIL", "error", "Error:"],
-        ),
-        alias="validate",
-    )
-
-
 class RuntimeConfig(BaseModel):
     """Runtime execution configuration."""
 
@@ -282,7 +208,6 @@ class ProjectConfig(BaseModel):
 
     server: ServerConfig = Field(default_factory=ServerConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
-    hooks: HooksConfig = Field(default_factory=HooksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     rate_limiting: RateLimitingConfig = Field(default_factory=RateLimitingConfig)
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
@@ -403,38 +328,6 @@ enabled = true
 enabled = false
 # Bark server URL (e.g., "https://api.day.app/YOUR_KEY")
 url = ""
-
-[hooks.test]
-command = "npm test"
-timeout = 300
-success_exit_codes = [0]
-failure_patterns = ["FAIL", "failed", "Error:"]
-success_patterns = ["passed", "PASS"]
-
-[hooks.lint]
-command = "npm run lint"
-timeout = 120
-success_exit_codes = [0]
-failure_patterns = ["error", "warning"]
-
-[hooks.typecheck]
-command = "npm run typecheck"
-timeout = 120
-success_exit_codes = [0]
-failure_patterns = ["error TS", "Error:"]
-
-[hooks.build]
-command = "npm run build"
-timeout = 300
-success_exit_codes = [0]
-failure_patterns = ["error", "Error:", "failed"]
-success_patterns = ["Successfully", "Built"]
-
-[hooks.validate]
-command = "npm run validate"
-timeout = 600
-success_exit_codes = [0]
-failure_patterns = ["FAIL", "error", "Error:"]
 """
 
 

@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from claudesprint.services.project_config_service import (
-        HookConfig,
         ModelName,
         ProjectConfig,
     )
@@ -99,7 +98,6 @@ class ConfigurationManager:
         >>> cm = ConfigurationManager()
         >>> print(cm.project.models.default_model)
         >>> print(cm.paths.project_root)
-        >>> hook = cm.get_hook_config("test")
     """
 
     CONFIG_FILENAME = "config.toml"
@@ -287,19 +285,6 @@ class ConfigurationManager:
         return self.paths.project_config_file.exists()
 
     # === Convenience Methods ===
-
-    def get_hook_config(self, hook_name: str) -> "HookConfig | None":
-        """Get configuration for a specific hook.
-
-        Args:
-            hook_name: Name of the hook (test, lint, typecheck, build, validate)
-
-        Returns:
-            HookConfig if found, None otherwise
-        """
-        # Handle 'validate' -> 'validate_hook' mapping
-        attr_name = "validate_hook" if hook_name == "validate" else hook_name
-        return getattr(self.project.hooks, attr_name, None)
 
     def get_model_for_step(self, step_name: str) -> "ModelName":
         """Get the model to use for a workflow step.

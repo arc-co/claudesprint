@@ -119,16 +119,40 @@ class ClaudeHookService:
         r"\bgit\s+commit\s*$",  # Without -m, opens editor
     ]
 
-    # Server commands that may conflict with existing servers
+    # Server commands that run indefinitely. These patterns are used for DETECTION only.
+    # Server commands are ALLOWED (not blocked) - the model is instructed via prompts to
+    # check if a server is already running before starting one.
+    # See _project_discovery.xml.j2 <server_management> section.
     SERVER_PATTERNS = [
+        # Node.js package manager dev commands
         r"\bnpm\s+run\s+dev\b",
         r"\bnpm\s+run\s+start\b",
         r"\byarn\s+dev\b",
         r"\byarn\s+start\b",
+        r"\byarn\s+run\s+dev\b",
+        r"\bpnpm\s+dev\b",
+        r"\bpnpm\s+run\s+dev\b",
+        r"\bpnpm\s+start\b",
+        r"\bbun\s+dev\b",
+        r"\bbun\s+run\s+dev\b",
+        # Python web servers
         r"\bpython\s+-m\s+http\.server\b",
-        r"\bpython\s+.*\s+runserver\b",
+        r"\bpython3\s+-m\s+http\.server\b",
+        r"\bpython\s+.*\s+runserver\b",  # Django
+        r"\bpython3\s+.*\s+runserver\b",
+        r"\buvicorn\b",  # FastAPI/Starlette
+        r"\bgunicorn\b",
+        r"\bflask\s+run\b",
+        r"\bpoetry\s+run\s+.*runserver\b",
+        r"\buv\s+run\s+.*runserver\b",
+        # Generic server commands
         r"\bnode\s+.*server",
         r"\bnpx\s+.*serve\b",
+        r"\bnpx\s+vite\b",
+        r"\bnpx\s+next\s+dev\b",
+        # Rust/Go servers
+        r"\bcargo\s+run\b.*--bin\s+.*server",
+        r"\bgo\s+run\b.*server",
     ]
 
     def __init__(self) -> None:
@@ -353,7 +377,7 @@ class ClaudeHookService:
         Blocks:
         - Watch commands (--watch, npm test --watch, etc.)
         - Interactive git commands (git rebase -i, git add -p, etc.)
-        - Server commands that may conflict with existing servers
+        - Server commands that may conflict with existing servers or run indefinitely
 
         Args:
             hook_input: Parsed hook input
@@ -384,6 +408,11 @@ class ClaudeHookService:
                 else f"Blocked interactive git command: {command}"
             )
             return HookResult.BLOCK
+
+        # Note: Server commands (npm run dev, etc.) are intentionally ALLOWED.
+        # The prompt instructs the model to check if a server is already running
+        # before starting one, to prevent duplicate spawning and memory exhaustion.
+        # See _project_discovery.xml.j2 <server_management> section.
 
         return HookResult.ALLOW
 

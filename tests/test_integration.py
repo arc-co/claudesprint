@@ -462,7 +462,6 @@ class TestConfigBackwardCompatibility:
         from claudesprint.services.project_config_service import (
             ServerConfig,
             ModelsConfig,
-            HookConfig,
         )
         # Verify models can be instantiated with defaults
         server = ServerConfig()
