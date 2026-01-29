@@ -774,13 +774,6 @@ class SprintEngine:
             while True:
                 iteration += 1
 
-                # Reload sprint to get current state for iteration callback
-                sprint = self.sprint_service.read_sprint(self.sprint_path)
-                if sprint:
-                    available_count = len(sprint.get_available_issues())
-                    if self.on_sprint_iteration:
-                        self.on_sprint_iteration(iteration, available_count)
-
                 # Check iteration limit
                 if max_iterations > 0 and iteration > max_iterations:
                     elapsed = int(time.time() - start_time)
@@ -806,6 +799,11 @@ class SprintEngine:
                         message="Failed to reload sprint",
                         error="Could not parse sprint.json",
                     )
+
+                # Iteration callback
+                if self.on_sprint_iteration:
+                    available_count = len(sprint.get_available_issues())
+                    self.on_sprint_iteration(iteration, available_count)
 
                 # Get bearings - output sprint status between issue cycles
                 bearings = self.get_bearings(sprint)
