@@ -135,13 +135,14 @@ class SimpleLogsOutput:
             total: Total number of issues in the sprint.
             completed: Number of already completed issues.
         """
-        self.sprint_total = total
-        self.sprint_completed = completed
+        if self.sprint_total == 0:
+            self.sprint_total = total
+            self.sprint_completed = completed
         self._log("")
         self._log("[bold blue]" + "=" * 50 + "[/bold blue]")
         self._log("[bold blue]>>> ENTERING SPRINT LOOP[/bold blue]")
         self._log(f"[bold blue]    Sprint: {spec_id}[/bold blue]")
-        self._log(f"[bold blue]    Issues: {completed}/{total} complete[/bold blue]")
+        self._log(f"[bold blue]    Issues: {self.sprint_completed}/{self.sprint_total} complete[/bold blue]")
         self._log("[bold blue]" + "=" * 50 + "[/bold blue]")
 
     def on_sprint_exited(self, spec_id: str, total: int, completed: int) -> None:
