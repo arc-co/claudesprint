@@ -15,23 +15,38 @@ class WorkflowEvent(Enum):
     STEP_STARTED = auto()
     STEP_COMPLETED = auto()
     STEP_FAILED = auto()
+    STEP_SKIPPED = auto()  # For on_step_skip callback
     ISSUE_STARTED = auto()
     ISSUE_COMPLETED = auto()
     ISSUE_FAILED = auto()
     SPRINT_STARTED = auto()
-    SPRINT_PROGRESS = auto()
     SPRINT_COMPLETED = auto()
     RATE_LIMITED = auto()
-    STATE_PERSISTED = auto()
+    PROCESS_HUNG = auto()  # For HeartbeatService.on_hung callback
+    # New events for event-driven architecture
+    SUBPROCESS_STARTED = auto()  # on_subprocess_start
+    SUBPROCESS_OUTPUT = auto()  # on_subprocess_output
+    SUBPROCESS_ENDED = auto()  # on_subprocess_end
+    ISSUE_ITERATION = auto()  # on_issue_iteration
+    ROUTING_SIGNAL = auto()  # on_routing_signal
+    SPRINT_ITERATION = auto()  # on_sprint_iteration
+    SELECTING_ISSUE = auto()  # on_selecting_issue
+    OUTPUT = auto()  # on_output
 
 
-class StepEventPayload(TypedDict):
+class StepEventPayload(TypedDict, total=False):
     """Payload for step-related events."""
 
     issue_id: str
     step_name: str
     step_index: int
     timestamp: str
+    # Extended fields for richer event data
+    model: str
+    next_step: str | None
+    retry_count: int
+    max_retry: int
+    error: str | None
 
 
 class IssueEventPayload(TypedDict):
@@ -52,7 +67,112 @@ class SprintEventPayload(TypedDict):
     timestamp: str
 
 
-EventPayload = StepEventPayload | IssueEventPayload | SprintEventPayload
+class StepSkippedPayload(TypedDict):
+    """Payload for STEP_SKIPPED event."""
+
+    issue_id: str
+    step_name: str
+    next_step: str | None
+    timestamp: str
+
+
+class ProcessHungPayload(TypedDict):
+    """Payload for PROCESS_HUNG event."""
+
+    step_name: str
+    seconds_inactive: int
+    timestamp: str
+
+
+class SubprocessStartedPayload(TypedDict):
+    """Payload for SUBPROCESS_STARTED event."""
+
+    pid: int
+    command: str
+    issue_id: str
+    step_name: str
+    timestamp: str
+
+
+class SubprocessOutputPayload(TypedDict):
+    """Payload for SUBPROCESS_OUTPUT event."""
+
+    line: str
+    issue_id: str
+    step_name: str
+    timestamp: str
+
+
+class SubprocessEndedPayload(TypedDict):
+    """Payload for SUBPROCESS_ENDED event."""
+
+    issue_id: str
+    step_name: str
+    timestamp: str
+
+
+class IssueIterationPayload(TypedDict):
+    """Payload for ISSUE_ITERATION event."""
+
+    total_iterations: int
+    max_iterations: int
+    retry_count: int
+    max_retry: int
+    issue_id: str
+    timestamp: str
+
+
+class RoutingSignalPayload(TypedDict):
+    """Payload for ROUTING_SIGNAL event."""
+
+    step_name: str
+    signal: str | None
+    next_step: str | None
+    issue_id: str
+    timestamp: str
+
+
+class SprintIterationPayload(TypedDict):
+    """Payload for SPRINT_ITERATION event."""
+
+    iteration: int
+    available_issues: int
+    completed_count: int
+    total_count: int
+    sprint_id: str
+    timestamp: str
+
+
+class SelectingIssuePayload(TypedDict):
+    """Payload for SELECTING_ISSUE event."""
+
+    sprint_id: str
+    timestamp: str
+
+
+class OutputPayload(TypedDict):
+    """Payload for OUTPUT event."""
+
+    text: str
+    source: str
+    timestamp: str
+
+
+EventPayload = (
+    StepEventPayload
+    | IssueEventPayload
+    | SprintEventPayload
+    | StepSkippedPayload
+    | ProcessHungPayload
+    | SubprocessStartedPayload
+    | SubprocessOutputPayload
+    | SubprocessEndedPayload
+    | IssueIterationPayload
+    | RoutingSignalPayload
+    | SprintIterationPayload
+    | SelectingIssuePayload
+    | OutputPayload
+)
 
 
 class WorkflowEventBus:

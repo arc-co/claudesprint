@@ -75,10 +75,10 @@ class LlmStepExecutor(StepExecutor):
             parse_step_output: Function to parse step output for routing
             requires_explicit_signal: Steps that require explicit signal matching
             output_patterns: Patterns for parsing step output
-            on_step_start: Callback when step starts
-            on_subprocess_start: Callback when subprocess starts
-            on_subprocess_end: Callback when subprocess ends
-            on_subprocess_output: Callback for subprocess output
+            on_step_start: Callback when step starts (emits STEP_STARTED event)
+            on_subprocess_start: Callback when subprocess starts (emits SUBPROCESS_STARTED event)
+            on_subprocess_end: Callback when subprocess ends (emits SUBPROCESS_ENDED event)
+            on_subprocess_output: Callback for subprocess output (emits SUBPROCESS_OUTPUT event)
         """
         self.prompt_service = prompt_service
         self.claude_runner = claude_runner
