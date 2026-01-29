@@ -674,8 +674,7 @@ def show_models() -> None:
         model = summary.get(step_name, "opus")
         default = STEP_DEFAULT_MODELS.get(step, "opus")
 
-        if step in [IssueStep.SELECT_ISSUE, IssueStep.RUN_TESTS, IssueStep.STAGE_CHANGES,
-                    IssueStep.COMMIT_CHANGES]:
+        if step in [IssueStep.RUN_TESTS, IssueStep.STAGE_CHANGES, IssueStep.COMMIT_CHANGES]:
             notes = "[dim]automated (no AI)[/dim]"
         else:
             notes = "[green]AI required[/green]" if model == "opus" else "[cyan]AI required[/cyan]"

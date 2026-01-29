@@ -242,8 +242,8 @@ class SprintEngine:
         If there's already an in_progress issue (from a previous interrupted
         session), that issue is resumed directly without running selection.
 
-        If current_issue.json exists with a pending issue (e.g., from
-        ISSUE_CHANGED transition), that issue is used directly.
+        If current_issue.json exists with a pending issue, that issue
+        is used directly.
 
         Args:
             sprint: Sprint model
@@ -258,7 +258,6 @@ class SprintEngine:
             return self._resume_in_progress_issue(in_progress_issue, current_issue)
 
         # Check if current_issue.json already has a valid pending issue
-        # (this happens after ISSUE_CHANGED when the select-issue step already picked an issue)
         existing_current = self.issue_service.read_current_issue()
         if existing_current and existing_current.issue_id:
             # Find this issue in the sprint
@@ -871,8 +870,7 @@ class SprintEngine:
                 )
 
                 if has_valid_context:
-                    # Use existing current_issue context (either resuming or continuing after
-                    # ISSUE_CHANGED from select-issue step)
+                    # Use existing current_issue context (resuming from previous session)
                     current_issue = existing_current_issue
 
                     # Ensure issue is marked as in_progress in sprint
@@ -971,29 +969,6 @@ class SprintEngine:
                         # Callback: issue complete
                         if self.on_issue_complete:
                             self.on_issue_complete(issue)
-
-                    case IssueExitReason.ISSUE_CHANGED:
-                        # The select-issue step transitioned to a new issue
-                        # Mark the OLD issue as complete
-                        self._mark_issue_complete(issue.id)
-                        issues_completed += 1
-
-                        # Callback: old issue complete
-                        if self.on_issue_complete:
-                            self.on_issue_complete(issue)
-
-                        # Atomically mark new issue as IN_PROGRESS to prevent state
-                        # inconsistency if process crashes before next loop iteration
-                        new_current_issue = self.issue_service.read_current_issue()
-                        if new_current_issue and new_current_issue.issue_id:
-                            self.sprint_service.mark_issue_status(
-                                self.sprint_path,
-                                new_current_issue.issue_id,
-                                IssueStatus.IN_PROGRESS,
-                            )
-
-                        # DON'T clear current_issue - it already has the new issue data
-                        # The next loop iteration will pick up the new issue and fire on_issue_start
 
                     case IssueExitReason.RATE_LIMITED:
                         # Handle rate limiting with backoff
