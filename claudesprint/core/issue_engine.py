@@ -196,6 +196,9 @@ class IssueEngine:
         self.on_subprocess_start: Callable[[int, str], None] | None = None  # (pid, command)
         self.on_subprocess_output: Callable[[str], None] | None = None  # (line)
         self.on_subprocess_end: Callable[[], None] | None = None
+        # New callbacks for iteration tracking and routing visibility
+        self.on_issue_iteration: Callable[[int, int, int, int], None] | None = None  # (total_iters, max_iters, retry, max_retry)
+        self.on_routing_signal: Callable[[IssueStep, str | None, IssueStep | None], None] | None = None  # (step, signal, next_step)
 
         # Step executors registry
         self._step_executors: dict[IssueStep, StepExecutor] = {}
@@ -274,6 +277,15 @@ class IssueEngine:
             # Increment total iterations before any step processing (including skips)
             current_issue.total_iterations += 1
             self.issue_service.write_current_issue(current_issue)
+
+            # Emit iteration callback for logging/tracking
+            if self.on_issue_iteration:
+                self.on_issue_iteration(
+                    current_issue.total_iterations,
+                    self.config.max_total_iterations,
+                    current_issue.retry_count,
+                    self.config.max_retry,
+                )
 
             # Check if we should skip the current step
             if self._should_skip_step(current_issue.step):
@@ -384,6 +396,10 @@ class IssueEngine:
 
             # Determine next step
             next_step = step_result.next_step
+
+            # Emit routing signal callback
+            if self.on_routing_signal:
+                self.on_routing_signal(current_issue.step, step_result.matched_signal, next_step)
 
             # Check if we're done
             if next_step is None:

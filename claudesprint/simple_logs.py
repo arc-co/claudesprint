@@ -6,12 +6,22 @@ with timestamps, providing a scrollable history of the entire execution.
 
 import time
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from rich.console import Console
 
 if TYPE_CHECKING:
     from claudesprint.core.issue_engine import IssueStep
+
+
+class LogVerbosity(StrEnum):
+    """Verbosity levels for log output."""
+
+    QUIET = "quiet"  # Errors/warnings only
+    NORMAL = "normal"  # Default: key events
+    VERBOSE = "verbose"  # All events + routing signals + iterations
+    DEBUG = "debug"  # Everything + internal state
 
 
 class SimpleLogsOutput:
@@ -30,18 +40,29 @@ class SimpleLogsOutput:
         [14:25:30] STEP implement | Complete (2m 15s)
     """
 
-    def __init__(self, console: Console | None = None) -> None:
+    def __init__(
+        self,
+        console: Console | None = None,
+        verbosity: LogVerbosity = LogVerbosity.NORMAL,
+    ) -> None:
         """Initialize the simple logs output.
 
         Args:
             console: Rich console for output. If None, creates a new one.
+            verbosity: Log verbosity level controlling output detail.
         """
         self.console = console or Console()
+        self.verbosity = verbosity
         self.current_issue: str | None = None
         self.current_step: str | None = None
         self.step_start_time: float | None = None
         self.sprint_total: int = 0
         self.sprint_completed: int = 0
+        # Track iteration state for warnings
+        self.issue_iterations: int = 0
+        self.max_iterations: int = 50
+        self.retry_count: int = 0
+        self.max_retry: int = 5
 
     def _timestamp(self) -> str:
         """Get current timestamp in HH:MM:SS format."""
@@ -56,6 +77,23 @@ class SimpleLogsOutput:
         """
         prefix = "  " * indent
         self.console.print(f"[dim][{self._timestamp()}][/dim] {prefix}{message}")
+
+    def _log_if(self, level: LogVerbosity, message: str, indent: int = 0) -> None:
+        """Log only if verbosity >= level.
+
+        Args:
+            level: Minimum verbosity level required for this message.
+            message: The message to print (can contain Rich markup).
+            indent: Number of indent levels (each level is 2 spaces).
+        """
+        levels = {
+            LogVerbosity.QUIET: 0,
+            LogVerbosity.NORMAL: 1,
+            LogVerbosity.VERBOSE: 2,
+            LogVerbosity.DEBUG: 3,
+        }
+        if levels[self.verbosity] >= levels[level]:
+            self._log(message, indent)
 
     def _format_elapsed(self, start_time: float | None) -> str:
         """Format elapsed time since start_time.
@@ -136,6 +174,69 @@ class SimpleLogsOutput:
 
     # Step events
 
+    def on_issue_iteration(
+        self,
+        total_iterations: int,
+        max_iterations: int,
+        retry_count: int,
+        max_retry: int,
+    ) -> None:
+        """Log iteration with early warnings at 70% threshold.
+
+        Args:
+            total_iterations: Current iteration count.
+            max_iterations: Maximum allowed iterations.
+            retry_count: Current retry count for the step.
+            max_retry: Maximum allowed retries.
+        """
+        self.issue_iterations = total_iterations
+        self.max_iterations = max_iterations
+        self.retry_count = retry_count
+        self.max_retry = max_retry
+
+        # Always log in VERBOSE mode
+        self._log_if(
+            LogVerbosity.VERBOSE,
+            f"[dim]ITER[/dim] {total_iterations}/{max_iterations} | retry {retry_count}/{max_retry}",
+        )
+
+        # Warn at 70% of limits (always visible)
+        iter_pct = total_iterations / max_iterations if max_iterations > 0 else 0
+        if 0.7 <= iter_pct < 1.0:
+            self._log(
+                f"[yellow]WARNING[/yellow] Approaching iteration limit: "
+                f"{total_iterations}/{max_iterations} ({iter_pct:.0%})"
+            )
+
+        retry_pct = retry_count / max_retry if max_retry > 0 else 0
+        if 0.6 <= retry_pct < 1.0:
+            self._log(f"[yellow]WARNING[/yellow] High retry count: {retry_count}/{max_retry}")
+
+    def on_routing_signal(
+        self,
+        step: "IssueStep",
+        signal: str | None,
+        next_step: "IssueStep | None",
+    ) -> None:
+        """Log routing decision (VERBOSE mode).
+
+        Args:
+            step: The current step.
+            signal: The matched routing signal, or None for default.
+            next_step: The next step to transition to.
+        """
+        next_name = next_step.value if next_step else "COMPLETE"
+        if signal:
+            self._log_if(
+                LogVerbosity.VERBOSE,
+                f"[dim]ROUTE[/dim] {step.value} --[cyan]{signal}[/cyan]--> {next_name}",
+            )
+        else:
+            self._log_if(
+                LogVerbosity.DEBUG,
+                f"[dim]ROUTE[/dim] {step.value} --[dim]default[/dim]--> {next_name}",
+            )
+
     def on_step_start(self, step: "IssueStep", model: str) -> None:
         """Log step start.
 
@@ -145,7 +246,12 @@ class SimpleLogsOutput:
         """
         self.current_step = step.value
         self.step_start_time = time.time()
-        self._log(f"[yellow]STEP[/yellow] {step.value} | Starting... (model: {model})")
+
+        iter_info = ""
+        if self.verbosity in (LogVerbosity.VERBOSE, LogVerbosity.DEBUG) and self.issue_iterations > 0:
+            iter_info = f" [dim](iter {self.issue_iterations}/{self.max_iterations})[/dim]"
+
+        self._log(f"[yellow]STEP[/yellow] {step.value} | Starting... (model: {model}){iter_info}")
 
     def on_step_complete(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
         """Log step completion.
@@ -168,14 +274,16 @@ class SimpleLogsOutput:
         """
         self._log(f"[dim]STEP[/dim] {step.value} | Skipped")
 
-    def on_step_failure(self, step: "IssueStep", retry_count: int) -> None:
+    def on_step_failure(self, step: "IssueStep", retry_count: int, max_retry: int = 5) -> None:
         """Log step failure.
 
         Args:
             step: The failed step.
             retry_count: Number of retries attempted.
+            max_retry: Maximum retry limit for context.
         """
-        self._log(f"[red]STEP[/red] {step.value} | Failed (retry {retry_count})")
+        color = "red" if retry_count >= max_retry * 0.6 else "yellow"
+        self._log(f"[{color}]STEP[/{color}] {step.value} | Failed (retry {retry_count}/{max_retry})")
 
     # Subprocess/agent output
 
