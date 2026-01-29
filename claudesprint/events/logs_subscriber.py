@@ -71,6 +71,8 @@ class LogsEventSubscriber:
         self._event_bus.subscribe(WorkflowEvent.ROUTING_SIGNAL, self._on_routing_signal)
 
         # Sprint events
+        self._event_bus.subscribe(WorkflowEvent.SPRINT_STARTED, self._on_sprint_started)
+        self._event_bus.subscribe(WorkflowEvent.SPRINT_COMPLETED, self._on_sprint_completed)
         self._event_bus.subscribe(WorkflowEvent.SPRINT_ITERATION, self._on_sprint_iteration)
         self._event_bus.subscribe(WorkflowEvent.SELECTING_ISSUE, self._on_selecting_issue)
 
@@ -102,6 +104,8 @@ class LogsEventSubscriber:
         self._event_bus.unsubscribe(WorkflowEvent.ROUTING_SIGNAL, self._on_routing_signal)
 
         # Sprint events
+        self._event_bus.unsubscribe(WorkflowEvent.SPRINT_STARTED, self._on_sprint_started)
+        self._event_bus.unsubscribe(WorkflowEvent.SPRINT_COMPLETED, self._on_sprint_completed)
         self._event_bus.unsubscribe(WorkflowEvent.SPRINT_ITERATION, self._on_sprint_iteration)
         self._event_bus.unsubscribe(WorkflowEvent.SELECTING_ISSUE, self._on_selecting_issue)
 
@@ -166,12 +170,15 @@ class LogsEventSubscriber:
         """Handle ISSUE_STARTED event."""
         issue_id = payload.get("issue_id", "")
         issue_name = payload.get("issue_name", "")
+        self._output.on_issue_entered(issue_id, issue_name)
         self._output.set_issue(issue_id, issue_name)
 
     def _on_issue_completed(self, payload: EventPayload) -> None:
         """Handle ISSUE_COMPLETED event."""
         issue_id = payload.get("issue_id", "")
+        exit_reason = payload.get("exit_reason", "completed")
         self._output.on_issue_complete(issue_id)
+        self._output.on_issue_exited(issue_id, exit_reason)
 
     def _on_issue_iteration(self, payload: EventPayload) -> None:
         """Handle ISSUE_ITERATION event."""
@@ -190,6 +197,20 @@ class LogsEventSubscriber:
         next_step = self._step_from_name(next_step_name) if next_step_name else None
         if step:
             self._output.on_routing_signal(step, signal, next_step)
+
+    def _on_sprint_started(self, payload: EventPayload) -> None:
+        """Handle SPRINT_STARTED event."""
+        spec_id = payload.get("sprint_id", "")
+        total = payload.get("total_count", 0)
+        completed = payload.get("completed_count", 0)
+        self._output.on_sprint_entered(spec_id, total, completed)
+
+    def _on_sprint_completed(self, payload: EventPayload) -> None:
+        """Handle SPRINT_COMPLETED event."""
+        spec_id = payload.get("sprint_id", "")
+        total = payload.get("total_count", 0)
+        completed = payload.get("completed_count", 0)
+        self._output.on_sprint_exited(spec_id, total, completed)
 
     def _on_sprint_iteration(self, payload: EventPayload) -> None:
         """Handle SPRINT_ITERATION event."""
