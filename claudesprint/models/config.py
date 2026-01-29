@@ -9,6 +9,29 @@ from pydantic import AliasChoices, BaseModel, Field
 from pydantic_settings import BaseSettings
 
 
+# Map of config field name -> environment variable name (module-level constant)
+_ENV_VAR_MAP: dict[str, str] = {
+    "max_retry": "CLAUDESPRINT_MAX_RETRY",
+    "max_total_iterations": "CLAUDESPRINT_MAX_TOTAL_ITERATIONS",
+    "claude_timeout": "CLAUDESPRINT_CLAUDE_TIMEOUT",
+    "total_timeout": "CLAUDESPRINT_TOTAL_TIMEOUT",
+    "rate_limit_retries": "CLAUDESPRINT_RATE_LIMIT_RETRIES",
+    "rate_limit_base_wait": "CLAUDESPRINT_RATE_LIMIT_BASE_WAIT",
+    "rate_limit_max_wait": "CLAUDESPRINT_RATE_LIMIT_MAX_WAIT",
+    "heartbeat_enabled": "CLAUDESPRINT_HEARTBEAT_ENABLED",
+    "heartbeat_timeout": "CLAUDESPRINT_HEARTBEAT_TIMEOUT",
+    "heartbeat_check_interval": "CLAUDESPRINT_HEARTBEAT_CHECK_INTERVAL",
+    "debug_conversations": "CLAUDESPRINT_DEBUG_CONVERSATIONS",
+    "kill_timeout": "CLAUDESPRINT_KILL_TIMEOUT",
+    "git_timeout": "CLAUDESPRINT_GIT_TIMEOUT",
+    "http_timeout": "CLAUDESPRINT_HTTP_TIMEOUT",
+    "issue_delay": "CLAUDESPRINT_ISSUE_DELAY",
+    "min_output_length": "CLAUDESPRINT_MIN_OUTPUT_LENGTH",
+    "version_check_timeout": "CLAUDESPRINT_VERSION_CHECK_TIMEOUT",
+    "install_timeout": "CLAUDESPRINT_INSTALL_TIMEOUT",
+}
+
+
 class BarkConfig(BaseModel):
     """Bark push notification configuration."""
 
@@ -26,7 +49,13 @@ class NotificationConfig(BaseModel):
 class ClaudesprintConfig(BaseSettings):
     """Main configuration for ClaudeSprint.
 
-    Environment variables override defaults:
+    Configuration precedence (highest to lowest):
+    1. Environment variables (CLAUDESPRINT_*)
+    2. Project config (.claudesprint/config.toml) - per-project settings
+    3. Global config (~/.config/claudesprint/config.toml) - shared defaults
+    4. Hardcoded defaults
+
+    Environment variables:
     - CLAUDESPRINT_MAX_RETRY: Maximum retry count (default: 5)
     - CLAUDESPRINT_CLAUDE_TIMEOUT: Timeout for Claude sessions in seconds (default: 1800 = 30 min)
     - CLAUDESPRINT_TOTAL_TIMEOUT: Total runtime limit in seconds (default: 28800 = 8 hours, 0 = unlimited)
@@ -36,6 +65,7 @@ class ClaudesprintConfig(BaseSettings):
     - CLAUDESPRINT_MAX_TOTAL_ITERATIONS: Maximum total step executions per issue (default: 50, prevents infinite loops)
     """
 
+    # Runtime settings
     max_retry: Annotated[int, Field(ge=1)] = Field(
         default=5,
         description="Maximum number of retries before giving up",
@@ -56,6 +86,8 @@ class ClaudesprintConfig(BaseSettings):
         description="Total runtime limit in seconds (0 = unlimited)",
         validation_alias=AliasChoices("total_timeout", "CLAUDESPRINT_TOTAL_TIMEOUT"),
     )
+
+    # Rate limiting settings
     rate_limit_retries: Annotated[int, Field(ge=0)] = Field(
         default=3,
         description="Max rate limit retries before exiting (0 = exit immediately)",
@@ -71,6 +103,8 @@ class ClaudesprintConfig(BaseSettings):
         description="Maximum wait time in seconds for rate limit backoff (default 15 min)",
         validation_alias=AliasChoices("rate_limit_max_wait", "CLAUDESPRINT_RATE_LIMIT_MAX_WAIT"),
     )
+
+    # Heartbeat settings
     heartbeat_timeout: Annotated[int, Field(ge=60)] = Field(
         default=600,
         description="Seconds of inactivity before triggering hung process notification",
@@ -81,10 +115,64 @@ class ClaudesprintConfig(BaseSettings):
         description="Enable heartbeat monitoring for hung process detection",
         validation_alias=AliasChoices("heartbeat_enabled", "CLAUDESPRINT_HEARTBEAT_ENABLED"),
     )
+    heartbeat_check_interval: float = Field(
+        default=10.0,
+        ge=1.0,
+        description="How often to check for inactivity in seconds",
+        validation_alias=AliasChoices("heartbeat_check_interval", "CLAUDESPRINT_HEARTBEAT_CHECK_INTERVAL"),
+    )
+
+    # Debug settings
     debug_conversations: bool = Field(
         default=False,
         description="Log full agent inputs and outputs to agent_conversations.log",
         validation_alias=AliasChoices("debug_conversations", "CLAUDESPRINT_DEBUG_CONVERSATIONS"),
+    )
+
+    # Timeout settings
+    kill_timeout: int = Field(
+        default=10,
+        ge=1,
+        description="Grace period before SIGKILL when terminating Claude",
+        validation_alias=AliasChoices("kill_timeout", "CLAUDESPRINT_KILL_TIMEOUT"),
+    )
+    git_timeout: int = Field(
+        default=60,
+        ge=10,
+        description="Git command timeout in seconds",
+        validation_alias=AliasChoices("git_timeout", "CLAUDESPRINT_GIT_TIMEOUT"),
+    )
+    http_timeout: float = Field(
+        default=10.0,
+        ge=1.0,
+        description="HTTP request timeout for notifications in seconds",
+        validation_alias=AliasChoices("http_timeout", "CLAUDESPRINT_HTTP_TIMEOUT"),
+    )
+    issue_delay: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Delay between processing issues in a sprint",
+        validation_alias=AliasChoices("issue_delay", "CLAUDESPRINT_ISSUE_DELAY"),
+    )
+
+    # Advanced settings
+    min_output_length: int = Field(
+        default=50,
+        ge=1,
+        description="Minimum output length to consider a Claude response valid",
+        validation_alias=AliasChoices("min_output_length", "CLAUDESPRINT_MIN_OUTPUT_LENGTH"),
+    )
+    version_check_timeout: int = Field(
+        default=10,
+        ge=1,
+        description="Health check version check timeout in seconds",
+        validation_alias=AliasChoices("version_check_timeout", "CLAUDESPRINT_VERSION_CHECK_TIMEOUT"),
+    )
+    install_timeout: int = Field(
+        default=120,
+        ge=10,
+        description="Health check dependency install timeout in seconds",
+        validation_alias=AliasChoices("install_timeout", "CLAUDESPRINT_INSTALL_TIMEOUT"),
     )
 
     # Paths (derived from script location) - kept for backward compatibility
@@ -98,6 +186,72 @@ class ClaudesprintConfig(BaseSettings):
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    @staticmethod
+    def _get_project_config_values(project_root: str) -> dict[str, Any]:
+        """Load config values from project config file.
+
+        Only returns values for fields where no environment variable is set.
+        This ensures env vars have highest precedence.
+
+        Args:
+            project_root: Path to the project root directory
+
+        Returns:
+            Dict with project config values to use
+        """
+        # Lazy import to avoid circular dependency
+        from claudesprint.services.project_config_service import ProjectConfigService
+
+        service = ProjectConfigService(project_root)
+        if not service.exists():
+            return {}
+
+        config = service.load()
+
+        # Flatten project config into our field names
+        result: dict[str, Any] = {}
+
+        # Runtime settings
+        result["max_retry"] = config.runtime.max_retry
+        result["max_total_iterations"] = config.runtime.max_total_iterations
+        result["claude_timeout"] = config.runtime.claude_timeout
+        result["total_timeout"] = config.runtime.total_timeout
+
+        # Rate limiting settings
+        result["rate_limit_retries"] = config.rate_limiting.retries
+        result["rate_limit_base_wait"] = config.rate_limiting.base_wait
+        result["rate_limit_max_wait"] = config.rate_limiting.max_wait
+
+        # Heartbeat settings
+        result["heartbeat_enabled"] = config.heartbeat.enabled
+        result["heartbeat_timeout"] = config.heartbeat.timeout
+        result["heartbeat_check_interval"] = config.heartbeat.check_interval
+
+        # Debug settings
+        result["debug_conversations"] = config.debug.conversations
+
+        # Timeout settings
+        result["kill_timeout"] = config.timeouts.kill_timeout
+        result["git_timeout"] = config.timeouts.git_timeout
+        result["http_timeout"] = config.timeouts.http_timeout
+        result["issue_delay"] = config.timeouts.issue_delay
+
+        # Advanced settings
+        result["min_output_length"] = config.advanced.min_output_length
+        result["version_check_timeout"] = config.advanced.version_check_timeout
+        result["install_timeout"] = config.advanced.install_timeout
+
+        # Filter out fields where env var is set (env vars take precedence)
+        filtered: dict[str, Any] = {}
+        for field_name, value in result.items():
+            env_var = _ENV_VAR_MAP.get(field_name)
+            if env_var and os.environ.get(env_var) is not None:
+                # Env var is set, skip this field
+                continue
+            filtered[field_name] = value
+
+        return filtered
 
     @staticmethod
     def _get_global_defaults() -> dict[str, Any]:
@@ -118,24 +272,10 @@ class ClaudesprintConfig(BaseSettings):
 
         flat = service.get_flat_dict()
 
-        # Map of field name -> env var name
-        env_var_map = {
-            "max_retry": "CLAUDESPRINT_MAX_RETRY",
-            "max_total_iterations": "CLAUDESPRINT_MAX_TOTAL_ITERATIONS",
-            "claude_timeout": "CLAUDESPRINT_CLAUDE_TIMEOUT",
-            "total_timeout": "CLAUDESPRINT_TOTAL_TIMEOUT",
-            "rate_limit_retries": "CLAUDESPRINT_RATE_LIMIT_RETRIES",
-            "rate_limit_base_wait": "CLAUDESPRINT_RATE_LIMIT_BASE_WAIT",
-            "rate_limit_max_wait": "CLAUDESPRINT_RATE_LIMIT_MAX_WAIT",
-            "heartbeat_enabled": "CLAUDESPRINT_HEARTBEAT_ENABLED",
-            "heartbeat_timeout": "CLAUDESPRINT_HEARTBEAT_TIMEOUT",
-            "debug_conversations": "CLAUDESPRINT_DEBUG_CONVERSATIONS",
-        }
-
         # Only include values where env var is not set
         result: dict[str, Any] = {}
         for field_name, value in flat.items():
-            env_var = env_var_map.get(field_name)
+            env_var = _ENV_VAR_MAP.get(field_name)
             if env_var and os.environ.get(env_var) is not None:
                 # Env var is set, skip this field (let pydantic-settings handle it)
                 continue
@@ -149,8 +289,8 @@ class ClaudesprintConfig(BaseSettings):
 
         Configuration precedence (highest to lowest):
         1. Environment variables (CLAUDESPRINT_*)
-        2. Project config (.claudesprint/.env)
-        3. Global config (~/.config/claudesprint/config.toml)
+        2. Project config (.claudesprint/config.toml) - per-project settings
+        3. Global config (~/.config/claudesprint/config.toml) - shared defaults
         4. Hardcoded defaults
 
         Args:
@@ -162,10 +302,7 @@ class ClaudesprintConfig(BaseSettings):
         claude_dir = os.path.join(project_root, ".claude")
         claudesprint_dir = os.path.join(project_root, ".claudesprint")
 
-        # Load global config defaults first
-        global_defaults = cls._get_global_defaults()
-
-        # Build kwargs with global defaults (pydantic-settings will override with env vars)
+        # Build kwargs with path settings first
         kwargs: dict[str, Any] = {
             "claude_dir": claude_dir,
             "project_dir": os.path.join(claudesprint_dir, "project"),
@@ -173,24 +310,43 @@ class ClaudesprintConfig(BaseSettings):
             "prompts_dir": os.path.join(claudesprint_dir, "prompts"),
         }
 
-        # Apply global config defaults for fields that have them
-        # Only set if the global config has a value (not relying on Pydantic defaults)
-        field_mapping = {
-            "max_retry": "max_retry",
-            "max_total_iterations": "max_total_iterations",
-            "claude_timeout": "claude_timeout",
-            "total_timeout": "total_timeout",
-            "rate_limit_retries": "rate_limit_retries",
-            "rate_limit_base_wait": "rate_limit_base_wait",
-            "rate_limit_max_wait": "rate_limit_max_wait",
-            "heartbeat_enabled": "heartbeat_enabled",
-            "heartbeat_timeout": "heartbeat_timeout",
-            "debug_conversations": "debug_conversations",
-        }
+        # Load global config defaults first (lowest precedence)
+        global_defaults = cls._get_global_defaults()
 
-        for field_name, global_key in field_mapping.items():
-            if global_key in global_defaults:
-                kwargs[field_name] = global_defaults[global_key]
+        # All config fields that can be loaded from config files
+        config_fields = [
+            "max_retry",
+            "max_total_iterations",
+            "claude_timeout",
+            "total_timeout",
+            "rate_limit_retries",
+            "rate_limit_base_wait",
+            "rate_limit_max_wait",
+            "heartbeat_enabled",
+            "heartbeat_timeout",
+            "heartbeat_check_interval",
+            "debug_conversations",
+            "kill_timeout",
+            "git_timeout",
+            "http_timeout",
+            "issue_delay",
+            "min_output_length",
+            "version_check_timeout",
+            "install_timeout",
+        ]
+
+        # Apply global config defaults (fallback)
+        for field_name in config_fields:
+            if field_name in global_defaults:
+                kwargs[field_name] = global_defaults[field_name]
+
+        # Load project config values (higher precedence than global)
+        project_config = cls._get_project_config_values(project_root)
+
+        # Apply project config values (overrides global defaults)
+        for field_name in config_fields:
+            if field_name in project_config:
+                kwargs[field_name] = project_config[field_name]
 
         return cls(**kwargs)
 

@@ -1066,8 +1066,8 @@ class SprintEngine:
                 if issue_result.exit_reason == IssueExitReason.COMPLETED:
                     self._rate_limit_retries = 0
 
-                # Small delay between issues
-                time.sleep(2)
+                # Small delay between issues (configurable via config.issue_delay)
+                time.sleep(self.config.issue_delay)
 
         finally:
             lock.release()

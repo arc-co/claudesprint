@@ -387,6 +387,12 @@ class TestDefaultProjectConfigToml:
         assert "server" in data
         assert "models" in data
         assert "hooks" in data
+        assert "runtime" in data
+        assert "rate_limiting" in data
+        assert "heartbeat" in data
+        assert "debug" in data
+        assert "timeouts" in data
+        assert "advanced" in data
 
     def test_template_has_all_sections(self) -> None:
         """Test template has all expected sections."""
@@ -394,6 +400,14 @@ class TestDefaultProjectConfigToml:
         assert "[models]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[models.steps]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[models.special]" in DEFAULT_PROJECT_CONFIG_TOML
+        # Runtime and other new sections
+        assert "[runtime]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[rate_limiting]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[heartbeat]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[debug]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[timeouts]" in DEFAULT_PROJECT_CONFIG_TOML
+        assert "[advanced]" in DEFAULT_PROJECT_CONFIG_TOML
+        # Hooks
         assert "[hooks.test]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.lint]" in DEFAULT_PROJECT_CONFIG_TOML
         assert "[hooks.typecheck]" in DEFAULT_PROJECT_CONFIG_TOML

@@ -37,11 +37,19 @@ class NotificationService:
         NotificationType.HUNG_PROCESS: "ClaudeSprint - Hung Process",
     }
 
-    def __init__(self, config_path: str | Path | None = None) -> None:
+    # Default HTTP timeout (can be overridden via config)
+    DEFAULT_HTTP_TIMEOUT = 10.0
+
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        http_timeout: float | None = None,
+    ) -> None:
         self.config: NotificationConfig | None = None
         self._client: httpx.AsyncClient | None = None
         self._queue: asyncio.Queue[tuple[NotificationType, str, str | None]] | None = None
         self._worker_task: asyncio.Task[None] | None = None
+        self._http_timeout = http_timeout if http_timeout is not None else self.DEFAULT_HTTP_TIMEOUT
 
         if config_path:
             self.load_config(config_path)
@@ -85,7 +93,7 @@ class NotificationService:
         url = f"{self.config.bark.url}/{encoded_title}/{encoded_message}"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=self._http_timeout) as client:
                 response = await client.get(url)
                 if response.status_code != 200:
                     logger.warning(
@@ -114,7 +122,7 @@ class NotificationService:
 
         try:
             # Fire and forget - don't wait for response
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=self._http_timeout) as client:
                 response = client.get(url)
                 if response.status_code != 200:
                     logger.warning(
