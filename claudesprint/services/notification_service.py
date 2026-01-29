@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 
 if TYPE_CHECKING:
+    from claudesprint.services.configuration_manager import ConfigurationManager
     from claudesprint.services.project_config_service import (
         NotificationsConfig,
         ProjectConfigService,
@@ -56,23 +57,22 @@ class NotificationService:
         self._http_timeout = http_timeout if http_timeout is not None else self.DEFAULT_HTTP_TIMEOUT
 
     @classmethod
-    def from_project_config(
+    def from_config_manager(
         cls,
-        project_config_service: ProjectConfigService,
+        config_manager: "ConfigurationManager",
         http_timeout: float | None = None,
-    ) -> NotificationService:
-        """Create NotificationService from ProjectConfigService (TOML).
+    ) -> "NotificationService":
+        """Create NotificationService from ConfigurationManager.
 
         Args:
-            project_config_service: The project config service to load from.
+            config_manager: The configuration manager to load from.
             http_timeout: Optional HTTP timeout override.
 
         Returns:
             Configured NotificationService instance.
         """
         instance = cls(http_timeout=http_timeout)
-        config = project_config_service.load()
-        instance._notifications_config = config.notifications
+        instance._notifications_config = config_manager.project.notifications
         return instance
 
     @property
