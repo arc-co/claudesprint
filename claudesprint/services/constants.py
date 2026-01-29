@@ -14,23 +14,27 @@ ClaudeSprint checks this directory first before falling back to built-in prompts
 
 ## Available Prompts
 
-- `PROMPT_init.md` - Sprint initialization from spec
-- `PROMPT_plan.md` - Planning mode
-- `PROMPT_implement.md` - Implementation step
-- `PROMPT_write-tests.md` - Test writing step
-- `PROMPT_run-tests.md` - Test execution step
-- `PROMPT_fix-tests.md` - Test fixing step
-- `PROMPT_browser-validation.md` - Browser QA step
-- `PROMPT_code-review.md` - Code review step
-- `PROMPT_fix-code-review-issues.md` - Code review fixes
-- `PROMPT_update-docs.md` - Documentation updates
+- `PROMPT_init.xml.j2` - Sprint initialization from spec
+- `PROMPT_plan.xml.j2` - Planning mode
+- `PROMPT_select-issue.xml.j2` - Issue selection step
+- `PROMPT_read-docs.xml.j2` - Documentation reading step
+- `PROMPT_implement.xml.j2` - Implementation step
+- `PROMPT_write-tests.xml.j2` - Test writing step
+- `PROMPT_run-tests.xml.j2` - Test execution step
+- `PROMPT_fix-tests.xml.j2` - Test fixing step
+- `PROMPT_browser-validation.xml.j2` - Browser QA step
+- `PROMPT_code-review.xml.j2` - Code review step
+- `PROMPT_fix-code-review-issues.xml.j2` - Code review fixes
+- `PROMPT_update-docs.xml.j2` - Documentation updates
+- `PROMPT_stage-changes.xml.j2` - Stage changes step
+- `PROMPT_commit-changes.xml.j2` - Commit changes step
 
 ## Example
 
 To customize the implementation prompt:
 
 1. Copy the built-in prompt (or create from scratch)
-2. Save as `.claudesprint/prompts/PROMPT_implement.md`
+2. Save as `.claudesprint/prompts/PROMPT_implement.xml.j2`
 3. ClaudeSprint will use your version instead
 
 ## Notes

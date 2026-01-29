@@ -94,7 +94,6 @@ class ClaudeRunner:
         timeout: int = 1800,  # 30 minutes default
         kill_timeout: int | None = None,  # Grace period before SIGKILL (from config)
         min_output_length: int | None = None,  # Override min output length (from config)
-        common_prompt_file: str | Path | None = None,  # Prepended to all prompts
         conversation_log_file: str | Path | None = None,  # Debug conversation logging
         conversation_logger: ConversationLogger | None = None,  # Injected logger (for testing)
     ) -> None:
@@ -102,7 +101,6 @@ class ClaudeRunner:
         self.timeout = timeout
         self.kill_timeout = kill_timeout if kill_timeout is not None else self.DEFAULT_KILL_TIMEOUT
         self.min_output_length = min_output_length if min_output_length is not None else self.DEFAULT_MIN_OUTPUT_LENGTH
-        self.common_prompt_file = Path(common_prompt_file) if common_prompt_file else None
         self._rate_limit_patterns = [
             re.compile(p, re.IGNORECASE) for p in self.RATE_LIMIT_PATTERNS
         ]
@@ -302,7 +300,7 @@ class ClaudeRunner:
 
         Args:
             prompt_content: The fully prepared prompt content to send to Claude.
-            source_name: Name for logging purposes (e.g., "PROMPT_init.md").
+            source_name: Name for logging purposes (e.g., "PROMPT_init.xml.j2").
             output_file: Optional file to capture output for rate limit detection.
             on_output: Optional callback for streaming output lines.
             model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
@@ -521,8 +519,7 @@ class ClaudeRunner:
 
         For XML templates, common patterns are included via Jinja2 template
         inheritance ({% include '_common.xml.j2' %}) and context data is
-        embedded in <artifact> tags. The common_prompt_file parameter is
-        preserved for backwards compatibility but is not used with XML templates.
+        embedded in <artifact> tags.
 
         Args:
             prompt_content: The base prompt content.
@@ -531,21 +528,9 @@ class ClaudeRunner:
         Returns:
             The fully prepared prompt content.
         """
-        result = prompt_content
-
-        # For backwards compatibility with legacy markdown prompts,
-        # prepend common_prompt_file if configured. XML templates
-        # use {% include '_common.xml.j2' %} instead.
-        if self.common_prompt_file and self.common_prompt_file.exists():
-            common_content = self.common_prompt_file.read_text()
-            result = common_content + "\n\n---\n\n" + result
-
-        # Prepend context if provided (deprecated for XML templates which
-        # embed context via <artifact> tags in the template)
         if context:
-            result = context + "\n\n" + result
-
-        return result
+            return context + "\n\n" + prompt_content
+        return prompt_content
 
     def run_prompt(
         self,
@@ -605,7 +590,7 @@ class ClaudeRunner:
 
         Args:
             prompt_content: The prompt content to send to Claude.
-            source_name: Name for logging purposes (e.g., "PROMPT_init.md").
+            source_name: Name for logging purposes (e.g., "PROMPT_init.xml.j2").
             output_file: Optional file to capture output for rate limit detection.
             on_output: Optional callback for streaming output lines.
             model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
@@ -652,11 +637,6 @@ class ClaudeRunner:
             )
 
         prompt_content = prompt_path.read_text()
-
-        # Prepend common prompt content if configured
-        if self.common_prompt_file and self.common_prompt_file.exists():
-            common_content = self.common_prompt_file.read_text()
-            prompt_content = common_content + "\n\n---\n\n" + prompt_content
 
         start_time = time.time()
         output_lines: list[str] = []
@@ -805,11 +785,6 @@ class ClaudeRunner:
             return
 
         prompt_content = prompt_path.read_text()
-
-        # Prepend common prompt content if configured
-        if self.common_prompt_file and self.common_prompt_file.exists():
-            common_content = self.common_prompt_file.read_text()
-            prompt_content = common_content + "\n\n---\n\n" + prompt_content
 
         start_time = time.time()
         process_manager = get_process_manager()

@@ -48,52 +48,6 @@ class TestXMLTemplateCommonPatterns:
         assert "Common rule here" in content
         assert "Do the thing" in content
 
-    def test_legacy_common_prompt_file_still_works(self, tmp_path: Path):
-        """ClaudeRunner's common_prompt_file should still work for backwards compatibility."""
-        # Create mock common file (legacy markdown format)
-        common_file = tmp_path / "_common.md"
-        common_file.write_text("# Common Patterns\n\nContext rules here.")
-
-        # Create mock prompt file
-        prompt_file = tmp_path / "PROMPT_test.md"
-        prompt_file.write_text("# Step: test\n\nDo the thing.")
-
-        # Create runner with common file
-        runner = ClaudeRunner(
-            project_root=tmp_path,
-            timeout=60,
-            common_prompt_file=common_file,
-        )
-
-        # Simulate what _prepare_prompt_content does
-        prompt_content = prompt_file.read_text()
-        assembled = runner._prepare_prompt_content(prompt_content)
-
-        # Verify structure - common should be prepended
-        assert "# Common Patterns" in assembled
-        assert "Context rules here." in assembled
-        assert "# Step: test" in assembled
-
-    def test_prompt_works_without_common_file(self, tmp_path: Path):
-        """Prompt should work when no common file exists."""
-        # Create only prompt file (no common file)
-        prompt_file = tmp_path / "PROMPT_test.md"
-        prompt_file.write_text("# Step: test\n\nDo the thing.")
-
-        # Create runner pointing to non-existent common file
-        runner = ClaudeRunner(
-            project_root=tmp_path,
-            timeout=60,
-            common_prompt_file=tmp_path / "_common.md",  # Does not exist
-        )
-
-        # Simulate what _prepare_prompt_content does
-        prompt_content = prompt_file.read_text()
-        assembled = runner._prepare_prompt_content(prompt_content)
-
-        # Should just be the prompt content (no common file prepended)
-        assert assembled == "# Step: test\n\nDo the thing."
-
     def test_real_common_xml_file_structure(self):
         """Test the actual _common.xml.j2 file from the project."""
         common_file = Path(__file__).parent.parent / "claudesprint" / "prompts" / "_common.xml.j2"

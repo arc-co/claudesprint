@@ -24,6 +24,7 @@ from claudesprint.services.git_service import GitService
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
+from claudesprint.services.prompt_service import PromptService, PromptContext
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
 
@@ -89,6 +90,7 @@ class SprintEngine:
         sprint_service: SprintService,
         issue_service: IssueService,
         notification_service: NotificationService,
+        prompt_service: PromptService,
         claude_runner: ClaudeRunner,
         # Injected Factory
         issue_engine_factory: IssueEngineFactory,
@@ -102,6 +104,7 @@ class SprintEngine:
             sprint_service: Injected SprintService instance
             issue_service: Injected IssueService instance
             notification_service: Injected NotificationService instance
+            prompt_service: Injected PromptService instance
             claude_runner: Injected ClaudeRunner instance
             issue_engine_factory: Factory function to create IssueEngine instances
         """
@@ -114,6 +117,7 @@ class SprintEngine:
         self.sprint_service = sprint_service
         self.issue_service = issue_service
         self.notification_service = notification_service
+        self.prompt_service = prompt_service
         self.claude_runner = claude_runner
 
         # Injected factory
@@ -236,7 +240,7 @@ class SprintEngine:
     def select_issue(self, sprint: Sprint) -> IssueSelectionResult:
         """Select next issue using agent-driven selection.
 
-        This runs PROMPT_select-issue.md to have the agent choose
+        This runs PROMPT_select-issue.xml.j2 to have the agent choose
         the next issue based on priority, dependencies, and context.
 
         If there's already an in_progress issue (from a previous interrupted
@@ -313,7 +317,7 @@ class SprintEngine:
         sprint: Sprint,
         available: list[Issue],
     ) -> IssueSelectionResult:
-        """Run agent-driven issue selection using PROMPT_select-issue.md.
+        """Run agent-driven issue selection using PROMPT_select-issue.xml.j2.
 
         Args:
             sprint: Sprint model
@@ -322,6 +326,8 @@ class SprintEngine:
         Returns:
             IssueSelectionResult with selected issue or error
         """
+        import json
+
         # Prepare current_issue.json for the agent with sprint context
         current_issue = CurrentIssue.create_initial(str(self.sprint_path))
         current_issue.step = IssueStep.SELECT_ISSUE
@@ -336,15 +342,44 @@ class SprintEngine:
                 error="Failed to write current_issue.json for issue selection",
             )
 
-        # Get prompt file for selection
-        prompt_file = self.config.get_prompt_file("select-issue")
-        if not Path(prompt_file).exists():
+        # Build template context for select-issue prompt
+        # For select-issue, we need full sprint data (all issues)
+        sprint_json = ""
+        if self.sprint_path.exists():
+            try:
+                sprint_data = json.loads(self.sprint_path.read_text())
+                sprint_json = json.dumps(sprint_data, indent=2)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        current_issue_json = current_issue.model_dump_json(indent=2)
+        log_tail = self.issue_service.read_log_tail(num_lines=50)
+
+        # Get base context and build full context
+        base_context = self.prompt_service.context
+        template_context = PromptContext(
+            browser_validation_enabled=base_context.browser_validation_enabled,
+            context7_available=base_context.context7_available,
+            custom_vars=base_context.custom_vars,
+            step_name="select-issue",
+            step_goal="Select next issue from sprint",
+            sprint_json=sprint_json,
+            current_issue_json=current_issue_json,
+            log_tail=log_tail,
+            current_failures="",
+        )
+        self.prompt_service.set_context(template_context)
+
+        # Get prompt content using PromptService (handles .xml.j2 templates)
+        try:
+            prompt_content = self.prompt_service.get_prompt_content("select-issue")
+        except FileNotFoundError:
             return IssueSelectionResult(
                 success=False,
                 issue_id=None,
                 issue_title=None,
                 rationale="",
-                error=f"Prompt file not found: {prompt_file}",
+                error="Prompt not found: PROMPT_select-issue.xml.j2",
             )
 
         # Run Claude with the selection prompt
@@ -355,8 +390,9 @@ class SprintEngine:
                 f"{'=' * 60}\n"
             )
 
-        result: ClaudeResult = self.claude_runner.run_prompt(
-            prompt_file,
+        result: ClaudeResult = self.claude_runner.run_with_content(
+            prompt_content,
+            source_name="PROMPT_select-issue.xml.j2",
             on_output=self.on_output,
         )
 

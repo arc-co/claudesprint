@@ -223,7 +223,6 @@ def _run_sprint_console(
         timeout=config.claude_timeout,
         kill_timeout=config.kill_timeout,
         min_output_length=config.min_output_length,
-        common_prompt_file=config.get_prompt_file("common"),
         conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
     )
 
@@ -236,7 +235,6 @@ def _run_sprint_console(
             timeout=config.claude_timeout,
             kill_timeout=config.kill_timeout,
             min_output_length=config.min_output_length,
-            common_prompt_file=config.get_prompt_file("common"),
             conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
         return IssueEngine(
@@ -257,6 +255,7 @@ def _run_sprint_console(
         sprint_service=sprint_service,
         issue_service=issue_service,
         notification_service=notification_service,
+        prompt_service=prompt_service,
         claude_runner=claude_runner,
         issue_engine_factory=issue_engine_factory,
     )
@@ -396,7 +395,7 @@ def init_project(
     try:
         prompt_content = prompt_service.get_prompt_content("init")
     except FileNotFoundError:
-        console.print("[red]Error: PROMPT_init.md not found in package[/red]")
+        console.print("[red]Error: PROMPT_init.xml.j2 not found in package[/red]")
         raise typer.Exit(1)
 
     # Get model for init step
@@ -430,7 +429,7 @@ Read the spec file and populate the sprint.json with all required issues.
     )
     result = runner.run_with_content(
         prompt_content,
-        source_name="PROMPT_init.md",
+        source_name="PROMPT_init.xml.j2",
         on_output=lambda line: console.print(line),
         model=model,
         context=context,
@@ -471,7 +470,7 @@ def run_planner(
     try:
         prompt_content = prompt_service.get_prompt_content("plan")
     except FileNotFoundError:
-        console.print("[red]Error: PROMPT_plan.md not found in package[/red]")
+        console.print("[red]Error: PROMPT_plan.xml.j2 not found in package[/red]")
         raise typer.Exit(1)
 
     # Get model for plan step
@@ -493,7 +492,7 @@ def run_planner(
     )
     result = runner.run_with_content(
         prompt_content,
-        source_name="PROMPT_plan.md",
+        source_name="PROMPT_plan.xml.j2",
         on_output=lambda line: console.print(line),
         model=model,
     )

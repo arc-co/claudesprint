@@ -395,15 +395,6 @@ class ClaudesprintConfig(BaseSettings):
         """Path to models config file for per-step model selection."""
         return os.path.join(self.claudesprint_dir, "config", "models.json")
 
-    def get_prompt_file(self, step: str) -> str:
-        """Get path to prompt file for a step."""
-        return os.path.join(self.prompts_dir, f"PROMPT_{step}.md")
-
-    @property
-    def common_prompt_file(self) -> str:
-        """Path to common prompt patterns file (prepended to all prompts)."""
-        return os.path.join(self.prompts_dir, "_common.md")
-
     @property
     def schemas_dir(self) -> str:
         """Path to JSON schemas directory."""
