@@ -88,7 +88,7 @@ claudesprint run -v                     # Verbose output
 claudesprint run -vv                    # Debug output
 claudesprint status                     # Show sprint and issue status
 claudesprint status --spec SPEC_01      # Status for specific sprint
-claudesprint sprints                    # List all available sprints
+claudesprint-tools sprints                    # List all available sprints
 claudesprint validate                   # Validate sprint.json structure
 claudesprint reset                      # Clear current issue state
 ```
@@ -106,33 +106,33 @@ These commands are used by agents during workflow execution:
 
 ```bash
 # Get current issue state
-claudesprint issue get
+claudesprint-tools issue get
 
 # Initialize issue state
-claudesprint issue init <issue_id>
-claudesprint issue init ISSUE_01 --step implement
-claudesprint issue init ISSUE_01 --goal "Add login feature"
+claudesprint-tools issue init <issue_id>
+claudesprint-tools issue init ISSUE_01 --step implement
+claudesprint-tools issue init ISSUE_01 --goal "Add login feature"
 
 # Update issue fields
-claudesprint issue update --goal "New goal"
-claudesprint issue update --next-action "Write tests"
+claudesprint-tools issue update --goal "New goal"
+claudesprint-tools issue update --next-action "Write tests"
 
 # Set next workflow step
-claudesprint issue step <step_name>
-claudesprint issue step implement --goal "Build feature"
-claudesprint issue step run-tests --clear-failures
+claudesprint-tools issue step <step_name>
+claudesprint-tools issue step implement --goal "Build feature"
+claudesprint-tools issue step run-tests --clear-failures
 
 # Record file changes
-claudesprint issue change <path> <summary>
-claudesprint issue change src/auth.py "Added login endpoint"
+claudesprint-tools issue change <path> <summary>
+claudesprint-tools issue change src/auth.py "Added login endpoint"
 
 # Record failures
-claudesprint issue failure <message>
-claudesprint issue failure "Tests failed: 2 assertions"
-claudesprint issue failure "Timeout" --no-increment
+claudesprint-tools issue failure <message>
+claudesprint-tools issue failure "Tests failed: 2 assertions"
+claudesprint-tools issue failure "Timeout" --no-increment
 
 # Clear failures and retry count
-claudesprint issue clear-failures
+claudesprint-tools issue clear-failures
 ```
 
 ## Commands - Sprint Queries (agent tools)
@@ -141,16 +141,16 @@ Token-optimized queries for agents:
 
 ```bash
 # List available issues (compact view)
-claudesprint sprint available
-claudesprint sprint available --spec SPEC_01
+claudesprint-tools sprint available
+claudesprint-tools sprint available --spec SPEC_01
 
 # Start working on an issue
-claudesprint sprint start <issue_id>
-claudesprint sprint start ISSUE_03 --spec SPEC_01
+claudesprint-tools sprint start <issue_id>
+claudesprint-tools sprint start ISSUE_03 --spec SPEC_01
 
 # Get full issue details
-claudesprint sprint details <issue_id>
-claudesprint sprint details ISSUE_03 --spec SPEC_01
+claudesprint-tools sprint details <issue_id>
+claudesprint-tools sprint details ISSUE_03 --spec SPEC_01
 ```
 
 ## Commands - Configuration
@@ -200,29 +200,29 @@ claudesprint status
 
 ```bash
 # Agent navigating through workflow steps
-claudesprint issue step read-docs --goal "Understand requirements"
-claudesprint issue step explore --goal "Map codebase structure"
-claudesprint issue step plan --goal "Design implementation"
-claudesprint issue step implement --goal "Write the feature"
-claudesprint issue step write-tests --goal "Add test coverage"
-claudesprint issue step run-tests
-claudesprint issue step stage-changes
-claudesprint issue step commit-changes
-claudesprint issue step complete
+claudesprint-tools issue step read-docs --goal "Understand requirements"
+claudesprint-tools issue step explore --goal "Map codebase structure"
+claudesprint-tools issue step plan --goal "Design implementation"
+claudesprint-tools issue step implement --goal "Write the feature"
+claudesprint-tools issue step write-tests --goal "Add test coverage"
+claudesprint-tools issue step run-tests
+claudesprint-tools issue step stage-changes
+claudesprint-tools issue step commit-changes
+claudesprint-tools issue step complete
 ```
 
 ### Failure recovery
 
 ```bash
 # Record a test failure
-claudesprint issue failure "AssertionError in test_login"
+claudesprint-tools issue failure "AssertionError in test_login"
 
 # Check current state
-claudesprint issue get
+claudesprint-tools issue get
 
 # After fixing, clear failures and continue
-claudesprint issue clear-failures
-claudesprint issue step run-tests
+claudesprint-tools issue clear-failures
+claudesprint-tools issue step run-tests
 ```
 
 ## Debugging
