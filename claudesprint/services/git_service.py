@@ -1,9 +1,12 @@
 """Git service for repository operations."""
 
+import logging
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,8 +48,13 @@ class GitService:
             )
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
         except subprocess.TimeoutExpired:
+            logger.warning(f"Git command timed out: git {' '.join(args)}")
             return False, "", "Command timed out"
-        except Exception as e:
+        except subprocess.SubprocessError as e:
+            logger.warning(f"Git subprocess error: {e}")
+            return False, "", str(e)
+        except OSError as e:
+            logger.warning(f"Failed to run git command: {e}")
             return False, "", str(e)
 
     def is_repo(self) -> bool:
@@ -116,7 +124,14 @@ class GitService:
                 return set()
             # Use binary mode output - don't decode as text to preserve NUL bytes
             output = result.stdout
-        except (subprocess.TimeoutExpired, Exception):
+        except subprocess.TimeoutExpired:
+            logger.warning("git status -z timed out")
+            return set()
+        except subprocess.SubprocessError as e:
+            logger.warning(f"git status -z subprocess error: {e}")
+            return set()
+        except OSError as e:
+            logger.warning(f"Failed to run git status -z: {e}")
             return set()
 
         dirty_files: set[str] = set()

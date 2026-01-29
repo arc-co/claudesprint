@@ -1,10 +1,15 @@
 """Issue service for current issue session operations."""
 
 import json
+import logging
 from datetime import datetime, UTC
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from claudesprint.models.current_issue import CurrentIssue
+
+logger = logging.getLogger(__name__)
 
 
 class IssueService:
@@ -31,7 +36,14 @@ class IssueService:
         try:
             data = json.loads(self.current_issue_file.read_text())
             return CurrentIssue.model_validate(data)
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in current_issue.json: {e}")
+            return None
+        except ValidationError as e:
+            logger.warning(f"Invalid current_issue data: {e}")
+            return None
+        except OSError as e:
+            logger.warning(f"Failed to read current_issue.json: {e}")
             return None
 
     def write_current_issue(self, issue: CurrentIssue) -> bool:
@@ -58,7 +70,8 @@ class IssueService:
             # Atomic rename
             temp_file.rename(self.current_issue_file)
             return True
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to write current_issue.json: {e}")
             return False
 
     def is_current_issue_valid(self) -> bool:
@@ -77,7 +90,11 @@ class IssueService:
                 and "sprint_path" in data
                 and "step" in data
             )
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.debug(f"Invalid JSON in current_issue.json: {e}")
+            return False
+        except OSError as e:
+            logger.debug(f"Failed to read current_issue.json: {e}")
             return False
 
     def clear_current_issue(self) -> bool:
@@ -92,7 +109,8 @@ class IssueService:
             if self.current_issue_log.exists():
                 self.current_issue_log.unlink()
             return True
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to clear current_issue files: {e}")
             return False
 
     def create_initial(self, sprint_path: str) -> CurrentIssue:
@@ -136,7 +154,8 @@ class IssueService:
             with open(self.current_issue_log, "a") as f:
                 f.write(log_line)
             return True
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to append to log: {e}")
             return False
 
     def read_log(self) -> list[str]:
@@ -150,7 +169,8 @@ class IssueService:
         try:
             content = self.current_issue_log.read_text()
             return [line for line in content.splitlines() if line.strip()]
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to read log: {e}")
             return []
 
     def read_log_tail(self, num_lines: int = 20) -> str:
@@ -196,7 +216,8 @@ class IssueService:
             if self.current_issue_log.exists():
                 self.current_issue_log.unlink()
             return True
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to clear log: {e}")
             return False
 
     def log_issue_selection(
