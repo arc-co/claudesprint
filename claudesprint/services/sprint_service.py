@@ -1,10 +1,14 @@
 """Sprint service for sprint file operations."""
 
 import json
-import re
+import logging
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus
+
+logger = logging.getLogger(__name__)
 
 
 class SprintService:
@@ -68,7 +72,14 @@ class SprintService:
         try:
             data = json.loads(file_path.read_text())
             return Sprint.model_validate(data)
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in sprint file {file_path}: {e}")
+            return None
+        except ValidationError as e:
+            logger.warning(f"Invalid sprint data in {file_path}: {e}")
+            return None
+        except OSError as e:
+            logger.warning(f"Failed to read sprint file {file_path}: {e}")
             return None
 
     def write_sprint(self, sprint: Sprint, path: str | Path) -> bool:
@@ -97,7 +108,8 @@ class SprintService:
             # Atomic rename
             temp_file.rename(file_path)
             return True
-        except Exception:
+        except OSError as e:
+            logger.warning(f"Failed to write sprint file {file_path}: {e}")
             return False
 
     def is_sprint_valid(self, path: str | Path) -> bool:
@@ -121,7 +133,11 @@ class SprintService:
                 and isinstance(data["issues"], list)
                 and "spec_id" in data
             )
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError as e:
+            logger.debug(f"Invalid JSON in sprint file {file_path}: {e}")
+            return False
+        except OSError as e:
+            logger.debug(f"Failed to read sprint file {file_path}: {e}")
             return False
 
     def get_available_issues(self, sprint: Sprint) -> list[Issue]:
