@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from claudesprint.models.current_issue import IssueStep
 
 if TYPE_CHECKING:
-    from claudesprint.services.project_config_service import ProjectConfigService
+    from claudesprint.services.configuration_manager import ConfigurationManager
 
 # Import ModelName from project_config_service to ensure consistent type definition
 from claudesprint.services.project_config_service import ModelName
@@ -51,22 +51,22 @@ class ModelsService:
 
     def __init__(self) -> None:
         """Initialize the models service."""
-        self._project_config_service: ProjectConfigService | None = None
+        self._config_manager: ConfigurationManager | None = None
 
     @classmethod
-    def from_project_config(
-        cls, project_config_service: "ProjectConfigService"
+    def from_config_manager(
+        cls, config_manager: "ConfigurationManager"
     ) -> "ModelsService":
-        """Create a ModelsService that reads from ProjectConfigService.
+        """Create a ModelsService that reads from ConfigurationManager.
 
         Args:
-            project_config_service: The project config service to use.
+            config_manager: The configuration manager to use.
 
         Returns:
-            ModelsService instance configured to use TOML config.
+            ModelsService instance configured to use ConfigurationManager.
         """
         instance = cls()
-        instance._project_config_service = project_config_service
+        instance._config_manager = config_manager
         return instance
 
     def get_model_for_step(self, step: IssueStep | str) -> ModelName:
@@ -86,9 +86,9 @@ class ModelsService:
         # Normalize step to string
         step_name = step.value if isinstance(step, IssueStep) else str(step)
 
-        # 2. Check TOML project config if available
-        if self._project_config_service is not None:
-            return self._project_config_service.get_model_for_step(step_name)
+        # 2. Check ConfigurationManager
+        if self._config_manager is not None:
+            return self._config_manager.get_model_for_step(step_name)
 
         # 3. Check STEP_DEFAULT_MODELS
         if isinstance(step, IssueStep) and step in STEP_DEFAULT_MODELS:
@@ -111,9 +111,9 @@ class ModelsService:
         if env_override in ("opus", "sonnet", "haiku"):
             return env_override  # type: ignore
 
-        # 2. Check TOML project config if available
-        if self._project_config_service is not None:
-            return self._project_config_service.get_model_for_special_step(step_name)
+        # 2. Check ConfigurationManager
+        if self._config_manager is not None:
+            return self._config_manager.get_model_for_special_step(step_name)
 
         # 3. Fall back to defaults (init=opus, plan=sonnet)
         defaults = {"init": "opus", "plan": "sonnet"}
@@ -138,10 +138,3 @@ class ModelsService:
             summary[special] = self.get_model_for_special_step(special)
 
         return summary
-
-    @property
-    def config(self) -> "ProjectConfigService":
-        """Get the project config service (for backward compatibility with CLI models command)."""
-        if self._project_config_service is None:
-            raise ValueError("ModelsService not initialized with project config")
-        return self._project_config_service

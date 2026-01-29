@@ -17,14 +17,13 @@ from claudesprint.core.sprint_engine import SprintEngine, SprintExitReason, Spri
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import IssueStep
 from claudesprint.models.sprint import Sprint, Issue, ResolvedConfig
+from claudesprint.services.configuration_manager import ConfigurationManager
 from claudesprint.services.git_service import GitService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.issue_service import IssueService
-from claudesprint.services.global_config_service import GlobalConfigService
 from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MODELS
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.services.path_service import PathService
-from claudesprint.services.project_config_service import ProjectConfigService
 from claudesprint.services.prompt_service import PromptService
 from claudesprint.simple_logs import LogVerbosity, SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
@@ -41,9 +40,7 @@ console = Console()
 
 def get_project_root() -> Path:
     """Get the project root directory."""
-    from claudesprint.services.path_service import PathService
-
-    discovered = PathService.discover_project_root()
+    discovered = ConfigurationManager.discover_project_root()
     return discovered or Path.cwd()
 
 
@@ -214,9 +211,9 @@ def _run_sprint_console(
 
     # Create all services for dependency injection
     issue_service = IssueService(config.project_dir)
-    project_config_service = ProjectConfigService(project_root)
-    notification_service = NotificationService.from_project_config(
-        project_config_service, http_timeout=config.http_timeout
+    cm = ConfigurationManager(project_root)
+    notification_service = NotificationService.from_config_manager(
+        cm, http_timeout=config.http_timeout
     )
     path_service = PathService(project_root)
     prompt_service = PromptService(path_service, project_root)
@@ -403,8 +400,8 @@ def init_project(
         raise typer.Exit(1)
 
     # Get model for init step
-    project_config_service = ProjectConfigService(project_root)
-    models_service = ModelsService.from_project_config(project_config_service)
+    cm = ConfigurationManager(project_root)
+    models_service = ModelsService.from_config_manager(cm)
     model = models_service.get_model_for_special_step("init")
 
     console.print(f"[cyan]▶ Running init agent to generate issues (model: {model})...[/cyan]")
@@ -479,8 +476,8 @@ def run_planner(
         raise typer.Exit(1)
 
     # Get model for plan step
-    project_config_service = ProjectConfigService(project_root)
-    models_service = ModelsService.from_project_config(project_config_service)
+    cm = ConfigurationManager(project_root)
+    models_service = ModelsService.from_config_manager(cm)
     model = models_service.get_model_for_special_step("plan")
 
     console.print(f"[cyan]▶ Running planner (model: {model})...[/cyan]")
@@ -651,9 +648,9 @@ def show_status(
 def show_models() -> None:
     """Show model configuration for each step."""
     project_root = get_project_root()
-    project_config_service = ProjectConfigService(project_root)
-    models_service = ModelsService.from_project_config(project_config_service)
-    project_config = project_config_service.load()
+    cm = ConfigurationManager(project_root)
+    models_service = ModelsService.from_config_manager(cm)
+    project_config = cm.project
 
     console.print(Panel.fit("Model Configuration", style="bold blue"))
     console.print("")
@@ -730,9 +727,9 @@ def send_notification(
     """Send a notification via Bark."""
     config = get_config()
     project_root = get_project_root()
-    project_config_service = ProjectConfigService(project_root)
-    service = NotificationService.from_project_config(
-        project_config_service, http_timeout=config.http_timeout
+    cm = ConfigurationManager(project_root)
+    service = NotificationService.from_config_manager(
+        cm, http_timeout=config.http_timeout
     )
 
     if not service.enabled:
@@ -957,9 +954,9 @@ app.add_typer(config_app, name="config")
 @config_app.command("path")
 def config_path() -> None:
     """Show the global config file location."""
-    service = GlobalConfigService()
-    console.print(f"[bold]Config file:[/bold] {service.config_path}")
-    if service.exists():
+    config_file = ConfigurationManager.get_default_global_config_path()
+    console.print(f"[bold]Config file:[/bold] {config_file}")
+    if config_file.exists():
         console.print("[green]✓ File exists[/green]")
     else:
         console.print("[dim]File does not exist. Run 'claudesprint config init' to create it.[/dim]")
@@ -973,16 +970,20 @@ def config_init(
     ] = False,
 ) -> None:
     """Create the default global config file."""
-    service = GlobalConfigService()
+    from claudesprint.services.global_config_service import DEFAULT_CONFIG_TOML
 
-    if service.exists() and not force:
-        console.print(f"[yellow]Config file already exists: {service.config_path}[/yellow]")
+    config_file = ConfigurationManager.get_default_global_config_path()
+
+    if config_file.exists() and not force:
+        console.print(f"[yellow]Config file already exists: {config_file}[/yellow]")
         console.print("Use --force to overwrite.")
         raise typer.Exit(1)
 
-    if service.init_config(overwrite=force):
-        console.print(f"[green]✓ Created config file: {service.config_path}[/green]")
-    else:
+    try:
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(DEFAULT_CONFIG_TOML)
+        console.print(f"[green]✓ Created config file: {config_file}[/green]")
+    except OSError:
         console.print("[red]✗ Failed to create config file[/red]")
         raise typer.Exit(1)
 
@@ -990,15 +991,16 @@ def config_init(
 @config_app.command("show")
 def config_show() -> None:
     """Display current global configuration."""
-    service = GlobalConfigService()
+    config_file = ConfigurationManager.get_default_global_config_path()
+    cm = ConfigurationManager()
 
-    if not service.exists():
-        console.print(f"[yellow]Config file not found: {service.config_path}[/yellow]")
+    if not config_file.exists():
+        console.print(f"[yellow]Config file not found: {config_file}[/yellow]")
         console.print("Run 'claudesprint config init' to create it.")
         console.print("")
         console.print("[dim]Using built-in defaults:[/dim]")
 
-    config = service.load()
+    config = cm.global_config
     console.print(Panel.fit("Global Configuration", style="bold blue"))
     console.print("")
 
@@ -1029,20 +1031,24 @@ def config_show() -> None:
 def config_edit() -> None:
     """Open global config file in $EDITOR."""
     import subprocess
+    from claudesprint.services.global_config_service import DEFAULT_CONFIG_TOML
 
-    service = GlobalConfigService()
+    config_file = ConfigurationManager.get_default_global_config_path()
 
-    if not service.exists():
-        console.print(f"[yellow]Config file not found: {service.config_path}[/yellow]")
+    if not config_file.exists():
+        console.print(f"[yellow]Config file not found: {config_file}[/yellow]")
         console.print("Creating default config file...")
-        if not service.init_config():
+        try:
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config_file.write_text(DEFAULT_CONFIG_TOML)
+            console.print(f"[green]✓ Created: {config_file}[/green]")
+        except OSError:
             console.print("[red]✗ Failed to create config file[/red]")
             raise typer.Exit(1)
-        console.print(f"[green]✓ Created: {service.config_path}[/green]")
 
     editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "vim"))
     try:
-        subprocess.run([editor, str(service.config_path)], check=True)
+        subprocess.run([editor, str(config_file)], check=True)
     except FileNotFoundError:
         console.print(f"[red]Editor not found: {editor}[/red]")
         console.print("Set the EDITOR environment variable to your preferred editor.")

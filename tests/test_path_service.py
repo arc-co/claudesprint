@@ -1,4 +1,8 @@
-"""Tests for PathService."""
+"""Tests for PathService.
+
+PathService now focuses on package asset resolution (prompts, schemas).
+Path resolution has moved to ConfigurationManager.
+"""
 
 import tempfile
 from pathlib import Path
@@ -78,11 +82,11 @@ class TestPathServicePackageAssets:
         assert not paths.schema_exists("nonexistent")
 
 
-class TestPathServiceLocalPaths:
-    """Tests for local config path resolution."""
+class TestPathServiceProjectRoot:
+    """Tests for project_root property (kept for PromptService compatibility)."""
 
     def test_project_root_default(self) -> None:
-        """Test default project root is cwd when no .claude found."""
+        """Test default project root is cwd when not specified."""
         paths = PathService(project_root="/tmp/test")
         assert paths.project_root == Path("/tmp/test")
 
@@ -90,145 +94,3 @@ class TestPathServiceLocalPaths:
         """Test explicit project root."""
         paths = PathService(project_root="/some/path")
         assert paths.project_root == Path("/some/path")
-
-    def test_claude_dir(self) -> None:
-        """Test .claude directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.claude_dir == Path("/project/.claude")
-
-    def test_config_dir(self) -> None:
-        """Test config directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.config_dir == Path("/project/.claudesprint")
-
-    def test_project_dir(self) -> None:
-        """Test project state directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.project_dir == Path("/project/.claudesprint/project")
-
-    def test_sprints_dir(self) -> None:
-        """Test sprints directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.sprints_dir == Path("/project/.claudesprint/sprints")
-
-    def test_specs_dir(self) -> None:
-        """Test specs directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.specs_dir == Path("/project/.claudesprint/specs")
-
-    def test_config_files_dir(self) -> None:
-        """Test config files directory path."""
-        paths = PathService(project_root="/project")
-        assert paths.config_files_dir == Path("/project/.claudesprint/config")
-
-    def test_current_issue_file(self) -> None:
-        """Test current_issue.json path."""
-        paths = PathService(project_root="/project")
-        assert paths.current_issue_file == Path(
-            "/project/.claudesprint/project/current_issue.json"
-        )
-
-    def test_current_issue_log_file(self) -> None:
-        """Test current_issue.log path."""
-        paths = PathService(project_root="/project")
-        assert paths.current_issue_log_file == Path(
-            "/project/.claudesprint/project/current_issue.log"
-        )
-
-    def test_lock_file(self) -> None:
-        """Test lock file path."""
-        paths = PathService(project_root="/project")
-        assert paths.lock_file == Path(
-            "/project/.claudesprint/project/.loop.lock"
-        )
-
-    def test_notifications_file(self) -> None:
-        """Test notifications config file path."""
-        paths = PathService(project_root="/project")
-        assert paths.notifications_file == Path(
-            "/project/.claudesprint/config/notifications.json"
-        )
-
-    def test_models_file(self) -> None:
-        """Test models config file path."""
-        paths = PathService(project_root="/project")
-        assert paths.models_file == Path(
-            "/project/.claudesprint/config/models.json"
-        )
-
-    def test_sprint_lock_file(self) -> None:
-        """Test sprint lock file path."""
-        paths = PathService(project_root="/project")
-        assert paths.sprint_lock_file == Path(
-            "/project/.claudesprint/state/sprint.lock"
-        )
-
-
-class TestPathServiceSprintPaths:
-    """Tests for sprint-specific path resolution."""
-
-    def test_get_sprint_dir(self) -> None:
-        """Test getting sprint directory."""
-        paths = PathService(project_root="/project")
-        sprint_dir = paths.get_sprint_dir("SPEC_01")
-        assert sprint_dir == Path("/project/.claudesprint/sprints/SPEC_01")
-
-    def test_get_sprint_path(self) -> None:
-        """Test getting sprint.json path."""
-        paths = PathService(project_root="/project")
-        sprint_path = paths.get_sprint_path("SPEC_01")
-        assert sprint_path == Path(
-            "/project/.claudesprint/sprints/SPEC_01/sprint.json"
-        )
-
-
-class TestPathServiceDiscovery:
-    """Tests for project root discovery."""
-
-    def test_discover_project_root_found(self) -> None:
-        """Test discovery when .claude exists."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_root = Path(tmpdir)
-            claude_dir = project_root / ".claude"
-            claude_dir.mkdir()
-
-            # Create a subdirectory to test discovery from
-            subdir = project_root / "src" / "module"
-            subdir.mkdir(parents=True)
-
-            discovered = PathService.discover_project_root(start=subdir)
-            assert discovered == project_root
-
-    def test_discover_project_root_not_found(self) -> None:
-        """Test discovery when .claude doesn't exist."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # No .claude directory
-            discovered = PathService.discover_project_root(start=Path(tmpdir))
-            assert discovered is None
-
-    def test_discover_project_root_at_root(self) -> None:
-        """Test discovery when .claude is at start directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_root = Path(tmpdir)
-            claude_dir = project_root / ".claude"
-            claude_dir.mkdir()
-
-            discovered = PathService.discover_project_root(start=project_root)
-            assert discovered == project_root
-
-
-class TestPathServiceDirectoryCreation:
-    """Tests for directory creation."""
-
-    def test_ensure_directories(self) -> None:
-        """Test creating all required directories."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            paths = PathService(project_root=tmpdir)
-            paths.ensure_directories()
-
-            assert paths.project_dir.exists()
-            assert paths.sprints_dir.exists()
-            assert paths.specs_dir.exists()
-            assert paths.config_files_dir.exists()
-
-
