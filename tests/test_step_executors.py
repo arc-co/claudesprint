@@ -68,7 +68,6 @@ def mock_claude_runner() -> MagicMock:
 def mock_issue_service() -> MagicMock:
     """Create a mock issue service."""
     mock = MagicMock()
-    mock.backup_current_issue.return_value = True
     mock.read_full_log.return_value = ""
     mock.read_log_tail.return_value = ""
     mock.read_current_issue.return_value = None
@@ -178,9 +177,6 @@ class TestLlmStepExecutor:
 
         # Verify prompt content was fetched
         mock_prompt_service.get_prompt_content.assert_called_once_with("implement")
-
-        # Verify backup was made
-        mock_issue_service.backup_current_issue.assert_called_once()
 
         # Verify model was fetched
         llm_executor.models_service.get_model_for_step.assert_called_once_with(

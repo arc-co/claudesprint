@@ -11,6 +11,7 @@ Usage:
     claudesprint-tools issue clear-failures
 
     claudesprint-tools sprint available [--spec=SPEC_ID]
+    claudesprint-tools sprint start <issue_id> [--spec=SPEC_ID]
     claudesprint-tools sprint details <issue_id> [--spec=SPEC_ID]
 
     claudesprint-tools test run
@@ -160,6 +161,14 @@ def cmd_sprint_available(args):
     print(json.dumps(result.to_dict(), indent=2))
 
 
+def cmd_sprint_start(args):
+    """Mark an issue as in_progress (start working on it)."""
+    from claudesprint.tools.sprint_tools import start_issue
+
+    result = start_issue(issue_id=args.issue_id, spec_id=args.spec)
+    print(json.dumps(result.to_dict(), indent=2))
+
+
 def cmd_sprint_details(args):
     """Get full details for a specific issue."""
     from claudesprint.tools.sprint_tools import get_issue_details
@@ -244,6 +253,14 @@ def main():
     )
     savail_parser.add_argument("--spec", help="Optional Spec ID to query")
     savail_parser.set_defaults(func=cmd_sprint_available)
+
+    # sprint start
+    sstart_parser = sprint_subparsers.add_parser(
+        "start", help="Mark issue as in_progress"
+    )
+    sstart_parser.add_argument("issue_id", help="Issue ID to start")
+    sstart_parser.add_argument("--spec", help="Optional Spec ID to query")
+    sstart_parser.set_defaults(func=cmd_sprint_start)
 
     # sprint details
     sdetails_parser = sprint_subparsers.add_parser(
