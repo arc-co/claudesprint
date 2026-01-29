@@ -68,6 +68,12 @@ claudesprint-tools sprint details "$ISSUE_ID"
                 Example: DEV_URL="http://localhost:3000" PORT=3000
             </note>
             <commands><![CDATA[
+# Validate required variables are set
+if [ -z "$DEV_URL" ] || [ -z "$PORT" ]; then
+    echo "ERROR: DEV_URL and PORT must be set before this phase"
+    exit 1
+fi
+
 # First, check if server is already responding
 if curl -s --max-time 5 "$DEV_URL" > /dev/null 2>&1; then
     echo "Server already running at $DEV_URL"
