@@ -105,3 +105,31 @@ class ModelError(ApiError):
         if error_code is not None:
             context["error_code"] = error_code
         super().__init__(message, **context)
+
+
+class RateLimitDetected(ApiError):
+    """Rate limit detected in output that should trigger a retry.
+
+    Raised when rate limit patterns are detected in command output,
+    signaling to tenacity that a retry should be attempted.
+
+    This is distinct from RateLimitExceeded which represents
+    the actual API 429 response.
+    """
+
+    def __init__(
+        self,
+        message: str = "Rate limit detected in output",
+        output: str | None = None,
+        **context: Any,
+    ) -> None:
+        """Initialize RateLimitDetected.
+
+        Args:
+            message: Human-readable error description.
+            output: The output text that contained rate limit indicators.
+            **context: Additional context.
+        """
+        if output is not None:
+            context["output"] = output
+        super().__init__(message, **context)

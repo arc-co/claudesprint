@@ -22,7 +22,12 @@ from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
 from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
 from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
 from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
-from claudesprint.core.rate_limit_handler import RateLimitConfig, RateLimitHandler
+from claudesprint.core.rate_limit_handler import (
+    RateLimitConfig,
+    RateLimitRetriesExhausted,
+    create_rate_limit_retrying,
+    get_retry_state_info,
+)
 from claudesprint.events.workflow_event_bus import (
     WorkflowEventBus,
     WorkflowEvent,
@@ -30,7 +35,7 @@ from claudesprint.events.workflow_event_bus import (
     SelectingIssuePayload,
     OutputPayload,
 )
-from claudesprint.exceptions import RateLimitExceeded, StateCorruptionError
+from claudesprint.exceptions import RateLimitDetected, RateLimitExceeded, StateCorruptionError
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
 from claudesprint.models.sprint import Sprint, Issue, IssueStatus, ResolvedConfig
@@ -155,13 +160,13 @@ class SprintEngine:
             max_consecutive_failures=5,
         )
 
-        # Rate limit handler (replaces self._rate_limit_retries)
-        self._rate_limit_handler = RateLimitHandler(
-            RateLimitConfig(
-                max_retries=config.rate_limit_retries,
-                base_delay_seconds=float(config.rate_limit_base_wait),
-                max_delay_seconds=float(config.rate_limit_max_wait),
-            )
+        # Rate limit configuration for tenacity-based retries
+        self._rate_limit_config = RateLimitConfig(
+            max_attempts=config.rate_limit_retries,
+            wait_min=float(config.rate_limit_base_wait),
+            wait_max=float(config.rate_limit_max_wait),
+            wait_multiplier=1.0,
+            before_sleep_callback=self._on_rate_limit_retry,
         )
 
         # Issue state machine for result handling
@@ -203,6 +208,39 @@ class SprintEngine:
             "issue_id": "selecting",
             "step_name": step_name,
         })
+
+    def _on_rate_limit_retry(self, retry_state) -> None:
+        """Callback invoked by tenacity before sleeping on rate limit retry.
+
+        Emits events and notifications when a rate limit retry is about to occur.
+
+        Args:
+            retry_state: Tenacity RetryCallState with attempt info.
+        """
+        from tenacity import RetryCallState
+
+        info = get_retry_state_info(retry_state)
+        attempt = info["attempt_number"]
+        wait_seconds = int(info["wait_seconds"])
+
+        # Emit rate limited event
+        self._emit_event(WorkflowEvent.RATE_LIMITED, {
+            "sprint_id": str(self.sprint_path.parent.name),
+            "attempt": attempt,
+            "wait_seconds": wait_seconds,
+        })
+
+        # Record as rate limit in iteration tracker
+        self._iteration_tracker.record_failure(
+            FailureCategory.RATE_LIMIT,
+            "Claude API rate limited",
+        )
+
+        # Notify and log
+        self.notification_service.notify_rate_limit(
+            f"Rate limited, waiting {wait_seconds}s (attempt {attempt}/{self._rate_limit_config.max_attempts})"
+        )
+        self._emit_output(f"\nRate limited, waiting {wait_seconds} seconds...\n")
 
     def preflight_check(self) -> tuple[bool, list[str]]:
         """Run pre-flight checks before starting sprint.
@@ -886,9 +924,9 @@ class SprintEngine:
             issues_completed: Number of issues completed so far
 
         Returns:
-            Tuple of (exit_result, updated_issues_completed, should_retry_same_issue).
+            Tuple of (exit_result, updated_issues_completed, _).
             exit_result is None if sprint should continue, otherwise contains the
-            final SprintResult. should_retry_same_issue is True for rate limiting.
+            final SprintResult. Third element is always False (kept for signature compatibility).
         """
         action = self._state_machine.get_action(issue_result.exit_reason)
 
@@ -898,9 +936,18 @@ class SprintEngine:
             )
 
         elif action == SprintAction.RETRY_SAME_ISSUE:
-            return self._handle_retry_action(
-                issue_result, issue, start_time, iteration, issues_completed
-            )
+            # Rate limiting is now handled by tenacity in _execute_issue_with_retry.
+            # If we reach here, it means rate limit retries were exhausted at the
+            # issue engine level (not sprint level). Treat as an error.
+            elapsed = int(time.time() - start_time)
+            return SprintResult(
+                exit_reason=SprintExitReason.RATE_LIMITED,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=elapsed,
+                message="Rate limited during issue execution",
+                error="Claude API rate limited",
+            ), issues_completed, False
 
         elif action == SprintAction.EXIT_SPRINT_FAILURE:
             return self._handle_exit_failure_action(
@@ -932,8 +979,7 @@ class SprintEngine:
                 "exit_reason": "completed",
             })
 
-            # Reset rate limit handler and iteration tracker on successful completion
-            self._rate_limit_handler.reset()
+            # Record success in iteration tracker
             self._iteration_tracker.record_success()
 
         elif issue_result.exit_reason == IssueExitReason.MAX_ITERATIONS:
@@ -981,55 +1027,6 @@ class SprintEngine:
             })
 
         return None, issues_completed, False
-
-    def _handle_retry_action(
-        self,
-        issue_result: IssueResult,
-        issue: Issue,
-        start_time: float,
-        iteration: int,
-        issues_completed: int,
-    ) -> tuple[SprintResult | None, int, bool]:
-        """Handle RETRY_SAME_ISSUE action (rate limiting)."""
-        self._rate_limit_handler.record_rate_limit()
-
-        # Emit rate limited event
-        self._emit_event(WorkflowEvent.RATE_LIMITED, {
-            "sprint_id": str(self.sprint_path.parent.name),
-            "completed_count": issues_completed,
-            "total_count": 0,  # Will be populated by caller
-        })
-
-        # Record as rate limit in iteration tracker (doesn't count toward limits)
-        self._iteration_tracker.record_failure(
-            FailureCategory.RATE_LIMIT,
-            "Claude API rate limited",
-        )
-
-        if not self._rate_limit_handler.should_retry():
-            elapsed = int(time.time() - start_time)
-            self.notification_service.notify_rate_limit(
-                f"Max rate limit retries ({self._rate_limit_handler.config.max_retries}) exceeded"
-            )
-            return SprintResult(
-                exit_reason=SprintExitReason.RATE_LIMITED,
-                issues_completed=issues_completed,
-                iterations=iteration,
-                elapsed_seconds=elapsed,
-                message="Rate limit retries exceeded",
-                error="Claude API rate limited",
-            ), issues_completed, False
-
-        # Calculate backoff and wait
-        backoff = self._rate_limit_handler.get_backoff_seconds()
-        self.notification_service.notify_rate_limit(
-            f"Rate limited, waiting {backoff}s (retry {self._rate_limit_handler.retry_count})"
-        )
-        self._emit_output(f"\nRate limited, waiting {backoff} seconds...\n")
-        time.sleep(backoff)
-
-        # Signal to retry same issue
-        return None, issues_completed, True
 
     def _handle_exit_failure_action(
         self,
@@ -1197,8 +1194,13 @@ class SprintEngine:
             f"Selected issue: {issue.id} - {issue.title}"
         )
 
-        # Run issue engine
-        issue_result = self._run_issue_engine(issue, current_issue, sprint)
+        # Run issue engine with rate limit retry
+        issue_result, rate_limit_error = self._execute_issue_with_retry(
+            issue, current_issue, sprint, start_time, iteration, issues_completed
+        )
+
+        if rate_limit_error:
+            return None, issue, current_issue, rate_limit_error
 
         return issue_result, issue, current_issue, None
 
@@ -1326,6 +1328,62 @@ class SprintEngine:
 
         return issue_result
 
+    def _execute_issue_with_retry(
+        self,
+        issue: Issue,
+        current_issue: CurrentIssue,
+        sprint: Sprint,
+        start_time: float,
+        iteration: int,
+        issues_completed: int,
+    ) -> tuple[IssueResult, SprintResult | None]:
+        """Execute an issue with tenacity-based rate limit retry.
+
+        Wraps _run_issue_engine with tenacity's retry mechanism. When the
+        issue engine returns RATE_LIMITED, raises RateLimitDetected to
+        trigger tenacity's retry with exponential backoff.
+
+        Args:
+            issue: The issue to execute
+            current_issue: Current issue context
+            sprint: Current sprint state
+            start_time: Start time of the sprint run
+            iteration: Current iteration number
+            issues_completed: Issues completed so far
+
+        Returns:
+            Tuple of (issue_result, error_result). If error_result is not None,
+            rate limit retries were exhausted.
+        """
+        try:
+            for attempt in create_rate_limit_retrying(self._rate_limit_config):
+                with attempt:
+                    issue_result = self._run_issue_engine(issue, current_issue, sprint)
+
+                    # Check if rate limited and raise to trigger tenacity retry
+                    if issue_result.exit_reason == IssueExitReason.RATE_LIMITED:
+                        raise RateLimitDetected(
+                            "Rate limit detected in issue execution",
+                            output=issue_result.message,
+                        )
+
+                    return issue_result, None
+
+        except RateLimitDetected:
+            # Tenacity exhausted all retries and re-raised the exception
+            elapsed = int(time.time() - start_time)
+            self.notification_service.notify_rate_limit(
+                f"Max rate limit retries ({self._rate_limit_config.max_attempts}) exceeded"
+            )
+            return None, SprintResult(
+                exit_reason=SprintExitReason.RATE_LIMITED,
+                issues_completed=issues_completed,
+                iterations=iteration,
+                elapsed_seconds=elapsed,
+                message="Rate limit retries exceeded",
+                error="Claude API rate limited",
+            )
+
     def run(
         self,
         max_iterations: int = 0,
@@ -1423,17 +1481,13 @@ class SprintEngine:
                 if error_result:
                     return error_result
 
-                # Handle issue result
-                exit_result, issues_completed, should_retry = self._handle_issue_result(
+                # Handle issue result (rate limiting is handled by tenacity in _execute_issue_with_retry)
+                exit_result, issues_completed, _ = self._handle_issue_result(
                     issue_result, issue, start_time, iteration, issues_completed
                 )
 
                 if exit_result:
                     return exit_result
-
-                if should_retry:
-                    # Don't increment iteration for rate limit retry
-                    iteration -= 1
 
                 # Small delay between issues
                 time.sleep(self.config.issue_delay)

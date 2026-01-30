@@ -54,6 +54,7 @@ from claudesprint.exceptions.state_errors import (
 from claudesprint.exceptions.api_errors import (
     ApiError,
     RateLimitExceeded,
+    RateLimitDetected,
     AuthenticationError,
     ModelError,
 )
@@ -88,6 +89,7 @@ __all__ = [
     # API errors
     "ApiError",
     "RateLimitExceeded",
+    "RateLimitDetected",
     "AuthenticationError",
     "ModelError",
     # Validation errors

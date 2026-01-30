@@ -1,261 +1,400 @@
-"""Tests for rate limit handler."""
+"""Tests for tenacity-based rate limit handler."""
 
-from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, call
 
 import pytest
 
 from claudesprint.core.rate_limit_handler import (
     RateLimitConfig,
-    RateLimitHandler,
     RateLimitRetriesExhausted,
+    create_rate_limit_retry,
+    create_rate_limit_retrying,
+    get_retry_state_info,
 )
+from claudesprint.exceptions import RateLimitDetected
 
 
 class TestRateLimitConfig:
-    """Tests for RateLimitConfig defaults."""
+    """Tests for RateLimitConfig with tenacity parameters."""
 
     def test_config_defaults(self):
-        """Verify default values match existing sprint engine config."""
+        """Verify default values match the plan specifications."""
         config = RateLimitConfig()
 
-        assert config.max_retries == 3
-        assert config.base_delay_seconds == 60.0
-        assert config.max_delay_seconds == 900.0
-        assert config.jitter_factor == 0.1
+        assert config.max_attempts == 5
+        assert config.wait_min == 4.0
+        assert config.wait_max == 60.0
+        assert config.wait_multiplier == 1.0
+        assert config.before_sleep_callback is None
 
     def test_config_custom_values(self):
         """Test custom configuration values."""
+        callback = MagicMock()
         config = RateLimitConfig(
-            max_retries=5,
-            base_delay_seconds=30.0,
-            max_delay_seconds=600.0,
-            jitter_factor=0.2,
+            max_attempts=10,
+            wait_min=2.0,
+            wait_max=120.0,
+            wait_multiplier=2.0,
+            before_sleep_callback=callback,
         )
 
-        assert config.max_retries == 5
-        assert config.base_delay_seconds == 30.0
-        assert config.max_delay_seconds == 600.0
-        assert config.jitter_factor == 0.2
+        assert config.max_attempts == 10
+        assert config.wait_min == 2.0
+        assert config.wait_max == 120.0
+        assert config.wait_multiplier == 2.0
+        assert config.before_sleep_callback is callback
 
 
 class TestRateLimitRetriesExhausted:
-    """Tests for RateLimitRetriesExhausted exception."""
+    """Tests for RateLimitRetriesExhausted exception (backward compatibility)."""
 
     def test_exception_message(self):
         """Test exception message format."""
-        exc = RateLimitRetriesExhausted(retries=3, max_retries=3)
+        exc = RateLimitRetriesExhausted(retries=3, max_retries=5)
 
         assert exc.retries == 3
-        assert exc.max_retries == 3
-        assert "3/3" in str(exc)
+        assert exc.max_retries == 5
+        assert "3/5" in str(exc)
 
 
-class TestRateLimitHandler:
-    """Tests for RateLimitHandler."""
+class TestCreateRateLimitRetry:
+    """Tests for the tenacity retry decorator factory."""
 
-    def test_initial_retry_count_is_zero(self):
-        """Handler starts with zero retries."""
-        handler = RateLimitHandler()
-        assert handler.retry_count == 0
+    def test_decorator_retries_on_rate_limit_detected(self):
+        """Test that decorator retries when RateLimitDetected is raised."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
 
-    def test_calculate_backoff_exponential(self):
-        """Test exponential backoff: base * 2^(attempt-1)."""
+        @create_rate_limit_retry(config)
+        def flaky_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise RateLimitDetected("Rate limited")
+            return "success"
+
+        result = flaky_function()
+
+        assert result == "success"
+        assert call_count == 3
+
+    def test_decorator_raises_after_max_attempts(self):
+        """Test that decorator raises after exhausting retries."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+
+        @create_rate_limit_retry(config)
+        def always_fails():
+            nonlocal call_count
+            call_count += 1
+            raise RateLimitDetected("Rate limited")
+
+        with pytest.raises(RateLimitDetected):
+            always_fails()
+
+        assert call_count == 3
+
+    def test_decorator_does_not_retry_other_exceptions(self):
+        """Test that decorator doesn't retry non-RateLimitDetected exceptions."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+
+        @create_rate_limit_retry(config)
+        def raises_value_error():
+            nonlocal call_count
+            call_count += 1
+            raise ValueError("Not a rate limit")
+
+        with pytest.raises(ValueError):
+            raises_value_error()
+
+        # Should only be called once since ValueError is not retried
+        assert call_count == 1
+
+    def test_decorator_calls_before_sleep_callback(self):
+        """Test that before_sleep callback is invoked on retry."""
+        callback = MagicMock()
         config = RateLimitConfig(
-            base_delay_seconds=60.0,
-            max_delay_seconds=900.0,
-            jitter_factor=0,  # Disable jitter for deterministic testing
+            max_attempts=3,
+            wait_min=0,
+            wait_max=0,
+            before_sleep_callback=callback,
         )
-        handler = RateLimitHandler(config)
+        call_count = 0
 
-        # First attempt: 60 * 2^0 = 60
-        assert handler.calculate_backoff(1) == timedelta(seconds=60)
+        @create_rate_limit_retry(config)
+        def flaky_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise RateLimitDetected("Rate limited")
+            return "success"
 
-        # Second attempt: 60 * 2^1 = 120
-        assert handler.calculate_backoff(2) == timedelta(seconds=120)
+        flaky_function()
 
-        # Third attempt: 60 * 2^2 = 240
-        assert handler.calculate_backoff(3) == timedelta(seconds=240)
+        # Callback should be called twice (before each retry sleep)
+        assert callback.call_count == 2
 
-        # Fourth attempt: 60 * 2^3 = 480
-        assert handler.calculate_backoff(4) == timedelta(seconds=480)
+    def test_decorator_with_default_config(self):
+        """Test decorator works with None config (uses defaults)."""
+        call_count = 0
 
-    def test_calculate_backoff_capped(self):
-        """Test that backoff is capped at max_delay."""
+        @create_rate_limit_retry(None)
+        def success_function():
+            nonlocal call_count
+            call_count += 1
+            return "success"
+
+        result = success_function()
+
+        assert result == "success"
+        assert call_count == 1
+
+
+class TestCreateRateLimitRetrying:
+    """Tests for the tenacity Retrying context manager factory."""
+
+    def test_retrying_succeeds_on_first_attempt(self):
+        """Test Retrying succeeds immediately when no exception."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                call_count += 1
+                result = "success"
+
+        assert result == "success"
+        assert call_count == 1
+
+    def test_retrying_retries_on_rate_limit_detected(self):
+        """Test Retrying retries when RateLimitDetected is raised."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+        result = None
+
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                call_count += 1
+                if call_count < 3:
+                    raise RateLimitDetected("Rate limited")
+                result = "success"
+
+        assert result == "success"
+        assert call_count == 3
+
+    def test_retrying_raises_after_max_attempts(self):
+        """Test Retrying raises RateLimitDetected after exhausting retries.
+
+        With reraise=True, tenacity re-raises the original exception rather
+        than wrapping it in RetryError.
+        """
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+
+        with pytest.raises(RateLimitDetected):
+            for attempt in create_rate_limit_retrying(config):
+                with attempt:
+                    call_count += 1
+                    raise RateLimitDetected("Rate limited")
+
+        assert call_count == 3
+
+    def test_retrying_does_not_retry_other_exceptions(self):
+        """Test Retrying doesn't retry non-RateLimitDetected exceptions."""
+        config = RateLimitConfig(max_attempts=3, wait_min=0, wait_max=0)
+        call_count = 0
+
+        with pytest.raises(ValueError):
+            for attempt in create_rate_limit_retrying(config):
+                with attempt:
+                    call_count += 1
+                    raise ValueError("Not a rate limit")
+
+        assert call_count == 1
+
+    def test_retrying_calls_before_sleep_callback(self):
+        """Test that before_sleep callback is invoked on retry."""
+        callback = MagicMock()
         config = RateLimitConfig(
-            base_delay_seconds=60.0,
-            max_delay_seconds=300.0,  # Cap at 5 minutes
-            jitter_factor=0,
+            max_attempts=3,
+            wait_min=0,
+            wait_max=0,
+            before_sleep_callback=callback,
         )
-        handler = RateLimitHandler(config)
+        call_count = 0
+        result = None
 
-        # Fifth attempt would be 60 * 2^4 = 960, but capped at 300
-        assert handler.calculate_backoff(5) == timedelta(seconds=300)
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                call_count += 1
+                if call_count < 3:
+                    raise RateLimitDetected("Rate limited")
+                result = "success"
 
-        # Even higher attempts stay capped
-        assert handler.calculate_backoff(10) == timedelta(seconds=300)
+        assert result == "success"
+        # Callback called twice (before each retry sleep)
+        assert callback.call_count == 2
 
-    def test_calculate_backoff_with_jitter(self):
-        """Test that jitter adds +-10% randomization."""
-        config = RateLimitConfig(
-            base_delay_seconds=100.0,
-            max_delay_seconds=1000.0,
-            jitter_factor=0.1,
+    def test_retrying_with_default_config(self):
+        """Test Retrying works with None config (uses defaults)."""
+        call_count = 0
+
+        for attempt in create_rate_limit_retrying(None):
+            with attempt:
+                call_count += 1
+                result = "success"
+
+        assert result == "success"
+        assert call_count == 1
+
+
+class TestGetRetryStateInfo:
+    """Tests for the retry state info extraction utility."""
+
+    def test_extracts_attempt_number(self):
+        """Test extraction of attempt number from retry state."""
+        mock_state = MagicMock()
+        mock_state.attempt_number = 3
+        mock_state.next_action = MagicMock()
+        mock_state.next_action.sleep = 10.5
+        mock_state.outcome = None
+
+        info = get_retry_state_info(mock_state)
+
+        assert info["attempt_number"] == 3
+        assert info["wait_seconds"] == 10.5
+        assert info["exception"] is None
+
+    def test_extracts_exception_info(self):
+        """Test extraction of exception info from retry state."""
+        mock_state = MagicMock()
+        mock_state.attempt_number = 2
+        mock_state.next_action = MagicMock()
+        mock_state.next_action.sleep = 5.0
+        mock_state.outcome = MagicMock()
+        mock_state.outcome.exception.return_value = RateLimitDetected("Test error")
+
+        info = get_retry_state_info(mock_state)
+
+        assert info["attempt_number"] == 2
+        assert info["wait_seconds"] == 5.0
+        assert "Test error" in info["exception"]
+
+    def test_handles_no_next_action(self):
+        """Test handling when next_action is None."""
+        mock_state = MagicMock()
+        mock_state.attempt_number = 1
+        mock_state.next_action = None
+        mock_state.outcome = None
+
+        info = get_retry_state_info(mock_state)
+
+        assert info["attempt_number"] == 1
+        assert info["wait_seconds"] == 0
+        assert info["exception"] is None
+
+
+class TestRateLimitDetectedException:
+    """Tests for the RateLimitDetected exception used with tenacity."""
+
+    def test_exception_with_default_message(self):
+        """Test exception with default message."""
+        exc = RateLimitDetected()
+
+        assert "Rate limit detected" in str(exc)
+
+    def test_exception_with_custom_message(self):
+        """Test exception with custom message."""
+        exc = RateLimitDetected("Custom rate limit message")
+
+        assert "Custom rate limit message" in str(exc)
+
+    def test_exception_with_output_context(self):
+        """Test exception stores output in context."""
+        exc = RateLimitDetected(
+            message="Rate limited",
+            output="API returned 429",
         )
-        handler = RateLimitHandler(config)
 
-        # Run multiple times to verify jitter is applied
-        delays = [handler.calculate_backoff(1).total_seconds() for _ in range(100)]
-
-        # Base delay for attempt 1 is 100 seconds
-        # With 10% jitter, range should be 90-110 seconds
-        assert min(delays) >= 90
-        assert max(delays) <= 110
-
-        # Verify there's actual variation (not all the same value)
-        unique_delays = set(delays)
-        assert len(unique_delays) > 1, "Jitter should produce varied delays"
-
-    def test_calculate_backoff_uses_retry_count_by_default(self):
-        """Test that calculate_backoff uses current retry_count when no attempt given."""
-        config = RateLimitConfig(
-            base_delay_seconds=60.0,
-            jitter_factor=0,
-        )
-        handler = RateLimitHandler(config)
-
-        # Record some retries
-        handler.record_rate_limit()
-        handler.record_rate_limit()
-        assert handler.retry_count == 2
-
-        # Should use retry_count (2) as attempt
-        # 60 * 2^1 = 120
-        assert handler.calculate_backoff() == timedelta(seconds=120)
-
-    def test_calculate_backoff_zero_or_negative_attempt(self):
-        """Test edge case handling for zero or negative attempt."""
-        config = RateLimitConfig(
-            base_delay_seconds=60.0,
-            jitter_factor=0,
-        )
-        handler = RateLimitHandler(config)
-
-        # Should treat 0 and negative as attempt 1
-        assert handler.calculate_backoff(0) == timedelta(seconds=60)
-        assert handler.calculate_backoff(-1) == timedelta(seconds=60)
-
-    def test_should_retry_within_limit(self):
-        """Test should_retry returns True when retries < max."""
-        config = RateLimitConfig(max_retries=3)
-        handler = RateLimitHandler(config)
-
-        assert handler.should_retry() is True
-
-        handler.record_rate_limit()  # retry_count = 1
-        assert handler.should_retry() is True
-
-        handler.record_rate_limit()  # retry_count = 2
-        assert handler.should_retry() is True
-
-    def test_should_retry_exceeded(self):
-        """Test should_retry returns False when retries >= max."""
-        config = RateLimitConfig(max_retries=3)
-        handler = RateLimitHandler(config)
-
-        handler.record_rate_limit()  # 1
-        handler.record_rate_limit()  # 2
-        handler.record_rate_limit()  # 3
-
-        assert handler.should_retry() is False
-
-        # Additional retries still return False
-        handler.record_rate_limit()  # 4
-        assert handler.should_retry() is False
-
-    def test_reset_clears_counter(self):
-        """Test reset() sets retry count back to zero."""
-        config = RateLimitConfig(max_retries=3)
-        handler = RateLimitHandler(config)
-
-        handler.record_rate_limit()
-        handler.record_rate_limit()
-        assert handler.retry_count == 2
-
-        handler.reset()
-        assert handler.retry_count == 0
-        assert handler.should_retry() is True
-
-    def test_record_rate_limit_increments(self):
-        """Test that each record_rate_limit() increments the counter."""
-        handler = RateLimitHandler()
-
-        assert handler.retry_count == 0
-
-        handler.record_rate_limit()
-        assert handler.retry_count == 1
-
-        handler.record_rate_limit()
-        assert handler.retry_count == 2
-
-        handler.record_rate_limit()
-        assert handler.retry_count == 3
-
-    def test_get_backoff_seconds(self):
-        """Test get_backoff_seconds returns integer seconds."""
-        config = RateLimitConfig(
-            base_delay_seconds=60.5,  # Non-integer to test truncation
-            jitter_factor=0,
-        )
-        handler = RateLimitHandler(config)
-
-        result = handler.get_backoff_seconds(1)
-        assert isinstance(result, int)
-        assert result == 60
-
-    def test_default_config_when_none_provided(self):
-        """Test that handler uses default config when None is provided."""
-        handler = RateLimitHandler(None)
-
-        assert handler.config.max_retries == 3
-        assert handler.config.base_delay_seconds == 60.0
-        assert handler.config.max_delay_seconds == 900.0
-        assert handler.config.jitter_factor == 0.1
+        assert exc.context.get("output") == "API returned 429"
 
 
-class TestRateLimitHandlerIntegration:
+class TestIntegrationPatterns:
     """Integration tests for typical usage patterns."""
 
-    def test_typical_retry_loop(self):
-        """Test typical retry loop pattern."""
-        config = RateLimitConfig(max_retries=3, jitter_factor=0)
-        handler = RateLimitHandler(config)
+    def test_typical_retry_loop_with_context_manager(self):
+        """Test typical retry loop pattern using Retrying context manager."""
+        config = RateLimitConfig(max_attempts=5, wait_min=0, wait_max=0)
+        attempts = 0
+        result = None
 
-        retries_made = 0
-        while handler.should_retry():
-            handler.record_rate_limit()
-            retries_made += 1
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                attempts += 1
+                if attempts < 3:
+                    raise RateLimitDetected("Simulated rate limit")
+                result = "Operation succeeded"
 
-        assert retries_made == 3
-        assert not handler.should_retry()
+        assert result == "Operation succeeded"
+        assert attempts == 3
 
-    def test_reset_after_success(self):
-        """Test resetting handler after successful operation."""
-        config = RateLimitConfig(max_retries=3)
-        handler = RateLimitHandler(config)
+    def test_decorator_pattern_for_api_call(self):
+        """Test decorator pattern for wrapping API calls."""
+        config = RateLimitConfig(max_attempts=5, wait_min=0, wait_max=0)
+        api_calls = []
 
-        # First operation: 2 retries then success
-        handler.record_rate_limit()
-        handler.record_rate_limit()
-        assert handler.retry_count == 2
+        @create_rate_limit_retry(config)
+        def mock_api_call(data: str) -> str:
+            api_calls.append(data)
+            if len(api_calls) < 2:
+                raise RateLimitDetected("API rate limited")
+            return f"Result: {data}"
 
-        # Success! Reset counter
-        handler.reset()
-        assert handler.retry_count == 0
+        result = mock_api_call("test_data")
 
-        # Second operation: should start fresh
-        assert handler.should_retry() is True
-        handler.record_rate_limit()
-        handler.record_rate_limit()
-        handler.record_rate_limit()
-        assert not handler.should_retry()
+        assert result == "Result: test_data"
+        assert len(api_calls) == 2
+        assert all(call == "test_data" for call in api_calls)
+
+    def test_callback_receives_retry_info(self):
+        """Test that callback receives useful retry information."""
+        received_info = []
+
+        def capture_callback(retry_state):
+            info = get_retry_state_info(retry_state)
+            received_info.append(info)
+
+        config = RateLimitConfig(
+            max_attempts=4,
+            wait_min=0,
+            wait_max=0,
+            before_sleep_callback=capture_callback,
+        )
+        call_count = 0
+
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                call_count += 1
+                if call_count < 3:
+                    raise RateLimitDetected("Rate limit")
+                break
+
+        # Should have 2 callbacks (before attempts 2 and 3)
+        assert len(received_info) == 2
+        assert received_info[0]["attempt_number"] == 1
+        assert received_info[1]["attempt_number"] == 2
+
+    def test_early_exit_on_success(self):
+        """Test that retry loop exits immediately on success."""
+        config = RateLimitConfig(max_attempts=10, wait_min=0, wait_max=0)
+        iterations = 0
+
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                iterations += 1
+                # Success on first try
+                result = "immediate success"
+
+        assert result == "immediate success"
+        assert iterations == 1
