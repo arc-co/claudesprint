@@ -78,7 +78,10 @@ WORKFLOW_STEPS = [
     ("fix-tests", "fix tests"),
     ("browser-validation", "browser validation"),
     ("code-review", "code review"),
+    ("update-docs", "update docs"),
+    ("stage-changes", "stage changes"),
     ("commit-changes", "commit changes"),
+    ("complete-issue", "complete issue"),
 ]
 
 
