@@ -96,11 +96,18 @@ def create_dashboard(state: DashboardState, refresh_callbacks: dict[str, Callabl
 
     with ui.element("div").classes("tui"):
         _create_header(state)
-        _create_sprint_section(state)
+        _create_sprint_section(state, refresh_callbacks)
         _create_task_board(state, refresh_callbacks)
         _create_issue_section(state, refresh_callbacks)
         _create_workflow_section(state, refresh_callbacks)
         _create_output_section(state, refresh_callbacks)
+
+    # Timer to auto-refresh elapsed time every second
+    def refresh_elapsed() -> None:
+        if "issue" in refresh_callbacks:
+            refresh_callbacks["issue"]()
+
+    ui.timer(1.0, refresh_elapsed)
 
 
 def _create_header(_state: DashboardState) -> None:
@@ -110,29 +117,29 @@ def _create_header(_state: DashboardState) -> None:
         ui.html('<span>status: <span class="conn-ok">OK</span></span>', sanitize=False)
 
 
-def _create_sprint_section(state: DashboardState) -> None:
+def _create_sprint_section(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
     """Create the sprint info section."""
     with ui.element("div").classes("section"):
-        ui.element("div").classes("section-title").text = "sprint"
-        with ui.element("div").classes("row"):
-            # These will be updated via refresh
-            sprint_label = ui.html("", sanitize=False)
+        ui.label("sprint").classes("section-title")
 
-            @ui.refreshable
-            def update_sprint() -> None:
-                sprint_label.set_content(
+        @ui.refreshable
+        def render_sprint() -> None:
+            with ui.element("div").classes("row"):
+                ui.html(
                     f'<span>id: <span class="sprint-id">{state.sprint_id or "-"}</span></span>'
                     f'<span style="margin-left: 24px">issues: <span class="issue-count">'
-                    f"{state.completed_issues}/{state.total_issues}</span></span>"
+                    f"{state.completed_issues}/{state.total_issues}</span></span>",
+                    sanitize=False,
                 )
 
-            update_sprint()
+        render_sprint()
+        refresh_callbacks["sprint"] = render_sprint.refresh
 
 
 def _create_task_board(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
     """Create the 4-column task board."""
     with ui.element("div").classes("section"):
-        ui.element("div").classes("section-title").text = "task board"
+        ui.label("task board").classes("section-title")
 
         @ui.refreshable
         def render_board() -> None:
@@ -144,25 +151,25 @@ def _create_task_board(state: DashboardState, refresh_callbacks: dict[str, Calla
                     ("blocked", "blocked"),
                 ]:
                     with ui.element("div").classes("board-column"):
-                        ui.element("div").classes(f"column-header {status}").text = header_text
+                        ui.label(header_text).classes(f"column-header {status}")
                         with ui.element("div").classes("column-content"):
                             issues_in_column = [
                                 issue for issue in state.issues.values() if issue.get("status") == status
                             ]
                             if not issues_in_column:
-                                ui.element("div").classes("empty-column").text = "-"
+                                ui.label("-").classes("empty-column")
                             else:
                                 for issue in issues_in_column:
                                     is_active = issue.get("id") == state.current_issue_id
                                     card_classes = "issue-card active" if is_active else "issue-card"
                                     with ui.element("div").classes(card_classes):
-                                        ui.element("div").classes("issue-id").text = issue.get("id", "")
-                                        ui.element("div").classes("issue-title").text = issue.get("title", "")
+                                        ui.label(issue.get("id", "")).classes("issue-id")
+                                        ui.label(issue.get("title", "")).classes("issue-title")
                                         with ui.element("div").classes("issue-meta"):
                                             priority = issue.get("priority", "medium")
-                                            ui.element("span").classes(f"priority {priority}").text = priority.upper()
+                                            ui.label(priority.upper()).classes(f"priority {priority}")
                                             if issue.get("category"):
-                                                ui.element("span").classes("category").text = issue.get("category")
+                                                ui.label(issue.get("category")).classes("category")
 
         render_board()
         refresh_callbacks["task_board"] = render_board.refresh
@@ -171,12 +178,12 @@ def _create_task_board(state: DashboardState, refresh_callbacks: dict[str, Calla
 def _create_issue_section(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
     """Create the current issue section."""
     with ui.element("div").classes("section"):
-        ui.element("div").classes("section-title").text = "issue"
+        ui.label("issue").classes("section-title")
 
         @ui.refreshable
         def render_issue() -> None:
             issue_text = state.current_issue_name if state.current_issue_name else "waiting..."
-            ui.element("div").classes("issue-name").text = issue_text
+            ui.label(issue_text).classes("issue-name")
             with ui.element("div").classes("row meta"):
                 ui.html(
                     f'<span>step: <span class="current-step">{state.current_step or "-"}</span></span>'
@@ -193,18 +200,18 @@ def _create_issue_section(state: DashboardState, refresh_callbacks: dict[str, Ca
 def _create_workflow_section(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
     """Create the workflow pipeline visualization."""
     with ui.element("div").classes("section"):
-        ui.element("div").classes("section-title").text = "workflow"
+        ui.label("workflow").classes("section-title")
 
         @ui.refreshable
         def render_workflow() -> None:
             with ui.element("div").classes("workflow"):
                 for i, (step_id, step_label) in enumerate(WORKFLOW_STEPS):
                     if i > 0:
-                        ui.element("span").classes("arrow").text = ">"
+                        ui.label(">").classes("arrow")
                     is_active = state.current_step == step_id
                     step_classes = "step active" if is_active else "step"
                     marker = "[*]" if is_active else "[ ]"
-                    ui.element("span").classes(step_classes).text = f"{marker} {step_label}"
+                    ui.label(f"{marker} {step_label}").classes(step_classes)
 
         render_workflow()
         refresh_callbacks["workflow"] = render_workflow.refresh
@@ -213,9 +220,10 @@ def _create_workflow_section(state: DashboardState, refresh_callbacks: dict[str,
 def _create_output_section(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
     """Create the output log section."""
     with ui.element("div").classes("section"):
-        with ui.element("div").classes("section-title").style("display: flex; justify-content: space-between"):
+        with ui.row().classes("section-title").style("display: flex; justify-content: space-between; width: 100%"):
             ui.label("output")
             clear_btn = ui.label("clear").classes("btn")
+
             def clear_and_refresh() -> None:
                 state.clear_output()
                 refresh_callbacks["output"]()
@@ -226,17 +234,17 @@ def _create_output_section(state: DashboardState, refresh_callbacks: dict[str, C
         def render_output() -> None:
             with ui.element("div").classes("output-container"), ui.element("pre").classes("output-content"):
                 for line in state.output_lines:
-                        # Determine line type for styling
-                        line_class = "output-line"
-                        if line.startswith("$ ") or line.startswith("> "):
-                            line_class = "output-line command"
-                        elif "error" in line.lower() or "failed" in line.lower():
-                            line_class = "output-line error"
-                        elif "success" in line.lower() or "done" in line.lower():
-                            line_class = "output-line success"
-                        elif "warning" in line.lower() or "rate limit" in line.lower():
-                            line_class = "output-line warning"
-                        ui.element("span").classes(line_class).text = line + "\n"
+                    # Determine line type for styling
+                    line_class = "output-line"
+                    if line.startswith("$ ") or line.startswith("> "):
+                        line_class = "output-line command"
+                    elif "error" in line.lower() or "failed" in line.lower():
+                        line_class = "output-line error"
+                    elif "success" in line.lower() or "done" in line.lower():
+                        line_class = "output-line success"
+                    elif "warning" in line.lower() or "rate limit" in line.lower():
+                        line_class = "output-line warning"
+                    ui.label(line + "\n").classes(line_class)
 
         render_output()
         refresh_callbacks["output"] = render_output.refresh

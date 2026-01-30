@@ -179,16 +179,16 @@ class DashboardServer:
         issues_data = cast(dict[str, Any], payload).get("issues", [])
         if issues_data:
             self._state.set_issues(issues_data)
-        self._refresh_ui("task_board", "issue", "output")
+        self._refresh_ui("sprint", "task_board", "issue", "output")
 
     def _on_sprint_completed(self, payload: EventPayload) -> None:
         self._state.completed_issues = _get_int(payload, "completed_count")
         self._state.add_output("SPRINT DONE")
-        self._refresh_ui("task_board", "output")
+        self._refresh_ui("sprint", "task_board", "output")
 
     def _on_sprint_iteration(self, payload: EventPayload) -> None:
         self._state.completed_issues = _get_int(payload, "completed_count")
-        self._refresh_ui("task_board")
+        self._refresh_ui("sprint", "task_board")
 
     def _on_selecting_issue(self, _payload: EventPayload) -> None:
         self._state.current_step = "selecting-issue"
@@ -212,7 +212,7 @@ class DashboardServer:
         self._state.current_issue_name = ""
         self._state.current_step = ""
         self._state.add_output(f"DONE: {old_issue}")
-        self._refresh_ui("task_board", "issue", "workflow", "output")
+        self._refresh_ui("sprint", "task_board", "issue", "workflow", "output")
 
     def _on_issue_failed(self, payload: EventPayload) -> None:
         issue_id = _get_str(payload, "issue_id") or self._state.current_issue_id
