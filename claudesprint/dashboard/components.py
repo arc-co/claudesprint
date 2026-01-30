@@ -75,13 +75,14 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 """
 
 WORKFLOW_STEPS = [
-    ("read-docs", "docs"),
-    ("implement", "impl"),
-    ("write-tests", "tests"),
-    ("run-tests", "run"),
-    ("fix-tests", "fix"),
-    ("code-review", "review"),
-    ("commit-changes", "commit"),
+    ("read-docs", "read docs"),
+    ("implement", "implementation"),
+    ("write-tests", "write tests"),
+    ("run-tests", "run tests"),
+    ("fix-tests", "fix tests"),
+    ("browser-validation", "browser validation"),
+    ("code-review", "code review"),
+    ("commit-changes", "commit changes"),
 ]
 
 
