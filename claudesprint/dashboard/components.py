@@ -58,12 +58,8 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .empty-column { color: #444; text-align: center; padding: 12px; }
 
 .output-container { margin-top: 8px; max-height: 300px; overflow-y: auto; border-top: 1px solid #444; padding-top: 8px; }
-.output-content { font-family: monospace; font-size: 12px; color: #BFBFBF; white-space: pre-wrap; word-break: break-all; }
+.output-content { font-family: monospace; font-size: 12px; color: #f2f2f2; white-space: pre-wrap; word-break: break-all; }
 .output-line { display: block; }
-.output-line.command { color: #D77757; }
-.output-line.error { color: #ef6678; }
-.output-line.success { color: #0db172; }
-.output-line.warning { color: #e3e312; }
 
 .throbber { display: inline-block; color: #D77757; font-weight: 500; min-width: 12px; }
 .btn { color: #BFBFBF; cursor: pointer; margin-left: 12px; }
@@ -235,17 +231,7 @@ def _create_output_section(state: DashboardState, refresh_callbacks: dict[str, C
         def render_output() -> None:
             with ui.element("div").classes("output-container"), ui.element("pre").classes("output-content"):
                 for line in state.output_lines:
-                    # Determine line type for styling
-                    line_class = "output-line"
-                    if line.startswith("$ ") or line.startswith("> "):
-                        line_class = "output-line command"
-                    elif "error" in line.lower() or "failed" in line.lower():
-                        line_class = "output-line error"
-                    elif "success" in line.lower() or "done" in line.lower():
-                        line_class = "output-line success"
-                    elif "warning" in line.lower() or "rate limit" in line.lower():
-                        line_class = "output-line warning"
-                    ui.label(line + "\n").classes(line_class)
+                    ui.label(line + "\n").classes("output-line")
 
         render_output()
         refresh_callbacks["output"] = render_output.refresh
