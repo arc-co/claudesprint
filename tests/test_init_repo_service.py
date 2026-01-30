@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 import pytest
 
-from claudesprint.services.constants import CLAUDESPRINT_SKILL_CONTENT, PROMPTS_README_CONTENT
+from claudesprint.services.constants import (
+    AGENT_BROWSER_SKILL_CONTENT,
+    CLAUDESPRINT_SKILL_CONTENT,
+    PROMPTS_README_CONTENT,
+)
 from claudesprint.services.init_repo_service import (
     InitRepoService,
     InitRepoResult,
@@ -422,3 +426,64 @@ class TestInitRepoResult:
         assert result.created_files == ["file1.txt"]
         assert result.warnings == ["warning1"]
         assert result.error == "Something went wrong"
+
+
+class TestInitRepoServiceAgentBrowserSkill:
+    """Tests for agent-browser skill creation."""
+
+    def test_creates_agent_browser_skill_directory_and_file(self) -> None:
+        """Test init creates .claude/skills/agent-browser/SKILL.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            skill_path = Path(tmpdir) / ".claude" / "skills" / "agent-browser" / "SKILL.md"
+            assert skill_path.exists()
+            assert skill_path.read_text() == AGENT_BROWSER_SKILL_CONTENT
+
+    def test_agent_browser_skill_in_created_items(self) -> None:
+        """Test agent-browser skill directory and file are listed in result."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            assert ".claude/skills/agent-browser/" in result.created_dirs
+            assert ".claude/skills/agent-browser/SKILL.md" in result.created_files
+
+    def test_force_overwrites_agent_browser_skill(self) -> None:
+        """Test --force overwrites agent-browser SKILL.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create initial structure with custom skill
+            skill_dir = Path(tmpdir) / ".claude" / "skills" / "agent-browser"
+            skill_dir.mkdir(parents=True)
+            skill_path = skill_dir / "SKILL.md"
+            skill_path.write_text("# Custom agent-browser skill")
+
+            # Also create .claudesprint to satisfy exists check
+            (Path(tmpdir) / ".claudesprint").mkdir()
+
+            service = InitRepoService(tmpdir)
+            result = service.init(force=True)
+
+            assert result.success is True
+            assert skill_path.read_text() == AGENT_BROWSER_SKILL_CONTENT
+
+    def test_creates_both_skills(self) -> None:
+        """Test init creates both claudesprint and agent-browser skills."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init()
+
+            assert result.success is True
+            # Both skills should exist
+            claudesprint_skill = Path(tmpdir) / ".claude" / "skills" / "claudesprint" / "SKILL.md"
+            agent_browser_skill = Path(tmpdir) / ".claude" / "skills" / "agent-browser" / "SKILL.md"
+            assert claudesprint_skill.exists()
+            assert agent_browser_skill.exists()
+            # Both should be in created items
+            assert ".claude/skills/claudesprint/" in result.created_dirs
+            assert ".claude/skills/agent-browser/" in result.created_dirs
+            assert ".claude/skills/claudesprint/SKILL.md" in result.created_files
+            assert ".claude/skills/agent-browser/SKILL.md" in result.created_files

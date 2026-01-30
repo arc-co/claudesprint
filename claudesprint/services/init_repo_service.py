@@ -3,7 +3,11 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claudesprint.services.constants import CLAUDESPRINT_SKILL_CONTENT, PROMPTS_README_CONTENT
+from claudesprint.services.constants import (
+    AGENT_BROWSER_SKILL_CONTENT,
+    CLAUDESPRINT_SKILL_CONTENT,
+    PROMPTS_README_CONTENT,
+)
 from claudesprint.services.git_service import GitService
 from claudesprint.services.project_config_service import DEFAULT_PROJECT_CONFIG_TOML
 
@@ -34,8 +38,10 @@ class InitRepoService:
     # Skill installation paths
     CLAUDE_DIR = ".claude"
     SKILLS_DIR = "skills"
-    SKILL_NAME = "claudesprint"
     SKILL_FILE = "SKILL.md"
+    # Skills to scaffold
+    CLAUDESPRINT_SKILL_NAME = "claudesprint"
+    AGENT_BROWSER_SKILL_NAME = "agent-browser"
 
     def __init__(self, project_root: str | Path) -> None:
         """Initialize the service.
@@ -54,8 +60,12 @@ class InitRepoService:
         # Skill paths
         self.claude_dir = self.project_root / self.CLAUDE_DIR
         self.skills_dir = self.claude_dir / self.SKILLS_DIR
-        self.skill_dir = self.skills_dir / self.SKILL_NAME
-        self.skill_file = self.skill_dir / self.SKILL_FILE
+        # ClaudeSprint skill
+        self.claudesprint_skill_dir = self.skills_dir / self.CLAUDESPRINT_SKILL_NAME
+        self.claudesprint_skill_file = self.claudesprint_skill_dir / self.SKILL_FILE
+        # Agent-browser skill
+        self.agent_browser_skill_dir = self.skills_dir / self.AGENT_BROWSER_SKILL_NAME
+        self.agent_browser_skill_file = self.agent_browser_skill_dir / self.SKILL_FILE
 
     def exists(self) -> bool:
         """Check if .claudesprint/ directory already exists.
@@ -130,18 +140,32 @@ class InitRepoService:
                 else:
                     result.created_files.append(".gitignore (updated)")
 
-            # Create skill directory and file
-            skill_dir_existed = self.skill_dir.exists()
-            self.skill_dir.mkdir(parents=True, exist_ok=True)
-            if not skill_dir_existed:
+            # Create claudesprint skill
+            claudesprint_skill_dir_existed = self.claudesprint_skill_dir.exists()
+            self.claudesprint_skill_dir.mkdir(parents=True, exist_ok=True)
+            if not claudesprint_skill_dir_existed:
                 result.created_dirs.append(
-                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.SKILL_NAME}/"
+                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.CLAUDESPRINT_SKILL_NAME}/"
                 )
 
-            if not self.skill_file.exists() or force:
-                self.skill_file.write_text(CLAUDESPRINT_SKILL_CONTENT)
+            if not self.claudesprint_skill_file.exists() or force:
+                self.claudesprint_skill_file.write_text(CLAUDESPRINT_SKILL_CONTENT)
                 result.created_files.append(
-                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.SKILL_NAME}/{self.SKILL_FILE}"
+                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.CLAUDESPRINT_SKILL_NAME}/{self.SKILL_FILE}"
+                )
+
+            # Create agent-browser skill
+            agent_browser_skill_dir_existed = self.agent_browser_skill_dir.exists()
+            self.agent_browser_skill_dir.mkdir(parents=True, exist_ok=True)
+            if not agent_browser_skill_dir_existed:
+                result.created_dirs.append(
+                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/"
+                )
+
+            if not self.agent_browser_skill_file.exists() or force:
+                self.agent_browser_skill_file.write_text(AGENT_BROWSER_SKILL_CONTENT)
+                result.created_files.append(
+                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/{self.SKILL_FILE}"
                 )
 
         except OSError as e:
