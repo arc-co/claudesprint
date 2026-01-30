@@ -19,6 +19,10 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .section.header { display: flex; justify-content: space-between; background: #2a2a2a; padding: 14px 16px; }
 .section-title { color: #888; font-weight: 500; margin-bottom: 8px; }
 .label { color: #BFBFBF; font-weight: 500; }
+.logo { color: #D77757; font-weight: 500; }
+.header-links { display: flex; gap: 16px; align-items: center; }
+.header-link { color: #888; text-decoration: none; }
+.header-link:hover { color: #BFBFBF; text-decoration: underline; }
 .version { color: #666; margin-left: 8px; }
 .row { display: flex; gap: 24px; }
 .meta { margin-top: 8px; color: #BFBFBF; }
@@ -41,6 +45,7 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .board-column { flex: 1; border: 1px solid #444; min-width: 0; }
 .column-header { background: #2a2a2a; padding: 6px 10px; color: #888; font-weight: 500; border-bottom: 1px solid #444; text-align: center; }
 .column-header.pending { color: #BFBFBF; }
+.column-header.pending::before { content: "● "; color: #888; }
 .column-header.in_progress { color: #f2f2f2; }
 .column-header.in_progress::before { content: "● "; color: #e3e312; }
 .column-header.completed { color: #BFBFBF; }
@@ -53,12 +58,7 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .issue-id { color: #888; font-weight: 500; font-size: 11px; }
 .issue-title { color: #BFBFBF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .issue-meta { display: flex; gap: 10px; margin-top: 4px; font-size: 11px; }
-.priority { color: #BFBFBF; }
-.priority.critical { color: #f2f2f2; font-weight: 500; }
-.priority.critical::before { content: "● "; color: #ef6678; }
-.priority.high { color: #D77757; font-weight: 500; }
-.priority.medium { color: #BFBFBF; }
-.priority.low { color: #888; }
+.priority { color: #888; }
 .category { color: #BFBFBF; }
 .empty-column { color: #444; text-align: center; padding: 12px; }
 
@@ -118,8 +118,15 @@ def create_dashboard(state: DashboardState, refresh_callbacks: dict[str, Callabl
 def _create_header(_state: DashboardState) -> None:
     """Create the header section with title and connection status."""
     with ui.element("div").classes("section header"):
-        ui.html('<span class="label">ClaudeSprint<span class="version">v0.0.2</span></span>', sanitize=False)
-        ui.html('<span>status: <span class="conn-ok">OK</span></span>', sanitize=False)
+        ui.html('<span class="logo">⚡ ClaudeSprint<span class="version">v0.0.2</span></span>', sanitize=False)
+        ui.html(
+            '<div class="header-links">'
+            '<a class="header-link" href="https://www.claudesprint.com/docs" target="_blank">docs</a>'
+            '<a class="header-link" href="https://github.com/arc-co/claudesprint" target="_blank">github</a>'
+            '<span>status: <span class="conn-ok">OK</span></span>'
+            '</div>',
+            sanitize=False,
+        )
 
 
 def _create_sprint_section(state: DashboardState, refresh_callbacks: dict[str, Callable[[], None]]) -> None:
