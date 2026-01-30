@@ -21,6 +21,7 @@ from claudesprint.core.claude_runner import ClaudeRunner
 
 if TYPE_CHECKING:
     from claudesprint.events.workflow_event_bus import WorkflowEventBus
+    from claudesprint.services.configuration_manager import ConfigurationManager
 
 from claudesprint.events.workflow_event_bus import WorkflowEvent, IssueIterationPayload, RoutingSignalPayload
 from claudesprint.core.step_executors import (
@@ -175,6 +176,7 @@ class IssueEngine:
         prompt_service: PromptService,
         claude_runner: ClaudeRunner,
         event_bus: WorkflowEventBus | None = None,
+        config_manager: ConfigurationManager | None = None,
     ) -> None:
         """Initialize IssueEngine.
 
@@ -187,6 +189,7 @@ class IssueEngine:
             prompt_service: Service for loading prompt templates
             claude_runner: Runner for executing Claude commands
             event_bus: Optional event bus for emitting workflow events
+            config_manager: Optional ConfigurationManager for model configuration
         """
         self.config = config
         self.execution_config = execution_config
@@ -196,6 +199,7 @@ class IssueEngine:
         self.prompt_service = prompt_service
         self.claude_runner = claude_runner
         self.event_bus = event_bus
+        self._config_manager = config_manager
 
         # Step executors registry
         self._step_executors: dict[IssueStep, StepExecutor] = {}
@@ -207,7 +211,10 @@ class IssueEngine:
         Uses STEP_EXECUTOR_OVERRIDES to determine executor types.
         Default executor is LlmStepExecutor for steps not in the overrides.
         """
-        models_service = ModelsService(self.config.models_file)
+        if self._config_manager is not None:
+            models_service = ModelsService.from_config_manager(self._config_manager)
+        else:
+            models_service = ModelsService()
 
         # Create executor instances
         # Event-driven: callbacks emit events via the event bus

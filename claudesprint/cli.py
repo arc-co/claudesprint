@@ -267,6 +267,7 @@ def _run_sprint_console(
             prompt_service=prompt_service,
             claude_runner=issue_claude_runner,
             event_bus=event_bus,
+            config_manager=cm,
         )
 
     # Create SprintEngine with all dependencies
