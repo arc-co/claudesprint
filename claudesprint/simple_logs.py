@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from claudesprint.utils.styles import SYMBOLS, COLORS
+from claudesprint.utils.styles import SYMBOLS, COLORS, ConsoleThrobber
 
 if TYPE_CHECKING:
     from claudesprint.core.issue_engine import IssueStep
@@ -46,15 +46,18 @@ class SimpleLogsOutput:
         self,
         console: Console | None = None,
         verbosity: LogVerbosity = LogVerbosity.NORMAL,
+        show_throbber: bool = True,
     ) -> None:
         """Initialize the simple logs output.
 
         Args:
             console: Rich console for output. If None, creates a new one.
             verbosity: Log verbosity level controlling output detail.
+            show_throbber: Whether to show animated throbber during steps.
         """
         self.console = console or Console()
         self.verbosity = verbosity
+        self.show_throbber = show_throbber
         self.current_issue: str | None = None
         self.current_step: str | None = None
         self.step_start_time: float | None = None
@@ -65,6 +68,8 @@ class SimpleLogsOutput:
         self.max_iterations: int = 50
         self.retry_count: int = 0
         self.max_retry: int = 5
+        # Throbber for indicating activity
+        self._throbber = ConsoleThrobber(self.console) if show_throbber else None
 
     def _timestamp(self) -> str:
         """Get current timestamp in HH:MM:SS format."""
@@ -318,6 +323,10 @@ class SimpleLogsOutput:
 
         self._log(f"[{COLORS.WARNING}]STEP[/{COLORS.WARNING}] {step.value} | Starting... (model: {model}){iter_info}", indent=2)
 
+        # Start throbber to indicate activity
+        if self._throbber:
+            self._throbber.start(f"{step.value}")
+
     def on_step_complete(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
         """Log step completion.
 
@@ -325,6 +334,10 @@ class SimpleLogsOutput:
             step: The completed step.
             next_step: The next step to execute, or None if done.
         """
+        # Stop throbber before logging completion
+        if self._throbber:
+            self._throbber.stop()
+
         elapsed = self._format_elapsed(self.step_start_time)
         self._log(f"[{COLORS.SUCCESS}]STEP[/{COLORS.SUCCESS}] {step.value} | Complete ({elapsed})", indent=2)
         self.step_start_time = None
@@ -337,6 +350,10 @@ class SimpleLogsOutput:
             step: The skipped step.
             next_step: The next step to execute, or None if done.
         """
+        # Stop throbber if running
+        if self._throbber:
+            self._throbber.stop()
+
         self._log(f"[{COLORS.MUTED}]STEP[/{COLORS.MUTED}] {step.value} | Skipped", indent=2)
 
     def on_step_failure(self, step: "IssueStep", retry_count: int, max_retry: int = 5) -> None:
@@ -347,6 +364,10 @@ class SimpleLogsOutput:
             retry_count: Number of retries attempted.
             max_retry: Maximum retry limit for context.
         """
+        # Stop throbber on failure
+        if self._throbber:
+            self._throbber.stop()
+
         color = COLORS.ERROR if retry_count >= max_retry * 0.6 else COLORS.WARNING
         self._log(f"[{color}]STEP[/{color}] {step.value} | Failed (retry {retry_count}/{max_retry})", indent=2)
 
@@ -368,11 +389,19 @@ class SimpleLogsOutput:
         Args:
             line: Output line from the subprocess.
         """
+        # Pause throbber during output to avoid mixing lines
+        if self._throbber and self._throbber.is_running:
+            self._throbber.stop()
+
         # Print agent output with indent (3 levels - under step)
         # Strip any trailing whitespace but preserve content
         line = line.rstrip()
         if line:
             self._log(f"[{COLORS.MUTED}]{SYMBOLS.INDENT}[/{COLORS.MUTED}] {line}", indent=3)
+
+        # Resume throbber after output
+        if self._throbber and self.current_step:
+            self._throbber.start(f"{self.current_step}")
 
     def on_subprocess_end(self) -> None:
         """Log subprocess end (no-op for simple logs)."""
@@ -415,7 +444,14 @@ class SimpleLogsOutput:
         # This is handled by on_issue_complete for simple logs
         pass
 
-    # Context manager (no-op for simple logger)
+    # Throbber control
+
+    def stop_throbber(self) -> None:
+        """Stop the throbber if running."""
+        if self._throbber:
+            self._throbber.stop()
+
+    # Context manager
 
     def __enter__(self) -> "SimpleLogsOutput":
         """Enter context manager."""
@@ -427,5 +463,5 @@ class SimpleLogsOutput:
         exc_val: BaseException | None,
         exc_tb: object,
     ) -> None:
-        """Exit context manager."""
-        pass
+        """Exit context manager - ensure throbber is stopped."""
+        self.stop_throbber()

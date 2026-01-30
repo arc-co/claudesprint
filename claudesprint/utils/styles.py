@@ -5,9 +5,16 @@ This module provides consistent styling across all CLI output through:
 - COLORS: Color names for Rich markup
 - STYLES: Compound styles for panels, badges, etc.
 - Helper functions for common formatting patterns
+- ConsoleThrobber: Animated spinner for long-running operations
 """
 
+import threading
+import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 @dataclass(frozen=True)
@@ -19,6 +26,8 @@ class Symbols:
     WARNING: str = "⚠"
     RUNNING: str = "▶"
     INDENT: str = ">"
+    # Throbber frames for animated spinner (Braille pattern)
+    THROBBER_FRAMES: tuple[str, ...] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
 @dataclass(frozen=True)
@@ -248,3 +257,104 @@ def warning_icon() -> str:
         '[yellow]⚠[/yellow]'
     """
     return f"[{COLORS.WARNING}]{SYMBOLS.WARNING}[/{COLORS.WARNING}]"
+
+
+class ConsoleThrobber:
+    """Animated console throbber/spinner for indicating activity.
+
+    Uses Braille pattern characters for smooth animation. Thread-safe
+    implementation that updates the console in a background thread.
+
+    Example:
+        >>> from rich.console import Console
+        >>> console = Console()
+        >>> throbber = ConsoleThrobber(console)
+        >>> throbber.start("Processing...")
+        >>> # Do work...
+        >>> throbber.stop()
+    """
+
+    def __init__(self, console: "Console", interval: float = 0.1) -> None:
+        """Initialize the throbber.
+
+        Args:
+            console: Rich console for output.
+            interval: Animation interval in seconds (default 0.1 = 100ms).
+        """
+        self.console = console
+        self.interval = interval
+        self.frames = SYMBOLS.THROBBER_FRAMES
+        self._running = False
+        self._thread: threading.Thread | None = None
+        self._frame_idx = 0
+        self._message = ""
+        self._lock = threading.Lock()
+
+    def start(self, message: str = "Working") -> None:
+        """Start the throbber animation.
+
+        Args:
+            message: Status message to display next to spinner.
+        """
+        with self._lock:
+            if self._running:
+                # Update message if already running
+                self._message = message
+                return
+            self._message = message
+            self._running = True
+            self._frame_idx = 0
+            self._thread = threading.Thread(target=self._animate, daemon=True)
+            self._thread.start()
+
+    def update(self, message: str) -> None:
+        """Update the throbber message without stopping.
+
+        Args:
+            message: New status message to display.
+        """
+        with self._lock:
+            self._message = message
+
+    def stop(self, final_message: str | None = None) -> None:
+        """Stop the throbber animation.
+
+        Args:
+            final_message: Optional message to print after stopping.
+        """
+        with self._lock:
+            if not self._running:
+                return
+            self._running = False
+
+        if self._thread:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+
+        # Clear the spinner line
+        self.console.print("\r" + " " * 80 + "\r", end="")
+
+        if final_message:
+            self.console.print(final_message)
+
+    def _animate(self) -> None:
+        """Animation loop running in background thread."""
+        while True:
+            with self._lock:
+                if not self._running:
+                    break
+                frame = self.frames[self._frame_idx]
+                message = self._message
+                self._frame_idx = (self._frame_idx + 1) % len(self.frames)
+
+            # Print spinner with carriage return to overwrite
+            spinner_text = f"\r[{COLORS.INFO}]{frame}[/{COLORS.INFO}] {message}..."
+            self.console.print(spinner_text, end="")
+
+            time.sleep(self.interval)
+
+    @property
+    def is_running(self) -> bool:
+        """Check if throbber is currently running."""
+        with self._lock:
+            return self._running
