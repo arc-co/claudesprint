@@ -36,6 +36,7 @@ dependencies = [
     "tomli>=2.0.0;python_version<'3.11'",  # TOML parser (backport for 3.10)
     "tomli-w>=1.0.0",  # TOML writer
     "jinja2>=3.1.0",  # Template engine for prompts
+    "aiohttp>=3.9.0",  # HTTP server for dashboard
 ]
 
 [project.optional-dependencies]
@@ -65,10 +66,11 @@ claudesprint-tools = "claudesprint.tools.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["claudesprint"]
 
-# Include package data (prompts and schemas)
+# Include package data (prompts, schemas, and dashboard static files)
 [tool.hatch.build.targets.wheel.force-include]
 "claudesprint/prompts" = "claudesprint/prompts"
 "claudesprint/schemas" = "claudesprint/schemas"
+"claudesprint/dashboard/static" = "claudesprint/dashboard/static"
 
 [tool.hatch.build.targets.sdist]
 include = [
