@@ -26,10 +26,11 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .conn-ok { color: #0db172; }
 .conn-err { color: #ef6678; }
 .sprint-id { color: #D77757; }
-.issue-count { color: #0db172; }
+.issue-count { color: #f2f2f2; }
 .issue-name { color: #f2f2f2; font-weight: 500; }
-.current-step { color: #e3e312; }
-.retry-count { color: #e3e312; }
+.current-step { color: #f2f2f2; font-weight: 500; }
+.current-step::before { content: "● "; color: #e3e312; }
+.retry-count { color: #BFBFBF; }
 
 .workflow { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
 .step { color: #BFBFBF; }
@@ -40,9 +41,12 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .board-column { flex: 1; border: 1px solid #444; min-width: 0; }
 .column-header { background: #2a2a2a; padding: 6px 10px; color: #888; font-weight: 500; border-bottom: 1px solid #444; text-align: center; }
 .column-header.pending { color: #BFBFBF; }
-.column-header.in_progress { color: #e3e312; }
-.column-header.completed { color: #0db172; }
-.column-header.blocked { color: #ef6678; }
+.column-header.in_progress { color: #f2f2f2; }
+.column-header.in_progress::before { content: "● "; color: #e3e312; }
+.column-header.completed { color: #BFBFBF; }
+.column-header.completed::before { content: "● "; color: #0db172; }
+.column-header.blocked { color: #BFBFBF; }
+.column-header.blocked::before { content: "● "; color: #ef6678; }
 .column-content { padding: 8px; max-height: 400px; overflow-y: auto; }
 .issue-card { background: #2a2a2a; border: 1px solid #444; padding: 6px 8px; margin-bottom: 6px; }
 .issue-card.active { border-color: #D77757; }
@@ -50,10 +54,11 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .issue-title { color: #BFBFBF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .issue-meta { display: flex; gap: 10px; margin-top: 4px; font-size: 11px; }
 .priority { color: #BFBFBF; }
-.priority.critical { color: #ef6678; font-weight: 500; }
+.priority.critical { color: #f2f2f2; font-weight: 500; }
+.priority.critical::before { content: "● "; color: #ef6678; }
 .priority.high { color: #D77757; font-weight: 500; }
-.priority.medium { color: #e3e312; }
-.priority.low { color: #0db172; }
+.priority.medium { color: #BFBFBF; }
+.priority.low { color: #888; }
 .category { color: #BFBFBF; }
 .empty-column { color: #444; text-align: center; padding: 12px; }
 
@@ -113,7 +118,7 @@ def create_dashboard(state: DashboardState, refresh_callbacks: dict[str, Callabl
 def _create_header(_state: DashboardState) -> None:
     """Create the header section with title and connection status."""
     with ui.element("div").classes("section header"):
-        ui.html('<span class="label">ClaudeSprint<span class="version">v2.0.0</span></span>', sanitize=False)
+        ui.html('<span class="label">ClaudeSprint<span class="version">v0.0.2</span></span>', sanitize=False)
         ui.html('<span>status: <span class="conn-ok">OK</span></span>', sanitize=False)
 
 
