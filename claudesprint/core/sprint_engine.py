@@ -7,6 +7,7 @@ The SprintEngine manages the outer loop:
 4. Create PR when all issues complete
 """
 
+import logging
 import time
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Callable
 
 import re
+
+logger = logging.getLogger(__name__)
 
 from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
 from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
@@ -451,8 +454,8 @@ class SprintEngine:
             try:
                 sprint_data = json.loads(self.sprint_path.read_text())
                 sprint_json = json.dumps(sprint_data, indent=2)
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Failed to load sprint.json for agent selection context: %s", e)
 
         current_issue_json = current_issue.model_dump_json(indent=2)
         log_tail = self.issue_service.read_log_tail(num_lines=50)
