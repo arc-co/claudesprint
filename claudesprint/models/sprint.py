@@ -352,10 +352,8 @@ class Sprint(BaseModel):
         issue_map = {i.id: i for i in self.issues}
         return detect_cycles(
             nodes=list(issue_map.keys()),
-            get_dependencies=lambda node_id: list(
-                issue_map.get(node_id, Issue(
-                    id="", title="", priority=IssuePriority.LOW, acceptance_criteria=[""]
-                )).dependencies
+            get_dependencies=lambda node_id: (
+                list(issue_map[node_id].dependencies) if node_id in issue_map else []
             ),
         )
 
