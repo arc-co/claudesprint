@@ -1381,16 +1381,6 @@ class SprintEngine:
                 error="Claude API rate limited",
             )
 
-        # Should not reach here, but satisfy type checker
-        return None, SprintResult(
-            exit_reason=SprintExitReason.ERROR,
-            issues_completed=issues_completed,
-            iterations=iteration,
-            elapsed_seconds=int(time.time() - start_time),
-            message="Unexpected error in retry loop",
-            error="Unexpected error",
-        )
-
     def run(
         self,
         max_iterations: int = 0,
