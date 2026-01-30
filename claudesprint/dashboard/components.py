@@ -106,8 +106,8 @@ def create_dashboard(state: DashboardState, refresh_callbacks: dict[str, Callabl
 def _create_header(_state: DashboardState) -> None:
     """Create the header section with title and connection status."""
     with ui.element("div").classes("section header"):
-        ui.html('<span class="label">ClaudeSprint<span class="version">v2.0.0</span></span>')
-        ui.html('<span>status: <span class="conn-ok">OK</span></span>')
+        ui.html('<span class="label">ClaudeSprint<span class="version">v2.0.0</span></span>', sanitize=False)
+        ui.html('<span>status: <span class="conn-ok">OK</span></span>', sanitize=False)
 
 
 def _create_sprint_section(state: DashboardState) -> None:
@@ -116,7 +116,7 @@ def _create_sprint_section(state: DashboardState) -> None:
         ui.element("div").classes("section-title").text = "sprint"
         with ui.element("div").classes("row"):
             # These will be updated via refresh
-            sprint_label = ui.html("")
+            sprint_label = ui.html("", sanitize=False)
 
             @ui.refreshable
             def update_sprint() -> None:
@@ -182,7 +182,8 @@ def _create_issue_section(state: DashboardState, refresh_callbacks: dict[str, Ca
                     f'<span>step: <span class="current-step">{state.current_step or "-"}</span></span>'
                     f'<span style="margin-left: 24px">elapsed: <span>{state.step_elapsed}</span></span>'
                     f'<span style="margin-left: 24px">retry: <span class="retry-count">{state.retry_count}</span>'
-                    f"/{state.max_retry}</span>"
+                    f"/{state.max_retry}</span>",
+                    sanitize=False,
                 )
 
         render_issue()
