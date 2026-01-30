@@ -175,8 +175,8 @@ class DashboardEventBridge:
                 event = await asyncio.to_thread(self._event_queue.get, timeout=0.5)
                 yield f"data: {json.dumps(event)}\n\n"
             except queue.Empty:
-                # Send keepalive comment every 0.5s
-                yield ": keepalive\n\n"
+                # Send heartbeat as actual event so client can track connection health
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
             except Exception:
                 break
 

@@ -6,10 +6,14 @@ class Dashboard {
     constructor() {
         this.eventSource = null;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 10;
         this.reconnectDelay = 1000;
         this.stepElapsedInterval = null;
         this.stepStartTime = null;
+
+        // Connection health tracking
+        this.lastEventTime = null;
+        this.healthCheckInterval = null;
+        this.connectionTimeout = 30000; // 30 seconds without events = stale
 
         // ASCII throbber animation
         this.throbberFrames = ['|', '/', '-', '\\'];
@@ -66,7 +70,9 @@ class Dashboard {
     init() {
         this.connect();
         this.setupEventListeners();
+        this.setupLifecycleHandlers();
         this.startElapsedTimer();
+        this.startHealthCheck();
     }
 
     startThrobber() {
@@ -95,16 +101,90 @@ class Dashboard {
         });
     }
 
+    setupLifecycleHandlers() {
+        // Reconnect when page becomes visible again
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // Check if connection is still alive
+                if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED) {
+                    this.reconnectAttempts = 0; // Reset attempts when coming back
+                    this.connect();
+                } else if (this.isConnectionStale()) {
+                    // Connection exists but may be stale
+                    this.forceReconnect();
+                }
+            }
+        });
+
+        // Also reconnect on window focus (belt and suspenders)
+        window.addEventListener('focus', () => {
+            if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED) {
+                this.reconnectAttempts = 0;
+                this.connect();
+            }
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            this.cleanup();
+        });
+
+        window.addEventListener('pagehide', () => {
+            this.cleanup();
+        });
+    }
+
+    cleanup() {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+        }
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
+        }
+    }
+
+    startHealthCheck() {
+        // Periodically check if connection is healthy
+        this.healthCheckInterval = setInterval(() => {
+            if (this.isConnectionStale()) {
+                this.forceReconnect();
+            }
+        }, 10000); // Check every 10 seconds
+    }
+
+    isConnectionStale() {
+        if (!this.lastEventTime) return false;
+        return (Date.now() - this.lastEventTime) > this.connectionTimeout;
+    }
+
+    forceReconnect() {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+        }
+        this.reconnectAttempts = 0;
+        this.connect();
+    }
+
     connect() {
+        // Prevent multiple simultaneous connections
+        if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
+            return;
+        }
+
         this.setConnectionStatus('connecting');
         this.eventSource = new EventSource('/events');
 
         this.eventSource.onopen = () => {
             this.setConnectionStatus('connected');
             this.reconnectAttempts = 0;
+            this.lastEventTime = Date.now();
         };
 
         this.eventSource.onmessage = (event) => {
+            this.lastEventTime = Date.now();
             this.handleEvent(JSON.parse(event.data));
         };
 
@@ -116,12 +196,11 @@ class Dashboard {
     }
 
     scheduleReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            return;
-        }
         this.reconnectAttempts++;
-        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-        setTimeout(() => this.connect(), Math.min(delay, 30000));
+        // Cap delay at 30 seconds, but keep trying indefinitely
+        const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
+        console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+        setTimeout(() => this.connect(), delay);
     }
 
     setConnectionStatus(status) {
@@ -155,6 +234,7 @@ class Dashboard {
             output: (data) => this.onOutput(data),
             rate_limited: () => this.addOutput('RATE LIMITED', 'warning'),
             process_hung: (data) => this.addOutput(`HUNG ${data.seconds_inactive}s`, 'error'),
+            heartbeat: () => {}, // Just updates lastEventTime in onmessage
         };
 
         const handler = handlers[event.type];
