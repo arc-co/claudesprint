@@ -33,7 +33,7 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .issue-count { color: #f2f2f2; }
 .issue-name { color: #f2f2f2; font-weight: 500; }
 .current-step { color: #f2f2f2; font-weight: 500; }
-.current-step::before { content: "● "; color: #e3e312; }
+.current-step::before { content: "● "; color: #D77757; }
 .retry-count { color: #BFBFBF; }
 
 .workflow { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
@@ -47,7 +47,7 @@ body { font-family: monospace; font-size: 12px; background: #1F1F1F; color: #BFB
 .column-header.pending { color: #BFBFBF; }
 .column-header.pending::before { content: "● "; color: #888; }
 .column-header.in_progress { color: #f2f2f2; }
-.column-header.in_progress::before { content: "● "; color: #e3e312; }
+.column-header.in_progress::before { content: "● "; color: #D77757; }
 .column-header.completed { color: #BFBFBF; }
 .column-header.completed::before { content: "● "; color: #0db172; }
 .column-header.blocked { color: #BFBFBF; }
