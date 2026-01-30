@@ -699,7 +699,7 @@ class IssueEngine:
         from_step = current_issue.step
 
         # 1. Pre-validation: Check if transition is valid
-        if not self._validate_step_transition(from_step, next_step):
+        if not self._validate_step_transition(from_step, next_step, skipped=skipped):
             self._log_invalid_transition(from_step, next_step)
             return False
 
@@ -746,15 +746,19 @@ class IssueEngine:
         self,
         from_step: IssueStep,
         to_step: IssueStep,
+        *,
+        skipped: bool = False,
     ) -> bool:
         """Validate that a step transition is allowed.
 
         Checks against the STEP_ROUTING table to ensure the transition
-        is a valid path in the workflow.
+        is a valid path in the workflow. For skip transitions, allows
+        jumping to steps that are reachable through skipped intermediates.
 
         Args:
             from_step: Current step
             to_step: Target step
+            skipped: If True, allows skip transitions that bypass steps
 
         Returns:
             True if the transition is valid.
@@ -763,7 +767,54 @@ class IssueEngine:
 
         # Check if to_step is reachable from from_step
         valid_targets = set(routing.values())
-        return to_step in valid_targets
+        if to_step in valid_targets:
+            return True
+
+        # For skip transitions, check if to_step is reachable through
+        # a chain of skipped intermediate steps
+        if skipped:
+            return self._is_reachable_via_skip(from_step, to_step)
+
+        return False
+
+    def _is_reachable_via_skip(
+        self,
+        from_step: IssueStep,
+        to_step: IssueStep,
+        visited: set[IssueStep] | None = None,
+    ) -> bool:
+        """Check if to_step is reachable from from_step via skipped steps.
+
+        Performs a depth-first search through the routing table, only
+        following paths through steps that would be skipped.
+
+        Args:
+            from_step: Starting step
+            to_step: Target step to reach
+            visited: Set of already visited steps (for cycle detection)
+
+        Returns:
+            True if to_step is reachable through skippable intermediate steps.
+        """
+        if visited is None:
+            visited = set()
+
+        if from_step in visited:
+            return False
+        visited.add(from_step)
+
+        routing = self.STEP_ROUTING.get(from_step, {})
+        for next_step in routing.values():
+            if next_step is None:
+                continue
+            if next_step == to_step:
+                return True
+            # Only follow through steps that would be skipped
+            if self._should_skip_step(next_step):
+                if self._is_reachable_via_skip(next_step, to_step, visited):
+                    return True
+
+        return False
 
     def _log_invalid_transition(
         self,
