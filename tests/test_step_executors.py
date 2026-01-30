@@ -120,7 +120,12 @@ def llm_executor(
         issue_service=mock_issue_service,
         models_service=mock_models_service,
         parse_step_output=default_parse_step_output,
-        requires_explicit_signal={IssueStep.RUN_TESTS, IssueStep.FIX_TESTS},
+        requires_explicit_signal={
+            IssueStep.RUN_TESTS,
+            IssueStep.FIX_TESTS,
+            IssueStep.BROWSER_VALIDATION,
+            IssueStep.CODE_REVIEW,
+        },
         output_patterns={
             IssueStep.RUN_TESTS: {
                 "pass": [r"<routing_signal>\s*pass\s*</routing_signal>"],
@@ -130,6 +135,15 @@ def llm_executor(
             IssueStep.FIX_TESTS: {
                 "code_wrong": [r"<routing_signal>\s*code_wrong\s*</routing_signal>"],
                 "test_fixed": [r"<routing_signal>\s*test_fixed\s*</routing_signal>"],
+            },
+            IssueStep.BROWSER_VALIDATION: {
+                "skip": [r"<routing_signal>\s*skip\s*</routing_signal>"],
+                "fail": [r"<routing_signal>\s*fail\s*</routing_signal>"],
+                "pass": [r"<routing_signal>\s*pass\s*</routing_signal>"],
+            },
+            IssueStep.CODE_REVIEW: {
+                "issues": [r"<routing_signal>\s*issues\s*</routing_signal>"],
+                "pass": [r"<routing_signal>\s*pass\s*</routing_signal>"],
             },
         },
     )

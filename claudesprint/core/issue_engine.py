@@ -111,9 +111,12 @@ class IssueEngine:
 
     # Steps that MUST have an explicit signal match - default routing is not allowed
     # because it can create infinite loops (e.g., FIX_TESTS -> RUN_TESTS -> FIX_TESTS)
+    # or silently skip failure handling (e.g., browser-validation fail -> code-review)
     REQUIRES_EXPLICIT_SIGNAL: set[IssueStep] = {
         IssueStep.RUN_TESTS,
         IssueStep.FIX_TESTS,
+        IssueStep.BROWSER_VALIDATION,
+        IssueStep.CODE_REVIEW,
     }
 
     # Steps that use non-default executors (default is LlmStepExecutor)
