@@ -129,6 +129,10 @@ def run_workflow(
         int,
         typer.Option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv, -vvv)"),
     ] = 0,
+    dashboard: Annotated[
+        bool,
+        typer.Option("--dashboard", help="Start the web dashboard for real-time monitoring"),
+    ] = False,
 ) -> None:
     """Run the sprint workflow loop.
 
@@ -163,7 +167,7 @@ def run_workflow(
             console.print("  claudesprint run --sprint path/to/sprint.json")
             raise typer.Exit(1)
 
-    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose))
+    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose), dashboard)
 
 
 def _run_sprint_console(
@@ -172,6 +176,7 @@ def _run_sprint_console(
     sprint_path: Path,
     max_iterations: int,
     verbosity: LogVerbosity = LogVerbosity.NORMAL,
+    enable_dashboard: bool = False,
 ) -> None:
     """Run the sprint workflow with console output."""
     if not sprint_path.exists():
@@ -290,21 +295,22 @@ def _run_sprint_console(
     logs_subscriber = LogsEventSubscriber(output, event_bus)
     logs_subscriber.connect()
 
-    # Start dashboard server
+    # Start dashboard server (only if explicitly enabled)
     from claudesprint.dashboard.server import DashboardServer
 
     dashboard: DashboardServer | None = None
-    try:
-        dashboard = DashboardServer(event_bus)
-        dashboard_url = dashboard.start()
-        if dashboard_url:
-            console.print(f"[cyan]Dashboard: {dashboard_url}[/cyan]")
-    except Exception as e:
-        # Dashboard is optional - log and continue without it
-        import logging
+    if enable_dashboard:
+        try:
+            dashboard = DashboardServer(event_bus)
+            dashboard_url = dashboard.start()
+            if dashboard_url:
+                console.print(f"[cyan]Dashboard: {dashboard_url}[/cyan]")
+        except Exception as e:
+            # Dashboard is optional - log and continue without it
+            import logging
 
-        logging.getLogger(__name__).debug(f"Dashboard failed to start: {e}")
-        dashboard = None
+            logging.getLogger(__name__).debug(f"Dashboard failed to start: {e}")
+            dashboard = None
 
     # Run sprint
     try:
