@@ -188,13 +188,13 @@ class ClaudesprintConfig(BaseSettings):
             Dict with project config values to use
         """
         # Lazy import to avoid circular dependency
-        from claudesprint.services.project_config_service import ProjectConfigService
+        from claudesprint.services.configuration_manager import ConfigurationManager
 
-        service = ProjectConfigService(project_root)
-        if not service.exists():
+        manager = ConfigurationManager(project_root)
+        if not manager.exists():
             return {}
 
-        config = service.load()
+        config = manager.project
 
         # Flatten project config into our field names
         result: dict[str, Any] = {}
