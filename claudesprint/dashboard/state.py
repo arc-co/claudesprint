@@ -1,5 +1,6 @@
 """Dashboard state management."""
 
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -31,6 +32,9 @@ class DashboardState:
     # Output buffer (ring buffer)
     output_lines: deque[str] = field(default_factory=lambda: deque(maxlen=500))
 
+    # Thread synchronization lock
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
     # Task board: issues indexed by ID
     issues: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -48,12 +52,19 @@ class DashboardState:
         return f"{mins}m{secs}s"
 
     def add_output(self, line: str) -> None:
-        """Add a line to the output buffer."""
-        self.output_lines.append(line)
+        """Add a line to the output buffer (thread-safe)."""
+        with self._lock:
+            self.output_lines.append(line)
 
     def clear_output(self) -> None:
-        """Clear the output buffer."""
-        self.output_lines.clear()
+        """Clear the output buffer (thread-safe)."""
+        with self._lock:
+            self.output_lines.clear()
+
+    def get_output_snapshot(self) -> list[str]:
+        """Get a thread-safe snapshot of output lines for iteration."""
+        with self._lock:
+            return list(self.output_lines)
 
     def set_issues(self, issues: list[dict[str, Any]]) -> None:
         """Load issues from sprint data."""

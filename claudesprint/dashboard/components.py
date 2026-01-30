@@ -245,7 +245,7 @@ def _create_output_section(state: DashboardState, refresh_callbacks: dict[str, C
         @ui.refreshable
         def render_output() -> None:
             with ui.element("div").classes("output-container"), ui.element("pre").classes("output-content"):
-                for line in state.output_lines:
+                for line in state.get_output_snapshot():
                     ui.label(line + "\n").classes("output-line")
 
         render_output()
