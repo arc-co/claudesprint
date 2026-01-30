@@ -29,6 +29,22 @@ from claudesprint.services.prompt_service import PromptService
 from claudesprint.simple_logs import LogVerbosity, SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
+from claudesprint.utils.styles import (
+    COLORS,
+    STYLES,
+    success,
+    error,
+    warning,
+    running,
+    subprocess_line,
+    status_badge,
+    model_badge,
+    muted,
+    info,
+    success_icon,
+    error_icon,
+    warning_icon,
+)
 
 app = typer.Typer(
     name="claudesprint",
@@ -137,7 +153,7 @@ def run_workflow(
         sprint_service = SprintService(config.sprints_dir)
         sprint_path, _ = sprint_service.get_active_sprint()
         if not sprint_path:
-            console.print("[yellow]No active sprint found.[/yellow]")
+            console.print(warning("No active sprint found."))
             console.print("")
             console.print("Create a sprint with:")
             console.print("  claudesprint init --spec <spec_file>")
@@ -159,7 +175,7 @@ def _run_sprint_console(
 ) -> None:
     """Run the sprint workflow with console output."""
     if not sprint_path.exists():
-        console.print(f"[red]Sprint file not found: {sprint_path}[/red]")
+        console.print(error(f"Sprint file not found: {sprint_path}"))
         console.print("Run 'claudesprint init --spec <spec_file>' to create a sprint.")
         raise typer.Exit(1)
 
@@ -167,7 +183,7 @@ def _run_sprint_console(
     sprint_service = SprintService(sprint_path.parent.parent)
     sprint = sprint_service.read_sprint(sprint_path)
     if not sprint:
-        console.print(f"[red]Failed to parse sprint file: {sprint_path}[/red]")
+        console.print(error(f"Failed to parse sprint file: {sprint_path}"))
         raise typer.Exit(1)
 
     # Pre-flight git check: warn if working directory has uncommitted changes
@@ -177,24 +193,24 @@ def _run_sprint_console(
 
     if git_status.is_repo and git_status.dirty:
         dirty_files = git_service.get_dirty_files()
-        console.print("[yellow]Warning: Working directory has uncommitted changes:[/yellow]")
+        console.print(warning("Working directory has uncommitted changes:"))
         for f in sorted(dirty_files)[:10]:
-            console.print(f"  [dim]{f}[/dim]")
+            console.print(f"  {muted(f)}")
         if len(dirty_files) > 10:
-            console.print(f"  [dim]... and {len(dirty_files) - 10} more[/dim]")
+            console.print(f"  {muted(f'... and {len(dirty_files) - 10} more')}")
         console.print("")
-        console.print("[yellow]These files will be excluded from agent commits.[/yellow]")
+        console.print(warning("These files will be excluded from agent commits."))
         console.print("Recommended: stash or commit your changes first:")
-        console.print("  [dim]git stash push -m 'WIP before claudesprint'[/dim]")
+        console.print(f"  {muted('git stash push -m \"WIP before claudesprint\"')}")
         console.print("")
 
         if not typer.confirm("Continue anyway?", default=False):
-            console.print("[dim]Aborted. Commit or stash your changes and try again.[/dim]")
+            console.print(muted("Aborted. Commit or stash your changes and try again."))
             raise typer.Exit(0)
 
         # Save baseline dirty files for agent to reference
         git_service.save_baseline_dirty_files(baseline_dirty_path)
-        console.print(f"[dim]Baseline saved to {baseline_dirty_path}[/dim]")
+        console.print(muted(f"Baseline saved to {baseline_dirty_path}"))
         console.print("")
     else:
         # Clean state - remove any stale baseline file
@@ -287,17 +303,17 @@ def _run_sprint_console(
             console.print(result.message)
         else:
             console.print(
-                f"[bold green]SPRINT COMPLETE[/bold green] - "
+                f"{success('SPRINT COMPLETE')} - "
                 f"Issues completed: {result.issues_completed}, "
                 f"Runtime: {format_duration(result.elapsed_seconds)}"
             )
     elif result.exit_reason == SprintExitReason.ERROR:
-        console.print(f"[bold red]Error: {result.message}[/bold red]")
+        console.print(f"[{STYLES.STATUS_ERROR}]Error: {result.message}[/{STYLES.STATUS_ERROR}]")
         if result.error:
-            console.print(f"[red]{result.error}[/red]")
+            console.print(error(result.error))
         raise typer.Exit(1)
     else:
-        console.print(f"[yellow]Exit: {result.exit_reason.value} - {result.message}[/yellow]")
+        console.print(warning(f"Exit: {result.exit_reason.value} - {result.message}"))
 
 
 @app.command("init")
@@ -336,7 +352,7 @@ def init_project(
             spec_path = Path(config.specs_dir) / f"{spec}.md"
 
     if not spec_path.exists():
-        console.print(f"[red]Spec file not found: {spec}[/red]")
+        console.print(error(f"Spec file not found: {spec}"))
         console.print("Looked in:")
         console.print(f"  • {spec}")
         console.print(f"  • .claudesprint/specs/{spec}")
@@ -359,13 +375,13 @@ def init_project(
 
     # Write sprint skeleton
     if not sprint_service.write_sprint(sprint, sprint_path):
-        console.print(f"[red]✗ Failed to create sprint[/red]")
+        console.print(error("Failed to create sprint"))
         raise typer.Exit(1)
 
-    console.print(f"[green]✓ Sprint skeleton created: {sprint_path}[/green]")
-    console.print(f"  Spec ID: {sprint.spec_id}")
-    console.print(f"  Spec file: {sprint.spec_file}")
-    console.print(f"  Branch: {sprint.git_branch}")
+    console.print(success(f"Sprint skeleton created: {sprint_path}"))
+    console.print(f"  {muted('Spec ID:')} {sprint.spec_id}")
+    console.print(f"  {muted('Spec file:')} {sprint.spec_file}")
+    console.print(f"  {muted('Branch:')} {sprint.git_branch}")
     console.print("")
 
     # Now invoke the init agent to populate the sprint with issues
@@ -375,7 +391,7 @@ def init_project(
     try:
         prompt_content = prompt_service.get_prompt_content("init")
     except FileNotFoundError:
-        console.print("[red]Error: PROMPT_init.xml.j2 not found in package[/red]")
+        console.print(error("PROMPT_init.xml.j2 not found in package"))
         raise typer.Exit(1)
 
     # Get model for init step
@@ -383,7 +399,7 @@ def init_project(
     models_service = ModelsService.from_config_manager(cm)
     model = models_service.get_model_for_special_step("init")
 
-    console.print(f"[cyan]▶ Running init agent to generate issues (model: {model})...[/cyan]")
+    console.print(running(f"Running init agent to generate issues (model: {model})..."))
 
     # Build context for the agent
     context = f"""## Initialization Context
@@ -411,19 +427,19 @@ Read the spec file and populate the sprint.json with all required issues.
     result = runner.run_with_content(
         prompt_content,
         source_name="PROMPT_init.xml.j2",
-        on_output=lambda line: console.print(line),
+        on_output=lambda line: console.print(subprocess_line(line)),
         model=model,
         context=context,
     )
 
     if result.exit_code == 0:
         console.print("")
-        console.print("[green]✓ Sprint initialization complete.[/green]")
+        console.print(success("Sprint initialization complete."))
         console.print(f"Run 'claudesprint run --spec {sprint.spec_id}' to start the sprint workflow.")
     else:
-        console.print(f"[red]✗ Init agent failed (exit code: {result.exit_code})[/red]")
+        console.print(error(f"Init agent failed (exit code: {result.exit_code})"))
         if result.rate_limited:
-            console.print("[yellow]Rate limit detected. Please wait and try again.[/yellow]")
+            console.print(warning("Rate limit detected. Please wait and try again."))
         raise typer.Exit(1)
 
 
@@ -451,7 +467,7 @@ def run_planner(
     try:
         prompt_content = prompt_service.get_prompt_content("plan")
     except FileNotFoundError:
-        console.print("[red]Error: PROMPT_plan.xml.j2 not found in package[/red]")
+        console.print(error("PROMPT_plan.xml.j2 not found in package"))
         raise typer.Exit(1)
 
     # Get model for plan step
@@ -459,7 +475,7 @@ def run_planner(
     models_service = ModelsService.from_config_manager(cm)
     model = models_service.get_model_for_special_step("plan")
 
-    console.print(f"[cyan]▶ Running planner (model: {model})...[/cyan]")
+    console.print(running(f"Running planner (model: {model})..."))
 
     from claudesprint.core.claude_runner import ClaudeRunner
 
@@ -475,14 +491,14 @@ def run_planner(
     result = runner.run_with_content(
         prompt_content,
         source_name="PROMPT_plan.xml.j2",
-        on_output=lambda line: console.print(line),
+        on_output=lambda line: console.print(subprocess_line(line)),
         model=model,
     )
 
     if result.exit_code == 0:
-        console.print("[green]✓ Planning complete.[/green]")
+        console.print(success("Planning complete."))
     else:
-        console.print(f"[red]✗ Planning failed (exit code: {result.exit_code})[/red]")
+        console.print(error(f"Planning failed (exit code: {result.exit_code})"))
         raise typer.Exit(1)
 
 
@@ -513,9 +529,9 @@ def show_status(
         sprint_service = SprintService(config.sprints_dir)
         sprint_path, _ = sprint_service.get_active_sprint()
         if not sprint_path:
-            console.print(Panel.fit("ClaudeSprint - Status", style="bold blue"))
+            console.print(Panel.fit("ClaudeSprint - Status", style=STYLES.PANEL_HEADER))
             console.print("")
-            console.print("[dim]No active sprint found.[/dim]")
+            console.print(muted("No active sprint found."))
             console.print("")
             console.print("Create a sprint with:")
             console.print("  claudesprint init --spec <spec_file>")
@@ -525,19 +541,19 @@ def show_status(
             return
 
     if not sprint_path.exists():
-        console.print(f"[red]Sprint file not found: {sprint_path}[/red]")
+        console.print(error(f"Sprint file not found: {sprint_path}"))
         raise typer.Exit(1)
 
     sprint_service = SprintService(sprint_path.parent.parent)
     sprint_model = sprint_service.read_sprint(sprint_path)
     if not sprint_model:
-        console.print(f"[red]Failed to parse sprint file: {sprint_path}[/red]")
+        console.print(error(f"Failed to parse sprint file: {sprint_path}"))
         raise typer.Exit(1)
 
     issue_service = IssueService(config.project_dir)
     current_issue = issue_service.read_current_issue()
 
-    console.print(Panel.fit("ClaudeSprint - Sprint Status", style="bold magenta"))
+    console.print(Panel.fit("ClaudeSprint - Sprint Status", style=STYLES.PANEL_HEADER))
     console.print("")
 
     # Sprint info
@@ -547,9 +563,9 @@ def show_status(
 
     table.add_row("Spec ID", sprint_model.spec_id)
     table.add_row("Spec file", sprint_model.spec_file)
-    table.add_row("Description", sprint_model.description or "[dim]<none>[/dim]")
-    table.add_row("Branch", sprint_model.git_branch or "[dim]<none>[/dim]")
-    table.add_row("Status", "[green]Complete[/green]" if sprint_model.is_complete() else "[yellow]In progress[/yellow]")
+    table.add_row("Description", sprint_model.description or muted("<none>"))
+    table.add_row("Branch", sprint_model.git_branch or muted("<none>"))
+    table.add_row("Status", status_badge("Complete") if sprint_model.is_complete() else status_badge("In progress"))
 
     console.print(table)
     console.print("")
@@ -574,10 +590,10 @@ def show_status(
     if current_issue and current_issue.issue_id:
         console.print("[bold]Current Issue:[/bold]")
         console.print(f"  ID: {current_issue.issue_id}")
-        console.print(f"  Step: [green]{current_issue.step.value}[/green]")
+        console.print(f"  Step: {status_badge(current_issue.step.value)}")
         console.print(f"  Goal: {current_issue.goal}")
     else:
-        console.print("[dim]No issue currently in progress[/dim]")
+        console.print(muted("No issue currently in progress"))
     console.print("")
 
     # Available issues
@@ -597,18 +613,18 @@ def show_status(
         active_issue = sprint_model.get_issue(current_issue.issue_id)
         if active_issue:
             resolved = ResolvedConfig.from_sprint_and_issue(sprint_model.config, active_issue.config)
-            console.print(f"  [dim](for active issue: {current_issue.issue_id})[/dim]")
+            console.print(f"  {muted(f'(for active issue: {current_issue.issue_id})')}")
             console.print(f"  require_testing: {resolved.require_testing}")
             console.print(f"  require_browser_qa: {resolved.require_browser_qa}")
             if active_issue.config:
-                console.print(f"  [dim](issue overrides sprint defaults)[/dim]")
+                console.print(f"  {muted('(issue overrides sprint defaults)')}")
         else:
             # Fallback to sprint config
             console.print(f"  require_testing: {sprint_model.config.require_testing}")
             console.print(f"  require_browser_qa: {sprint_model.config.require_browser_qa}")
     else:
         # No active issue, show sprint defaults
-        console.print(f"  [dim](sprint defaults)[/dim]")
+        console.print(f"  {muted('(sprint defaults)')}")
         console.print(f"  require_testing: {sprint_model.config.require_testing}")
         console.print(f"  require_browser_qa: {sprint_model.config.require_browser_qa}")
 
@@ -618,9 +634,9 @@ def show_status(
     if git_status.is_repo:
         console.print(f"[bold]Git:[/bold] {git_status.branch} @ {git_status.head}")
         if git_status.dirty:
-            console.print("  [yellow]Uncommitted changes[/yellow]")
+            console.print(f"  {warning('Uncommitted changes')}")
     else:
-        console.print("[dim]Not a git repository[/dim]")
+        console.print(muted("Not a git repository"))
 
 
 @app.command("models")
@@ -631,17 +647,17 @@ def show_models() -> None:
     models_service = ModelsService.from_config_manager(cm)
     project_config = cm.project
 
-    console.print(Panel.fit("Model Configuration", style="bold blue"))
+    console.print(Panel.fit("Model Configuration", style=STYLES.PANEL_HEADER))
     console.print("")
 
     # Show override status
     env_override = os.environ.get("CLAUDESPRINT_MODEL_OVERRIDE", "")
     if env_override:
-        console.print(f"[yellow]Environment override active: CLAUDESPRINT_MODEL_OVERRIDE={env_override}[/yellow]")
+        console.print(warning(f"Environment override active: CLAUDESPRINT_MODEL_OVERRIDE={env_override}"))
         console.print("")
 
     if project_config.models.model_override:
-        console.print(f"[yellow]Config override active: model_override={project_config.models.model_override}[/yellow]")
+        console.print(warning(f"Config override active: model_override={project_config.models.model_override}"))
         console.print("")
 
     # Show per-step models
@@ -658,12 +674,11 @@ def show_models() -> None:
         default = STEP_DEFAULT_MODELS.get(step, "opus")
 
         if step in [IssueStep.RUN_TESTS, IssueStep.STAGE_CHANGES, IssueStep.COMMIT_CHANGES]:
-            notes = "[dim]automated (no AI)[/dim]"
+            notes = muted("automated (no AI)")
         else:
-            notes = "[green]AI required[/green]" if model == "opus" else "[cyan]AI required[/cyan]"
+            notes = status_badge("AI required")
 
-        model_style = "[bold magenta]" if model == "opus" else "[cyan]"
-        table.add_row(step_name, f"{model_style}{model}[/]", notes)
+        table.add_row(step_name, model_badge(model), notes)
 
     console.print(table)
     console.print("")
@@ -676,8 +691,7 @@ def show_models() -> None:
 
     for special in ["init", "plan"]:
         model = summary.get(special, "opus")
-        model_style = "[bold magenta]" if model == "opus" else "[cyan]"
-        special_table.add_row(special, f"{model_style}{model}[/]")
+        special_table.add_row(special, model_badge(model))
 
     console.print(special_table)
     console.print("")
@@ -712,18 +726,18 @@ def send_notification(
     )
 
     if not service.enabled:
-        console.print("[yellow]Notifications are not enabled[/yellow]")
+        console.print(warning("Notifications are not enabled"))
         return
 
     try:
         notif_type = NotificationType(notification_type)
     except ValueError:
-        console.print(f"[red]Invalid type: {notification_type}[/red]")
+        console.print(error(f"Invalid type: {notification_type}"))
         console.print(f"Valid types: {', '.join(t.value for t in NotificationType)}")
         raise typer.Exit(1)
 
     service.send_sync(notif_type, message, title)
-    console.print("[green]✓ Notification sent[/green]")
+    console.print(success("Notification sent"))
 
 
 @app.command("sprints")
@@ -732,13 +746,13 @@ def list_sprints() -> None:
     config = get_config()
     sprint_service = SprintService(config.sprints_dir)
 
-    console.print(Panel.fit("Available Sprints", style="bold blue"))
+    console.print(Panel.fit("Available Sprints", style=STYLES.PANEL_HEADER))
     console.print("")
 
     sprints = sprint_service.list_sprints()
 
     if not sprints:
-        console.print("[dim]No sprints found.[/dim]")
+        console.print(muted("No sprints found."))
         console.print("")
         console.print("Create a sprint with:")
         console.print("  claudesprint init --spec <spec_file>")
@@ -757,8 +771,8 @@ def list_sprints() -> None:
 
         stats = sprint.get_stats()
         progress = f"{stats['completed']}/{stats['total']}"
-        status = "[green]Complete[/green]" if sprint.is_complete() else "[yellow]In Progress[/yellow]"
-        branch = sprint.git_branch or "[dim]none[/dim]"
+        status = status_badge("Complete") if sprint.is_complete() else status_badge("In Progress")
+        branch = sprint.git_branch or muted("none")
 
         table.add_row(sprint.spec_id, status, progress, branch)
 
@@ -796,7 +810,7 @@ def validate_sprint(
         sprint_service = SprintService(config.sprints_dir)
         sprint_path, _ = sprint_service.get_active_sprint()
         if not sprint_path:
-            console.print("[yellow]No active sprint found to validate.[/yellow]")
+            console.print(warning("No active sprint found to validate."))
             return
 
     # Validate sprint
@@ -805,13 +819,13 @@ def validate_sprint(
         validator = SprintValidator(sprint_path)
         result = validator.validate()
         if result.valid:
-            console.print("[green]✓ Sprint validation PASSED[/green]")
+            console.print(success("Sprint validation PASSED"))
         else:
-            console.print("[red]✗ Sprint validation FAILED[/red]")
-            for error in result.errors:
-                console.print(f"  [red]• {error}[/red]")
-        for warning in result.warnings:
-            console.print(f"  [yellow]⚠ {warning}[/yellow]")
+            console.print(error("Sprint validation FAILED"))
+            for err in result.errors:
+                console.print(f"  [{COLORS.ERROR}]• {err}[/{COLORS.ERROR}]")
+        for warn in result.warnings:
+            console.print(f"  {warning(warn)}")
         console.print("")
 
     # Validate current_issue
@@ -821,15 +835,15 @@ def validate_sprint(
         validator = CurrentIssueValidator(current_issue_path)
         result = validator.validate()
         if result.valid:
-            console.print("[green]✓ Current issue validation PASSED[/green]")
+            console.print(success("Current issue validation PASSED"))
         else:
-            console.print("[red]✗ Current issue validation FAILED[/red]")
-            for error in result.errors:
-                console.print(f"  [red]• {error}[/red]")
-        for warning in result.warnings:
-            console.print(f"  [yellow]⚠ {warning}[/yellow]")
+            console.print(error("Current issue validation FAILED"))
+            for err in result.errors:
+                console.print(f"  [{COLORS.ERROR}]• {err}[/{COLORS.ERROR}]")
+        for warn in result.warnings:
+            console.print(f"  {warning(warn)}")
     else:
-        console.print("[dim]No current_issue.json (not mid-issue)[/dim]")
+        console.print(muted("No current_issue.json (not mid-issue)"))
 
 
 @app.command("reset")
@@ -848,10 +862,10 @@ def reset_sprint(
     issue_service = IssueService(config.project_dir)
 
     if issue_service.clear_current_issue():
-        console.print("[green]✓ Current issue cleared.[/green]")
+        console.print(success("Current issue cleared."))
         console.print("Run 'claudesprint run' to start fresh.")
     else:
-        console.print("[yellow]No current issue to clear.[/yellow]")
+        console.print(warning("No current issue to clear."))
 
 
 @app.command("initrepo")
@@ -884,15 +898,15 @@ def init_repo(
     result = service.init(force=force, inject_hooks=not skip_hooks)
 
     # Show warnings first
-    for warning in result.warnings:
-        console.print(f"[yellow]Warning: {warning}[/yellow]")
+    for warn in result.warnings:
+        console.print(warning(f"Warning: {warn}"))
 
     if not result.success:
-        console.print(f"[red]Error: {result.error}[/red]")
+        console.print(error(f"Error: {result.error}"))
         raise typer.Exit(1)
 
     # Show what was created
-    console.print("[green]✓ Initialized .claudesprint/ directory[/green]")
+    console.print(success("Initialized .claudesprint/ directory"))
     console.print("")
 
     if result.created_dirs:
@@ -909,11 +923,11 @@ def init_repo(
     if not skip_hooks:
         console.print("")
         if result.hooks_injected:
-            console.print("[green]✓ Claude hooks injected into .claude/settings.json[/green]")
+            console.print(success("Claude hooks injected into .claude/settings.json"))
             if result.hooks_backup_path:
-                console.print(f"  [dim]Backup created: {result.hooks_backup_path}[/dim]")
+                console.print(f"  {muted(f'Backup created: {result.hooks_backup_path}')}")
         else:
-            console.print("[yellow]⚠ Claude hooks were not injected[/yellow]")
+            console.print(warning("Claude hooks were not injected"))
 
     console.print("")
     console.print("[bold]Next steps:[/bold]")
@@ -936,9 +950,9 @@ def config_path() -> None:
     config_file = ConfigurationManager.get_default_global_config_path()
     console.print(f"[bold]Config file:[/bold] {config_file}")
     if config_file.exists():
-        console.print("[green]✓ File exists[/green]")
+        console.print(success("File exists"))
     else:
-        console.print("[dim]File does not exist. Run 'claudesprint config init' to create it.[/dim]")
+        console.print(muted("File does not exist. Run 'claudesprint config init' to create it."))
 
 
 @config_app.command("init")
@@ -954,16 +968,16 @@ def config_init(
     config_file = ConfigurationManager.get_default_global_config_path()
 
     if config_file.exists() and not force:
-        console.print(f"[yellow]Config file already exists: {config_file}[/yellow]")
+        console.print(warning(f"Config file already exists: {config_file}"))
         console.print("Use --force to overwrite.")
         raise typer.Exit(1)
 
     try:
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(DEFAULT_CONFIG_TOML)
-        console.print(f"[green]✓ Created config file: {config_file}[/green]")
+        console.print(success(f"Created config file: {config_file}"))
     except OSError:
-        console.print("[red]✗ Failed to create config file[/red]")
+        console.print(error("Failed to create config file"))
         raise typer.Exit(1)
 
 
@@ -974,13 +988,13 @@ def config_show() -> None:
     cm = ConfigurationManager()
 
     if not config_file.exists():
-        console.print(f"[yellow]Config file not found: {config_file}[/yellow]")
+        console.print(warning(f"Config file not found: {config_file}"))
         console.print("Run 'claudesprint config init' to create it.")
         console.print("")
-        console.print("[dim]Using built-in defaults:[/dim]")
+        console.print(muted("Using built-in defaults:"))
 
     config = cm.global_config
-    console.print(Panel.fit("Global Configuration", style="bold blue"))
+    console.print(Panel.fit("Global Configuration", style=STYLES.PANEL_HEADER))
     console.print("")
 
     # Display as formatted sections
@@ -1015,25 +1029,25 @@ def config_edit() -> None:
     config_file = ConfigurationManager.get_default_global_config_path()
 
     if not config_file.exists():
-        console.print(f"[yellow]Config file not found: {config_file}[/yellow]")
+        console.print(warning(f"Config file not found: {config_file}"))
         console.print("Creating default config file...")
         try:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             config_file.write_text(DEFAULT_CONFIG_TOML)
-            console.print(f"[green]✓ Created: {config_file}[/green]")
+            console.print(success(f"Created: {config_file}"))
         except OSError:
-            console.print("[red]✗ Failed to create config file[/red]")
+            console.print(error("Failed to create config file"))
             raise typer.Exit(1)
 
     editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "vim"))
     try:
         subprocess.run([editor, str(config_file)], check=True)
     except FileNotFoundError:
-        console.print(f"[red]Editor not found: {editor}[/red]")
+        console.print(error(f"Editor not found: {editor}"))
         console.print("Set the EDITOR environment variable to your preferred editor.")
         raise typer.Exit(1)
     except subprocess.CalledProcessError as e:
-        console.print(f"[red]Editor exited with error: {e.returncode}[/red]")
+        console.print(error(f"Editor exited with error: {e.returncode}"))
         raise typer.Exit(1)
 
 
@@ -1070,7 +1084,7 @@ def doctor(
         install_timeout=config.install_timeout,
     )
 
-    console.print(Panel.fit("ClaudeSprint Doctor", style="bold blue"))
+    console.print(Panel.fit("ClaudeSprint Doctor", style=STYLES.PANEL_HEADER))
     console.print("")
 
     # Run all checks
@@ -1079,36 +1093,36 @@ def doctor(
     # Display results
     for check in report.checks:
         if check.status == CheckStatus.OK:
-            icon = "[green]✓[/green]"
+            icon = success_icon()
             message = check.message
         elif check.status == CheckStatus.WARNING:
-            icon = "[yellow]⚠[/yellow]"
-            message = f"[yellow]{check.message}[/yellow]"
+            icon = warning_icon()
+            message = f"[{COLORS.WARNING}]{check.message}[/{COLORS.WARNING}]"
         else:
-            icon = "[red]✗[/red]"
-            message = f"[red]{check.message}[/red]"
+            icon = error_icon()
+            message = f"[{COLORS.ERROR}]{check.message}[/{COLORS.ERROR}]"
 
         console.print(f"  {icon} {check.name}: {message}")
 
         if verbose and check.details:
             for line in check.details.split("\n"):
-                console.print(f"      [dim]{line}[/dim]")
+                console.print(f"      {muted(line)}")
 
     console.print("")
 
     # Summary
     if report.is_healthy:
         if report.has_warnings:
+            warn_suffix = "s" if report.warning_count > 1 else ""
             console.print(
-                f"[green]✓ All required checks passed[/green] "
-                f"[yellow]({report.warning_count} warning{'s' if report.warning_count > 1 else ''})[/yellow]"
+                f"{success('All required checks passed')} "
+                f"{warning(f'({report.warning_count} warning{warn_suffix})')}"
             )
         else:
-            console.print("[green]✓ All checks passed[/green]")
+            console.print(success("All checks passed"))
     else:
-        console.print(
-            f"[red]✗ {report.error_count} error{'s' if report.error_count > 1 else ''} found[/red]"
-        )
+        err_suffix = "s" if report.error_count > 1 else ""
+        console.print(error(f"{report.error_count} error{err_suffix} found"))
 
     # Handle --fix flag
     if fix and report.fixable_issues:
@@ -1118,23 +1132,25 @@ def doctor(
 
         for issue in report.fixable_issues:
             if issue.fix_command:
-                console.print(f"  Running: [cyan]{issue.fix_command}[/cyan]")
-                success = service.attempt_fix(
+                console.print(f"  Running: {info(issue.fix_command)}")
+                fix_success = service.attempt_fix(
                     issue,
                     on_output=lambda line: console.print(f"    {line}"),
                 )
-                if success:
-                    console.print("    [green]✓ Fixed[/green]")
+                if fix_success:
+                    console.print(f"    {success('Fixed')}")
                 else:
-                    console.print("    [red]✗ Failed - run manually[/red]")
+                    console.print(f"    {error('Failed - run manually')}")
 
         console.print("")
-        console.print("Re-run [cyan]claudesprint doctor[/cyan] to verify fixes.")
+        console.print(f"Re-run {info('claudesprint doctor')} to verify fixes.")
     elif not fix and report.fixable_issues:
         console.print("")
         console.print(
-            f"[dim]Tip: Run [cyan]claudesprint doctor --fix[/cyan] to attempt auto-fixes "
-            f"for {len(report.fixable_issues)} issue{'s' if len(report.fixable_issues) > 1 else ''}[/dim]"
+            muted(
+                f"Tip: Run {info('claudesprint doctor --fix')} to attempt auto-fixes "
+                f"for {len(report.fixable_issues)} issue{'s' if len(report.fixable_issues) > 1 else ''}"
+            )
         )
 
     if not report.is_healthy:
@@ -1175,7 +1191,7 @@ def run_hook(
         hook_type_enum = HookType(hook_type)
     except ValueError:
         valid_types = ", ".join(t.value for t in list(HookType))
-        console.print(f"[red]Invalid hook type: {hook_type}[/red]", style="red")
+        console.print(error(f"Invalid hook type: {hook_type}"))
         console.print(f"Valid types: {valid_types}")
         raise typer.Exit(1)
 

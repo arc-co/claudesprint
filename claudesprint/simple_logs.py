@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
+from claudesprint.utils.styles import SYMBOLS, COLORS
+
 if TYPE_CHECKING:
     from claudesprint.core.issue_engine import IssueStep
 
@@ -76,7 +78,7 @@ class SimpleLogsOutput:
             indent: Number of indent levels (each level is 2 spaces).
         """
         prefix = "  " * indent
-        self.console.print(f"[dim][{self._timestamp()}][/dim] {prefix}{message}")
+        self.console.print(f"[{COLORS.MUTED}][{self._timestamp()}][/{COLORS.MUTED}] {prefix}{message}")
 
     def _log_if(self, level: LogVerbosity, message: str, indent: int = 0) -> None:
         """Log only if verbosity >= level.
@@ -142,7 +144,7 @@ class SimpleLogsOutput:
 
     def on_selecting_issue(self) -> None:
         """Log that issue selection is starting."""
-        self._log("[dim]Selecting next issue...[/dim]")
+        self._log(f"[{COLORS.MUTED}]Selecting next issue...[/{COLORS.MUTED}]")
 
     # Issue events
 
@@ -154,7 +156,7 @@ class SimpleLogsOutput:
             title: The issue title.
         """
         self.current_issue = issue_id
-        self._log(f"[cyan]ISSUE[/cyan] {issue_id} | {title}")
+        self._log(f"[{COLORS.INFO}]ISSUE[/{COLORS.INFO}] {issue_id} | {title}")
 
     def on_issue_complete(self, issue_id: str) -> None:
         """Log issue completion.
@@ -164,7 +166,7 @@ class SimpleLogsOutput:
         """
         self.sprint_completed += 1
         self._log(
-            f"[green]ISSUE[/green] {issue_id} | "
+            f"[{COLORS.SUCCESS}]ISSUE[/{COLORS.SUCCESS}] {issue_id} | "
             f"Complete ({self.sprint_completed}/{self.sprint_total})"
         )
 
@@ -197,20 +199,20 @@ class SimpleLogsOutput:
         # Always log in VERBOSE mode
         self._log_if(
             LogVerbosity.VERBOSE,
-            f"[dim]ITER[/dim] {total_iterations}/{max_iterations} | retry {retry_count}/{max_retry}",
+            f"[{COLORS.MUTED}]ITER[/{COLORS.MUTED}] {total_iterations}/{max_iterations} | retry {retry_count}/{max_retry}",
         )
 
         # Warn at 70% of limits (always visible)
         iter_pct = total_iterations / max_iterations if max_iterations > 0 else 0
         if 0.7 <= iter_pct < 1.0:
             self._log(
-                f"[yellow]WARNING[/yellow] Approaching iteration limit: "
+                f"[{COLORS.WARNING}]WARNING[/{COLORS.WARNING}] Approaching iteration limit: "
                 f"{total_iterations}/{max_iterations} ({iter_pct:.0%})"
             )
 
         retry_pct = retry_count / max_retry if max_retry > 0 else 0
         if 0.6 <= retry_pct < 1.0:
-            self._log(f"[yellow]WARNING[/yellow] High retry count: {retry_count}/{max_retry}")
+            self._log(f"[{COLORS.WARNING}]WARNING[/{COLORS.WARNING}] High retry count: {retry_count}/{max_retry}")
 
     def on_routing_signal(
         self,
@@ -229,12 +231,12 @@ class SimpleLogsOutput:
         if signal:
             self._log_if(
                 LogVerbosity.VERBOSE,
-                f"[dim]ROUTE[/dim] {step.value} --[cyan]{signal}[/cyan]--> {next_name}",
+                f"[{COLORS.MUTED}]ROUTE[/{COLORS.MUTED}] {step.value} --[{COLORS.INFO}]{signal}[/{COLORS.INFO}]--> {next_name}",
             )
         else:
             self._log_if(
                 LogVerbosity.DEBUG,
-                f"[dim]ROUTE[/dim] {step.value} --[dim]default[/dim]--> {next_name}",
+                f"[{COLORS.MUTED}]ROUTE[/{COLORS.MUTED}] {step.value} --[{COLORS.MUTED}]default[/{COLORS.MUTED}]--> {next_name}",
             )
 
     def on_step_start(self, step: "IssueStep", model: str) -> None:
@@ -249,9 +251,9 @@ class SimpleLogsOutput:
 
         iter_info = ""
         if self.verbosity in (LogVerbosity.VERBOSE, LogVerbosity.DEBUG) and self.issue_iterations > 0:
-            iter_info = f" [dim](iter {self.issue_iterations}/{self.max_iterations})[/dim]"
+            iter_info = f" [{COLORS.MUTED}](iter {self.issue_iterations}/{self.max_iterations})[/{COLORS.MUTED}]"
 
-        self._log(f"[yellow]STEP[/yellow] {step.value} | Starting... (model: {model}){iter_info}")
+        self._log(f"[{COLORS.WARNING}]STEP[/{COLORS.WARNING}] {step.value} | Starting... (model: {model}){iter_info}")
 
     def on_step_complete(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
         """Log step completion.
@@ -261,7 +263,7 @@ class SimpleLogsOutput:
             next_step: The next step to execute, or None if done.
         """
         elapsed = self._format_elapsed(self.step_start_time)
-        self._log(f"[green]STEP[/green] {step.value} | Complete ({elapsed})")
+        self._log(f"[{COLORS.SUCCESS}]STEP[/{COLORS.SUCCESS}] {step.value} | Complete ({elapsed})")
         self.step_start_time = None
         self.current_step = None
 
@@ -272,7 +274,7 @@ class SimpleLogsOutput:
             step: The skipped step.
             next_step: The next step to execute, or None if done.
         """
-        self._log(f"[dim]STEP[/dim] {step.value} | Skipped")
+        self._log(f"[{COLORS.MUTED}]STEP[/{COLORS.MUTED}] {step.value} | Skipped")
 
     def on_step_failure(self, step: "IssueStep", retry_count: int, max_retry: int = 5) -> None:
         """Log step failure.
@@ -282,7 +284,7 @@ class SimpleLogsOutput:
             retry_count: Number of retries attempted.
             max_retry: Maximum retry limit for context.
         """
-        color = "red" if retry_count >= max_retry * 0.6 else "yellow"
+        color = COLORS.ERROR if retry_count >= max_retry * 0.6 else COLORS.WARNING
         self._log(f"[{color}]STEP[/{color}] {step.value} | Failed (retry {retry_count}/{max_retry})")
 
     # Subprocess/agent output
@@ -307,7 +309,7 @@ class SimpleLogsOutput:
         # Strip any trailing whitespace but preserve content
         line = line.rstrip()
         if line:
-            self._log(f"[dim]>[/dim] {line}", indent=1)
+            self._log(f"[{COLORS.MUTED}]{SYMBOLS.INDENT}[/{COLORS.MUTED}] {line}", indent=1)
 
     def on_subprocess_end(self) -> None:
         """Log subprocess end (no-op for simple logs)."""
@@ -325,7 +327,7 @@ class SimpleLogsOutput:
         # Split multi-line output and log each line
         for line in text.strip().split("\n"):
             if line.strip():
-                self._log(f"[dim]{line}[/dim]")
+                self._log(f"[{COLORS.MUTED}]{line}[/{COLORS.MUTED}]")
 
     def add_log_line(self, line: str) -> None:
         """Add a log line.
