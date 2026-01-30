@@ -273,9 +273,30 @@ def _run_sprint_console(
     logs_subscriber = LogsEventSubscriber(output, event_bus)
     logs_subscriber.connect()
 
+    # Start dashboard server
+    from claudesprint.dashboard.server import DashboardServer
+
+    dashboard: DashboardServer | None = None
+    try:
+        dashboard = DashboardServer(event_bus)
+        dashboard_url = dashboard.start()
+        if dashboard_url:
+            console.print(f"[cyan]Dashboard: {dashboard_url}[/cyan]")
+    except Exception as e:
+        # Dashboard is optional - log and continue without it
+        import logging
+
+        logging.getLogger(__name__).debug(f"Dashboard failed to start: {e}")
+        dashboard = None
+
     # Run sprint
-    with output:
-        result = engine.run(max_iterations=max_iterations)
+    try:
+        with output:
+            result = engine.run(max_iterations=max_iterations)
+    finally:
+        # Stop dashboard server
+        if dashboard:
+            dashboard.stop()
 
     # Disconnect subscriber after sprint completes
     logs_subscriber.disconnect()
