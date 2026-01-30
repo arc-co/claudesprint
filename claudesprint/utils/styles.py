@@ -8,6 +8,7 @@ This module provides consistent styling across all CLI output through:
 - ConsoleThrobber: Animated spinner for long-running operations
 """
 
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -331,8 +332,9 @@ class ConsoleThrobber:
             self._thread.join(timeout=1.0)
             self._thread = None
 
-        # Clear the spinner line
-        self.console.print("\r" + " " * 80 + "\r", end="")
+        # Clear the spinner line using raw stdout for consistency
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
 
         if final_message:
             self.console.print(final_message)
@@ -347,9 +349,11 @@ class ConsoleThrobber:
                 message = self._message
                 self._frame_idx = (self._frame_idx + 1) % len(self.frames)
 
-            # Print spinner with carriage return to overwrite
-            spinner_text = f"\r[{COLORS.INFO}]{frame}[/{COLORS.INFO}] {message}..."
-            self.console.print(spinner_text, end="")
+            # Use raw stdout write to properly overwrite with carriage return
+            # Rich's console.print() doesn't handle \r correctly
+            spinner_text = f"\r{frame} {message}..."
+            sys.stdout.write(spinner_text)
+            sys.stdout.flush()
 
             time.sleep(self.interval)
 
