@@ -251,13 +251,14 @@ class ClaudesprintConfig(BaseSettings):
             Dict with global config values to use as defaults
         """
         # Lazy import to avoid circular dependency
-        from claudesprint.services.global_config_service import GlobalConfigService
+        from claudesprint.services.configuration_manager import ConfigurationManager
 
-        service = GlobalConfigService()
-        if not service.exists():
+        manager = ConfigurationManager()
+        config_path = manager.get_default_global_config_path()
+        if not config_path.exists():
             return {}
 
-        flat = service.get_flat_dict()
+        flat = manager.get_global_flat_dict()
 
         # Only include values where env var is not set
         result: dict[str, Any] = {}
