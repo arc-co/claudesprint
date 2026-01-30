@@ -32,6 +32,7 @@ from claudesprint.utils.process_manager import get_process_manager
 from claudesprint.utils.styles import (
     COLORS,
     STYLES,
+    ConsoleThrobber,
     success,
     error,
     warning,
@@ -427,8 +428,6 @@ def init_project(
     models_service = ModelsService.from_config_manager(cm)
     model = models_service.get_model_for_special_step("init")
 
-    console.print(running(f"Running init agent to generate issues (model: {model})..."))
-
     # Build context for the agent
     context = f"""## Initialization Context
 
@@ -452,13 +451,30 @@ Read the spec file and populate the sprint.json with all required issues.
             config.conversation_log_file if debug_conversations else None
         ),
     )
+
+    # Start throbber while generating sprint from spec
+    throbber = ConsoleThrobber(console)
+    throbber.start(f"Generating sprint from spec (model: {model})")
+    first_output_received = [False]
+
+    def on_output_with_throbber(line: str) -> None:
+        """Handle output, stopping throbber on first line."""
+        if not first_output_received[0]:
+            first_output_received[0] = True
+            throbber.stop()
+        console.print(subprocess_line(line))
+
     result = runner.run_with_content(
         prompt_content,
         source_name="PROMPT_init.xml.j2",
-        on_output=lambda line: console.print(subprocess_line(line)),
+        on_output=on_output_with_throbber,
         model=model,
         context=context,
     )
+
+    # Ensure throbber is stopped even if no output was received
+    if throbber.is_running:
+        throbber.stop()
 
     if result.exit_code == 0:
         console.print("")
