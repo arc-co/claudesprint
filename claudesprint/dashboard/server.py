@@ -83,10 +83,11 @@ class DashboardServer:
         self._thread.start()
 
         # Wait for server to start (with timeout)
+        import time
         for _ in range(50):  # 5 seconds max
             if self._running:
                 break
-            threading.Event().wait(0.1)
+            time.sleep(0.1)
 
         if not self._running:
             logger.warning("Dashboard: Server failed to start")

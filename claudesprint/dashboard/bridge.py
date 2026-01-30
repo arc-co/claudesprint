@@ -155,9 +155,10 @@ class DashboardEventBridge:
         try:
             self._event_queue.put_nowait(event)
         except queue.Full:
-            # Drop oldest event if queue is full
+            # Drop oldest event if queue is full, log warning
             try:
-                self._event_queue.get_nowait()
+                dropped = self._event_queue.get_nowait()
+                logger.warning(f"Dashboard event queue full, dropped event: {dropped.get('type')}")
                 self._event_queue.put_nowait(event)
             except queue.Empty:
                 pass
