@@ -1,5 +1,5 @@
 /**
- * ClaudeSprint Dashboard - SSE Client
+ * ClaudeSprint Dashboard - Pure TUI
  */
 
 class Dashboard {
@@ -11,28 +11,39 @@ class Dashboard {
         this.stepElapsedInterval = null;
         this.stepStartTime = null;
 
-        // DOM elements
         this.elements = {
-            connectionStatus: document.getElementById('connection-status'),
+            connStatus: document.getElementById('conn-status'),
             sprintId: document.getElementById('sprint-id'),
-            progressFill: document.getElementById('progress-fill'),
-            progressText: document.getElementById('progress-text'),
+            issueCount: document.getElementById('issue-count'),
             issueName: document.getElementById('issue-name'),
             currentStep: document.getElementById('current-step'),
             stepElapsed: document.getElementById('step-elapsed'),
             retryCount: document.getElementById('retry-count'),
             maxRetry: document.getElementById('max-retry'),
-            workflowSteps: document.getElementById('workflow-steps'),
             outputContent: document.getElementById('output-content'),
             outputContainer: document.getElementById('output-container'),
             clearOutput: document.getElementById('clear-output'),
         };
 
-        // Step order for workflow visualization
-        this.stepOrder = [
-            'read-docs', 'implement', 'write-tests', 'run-tests',
-            'fix-tests', 'code-review', 'commit-changes'
-        ];
+        this.stepElements = {
+            'read-docs': document.getElementById('wf-docs'),
+            'implement': document.getElementById('wf-impl'),
+            'write-tests': document.getElementById('wf-tests'),
+            'run-tests': document.getElementById('wf-run'),
+            'fix-tests': document.getElementById('wf-fix'),
+            'code-review': document.getElementById('wf-review'),
+            'commit-changes': document.getElementById('wf-commit'),
+        };
+
+        this.stepLabels = {
+            'read-docs': 'docs',
+            'implement': 'impl',
+            'write-tests': 'tests',
+            'run-tests': 'run',
+            'fix-tests': 'fix',
+            'code-review': 'review',
+            'commit-changes': 'commit',
+        };
 
         this.init();
     }
@@ -51,7 +62,6 @@ class Dashboard {
 
     connect() {
         this.setConnectionStatus('connecting');
-
         this.eventSource = new EventSource('/events');
 
         this.eventSource.onopen = () => {
@@ -72,27 +82,18 @@ class Dashboard {
 
     scheduleReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('Max reconnect attempts reached');
             return;
         }
-
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
         setTimeout(() => this.connect(), Math.min(delay, 30000));
     }
 
     setConnectionStatus(status) {
-        const el = this.elements.connectionStatus;
-        el.className = `connection-status ${status}`;
-
-        const textMap = {
-            connecting: 'Connecting...',
-            connected: 'Connected',
-            disconnected: 'Disconnected',
-        };
-
-        el.querySelector('.status-text').textContent = textMap[status] || status;
+        const el = this.elements.connStatus;
+        el.className = status;
+        const text = { connecting: '...', connected: 'OK', disconnected: 'ERR' };
+        el.textContent = text[status] || status;
     }
 
     handleEvent(event) {
@@ -110,33 +111,28 @@ class Dashboard {
             step_failed: (data) => this.onStepFailed(data),
             subprocess_started: (data) => this.onSubprocessStarted(data),
             subprocess_output: (data) => this.onSubprocessOutput(data),
-            subprocess_ended: () => this.onSubprocessEnded(),
+            subprocess_ended: () => {},
             output: (data) => this.onOutput(data),
-            rate_limited: () => this.addOutput('Rate limited - waiting...', 'error'),
-            process_hung: (data) => this.addOutput(`Process appears hung (${data.seconds_inactive}s inactive)`, 'error'),
+            rate_limited: () => this.addOutput('RATE LIMITED', 'warning'),
+            process_hung: (data) => this.addOutput(`HUNG ${data.seconds_inactive}s`, 'error'),
         };
 
         const handler = handlers[event.type];
-        if (handler) {
-            handler(event.data);
-        }
+        if (handler) handler(event.data);
     }
 
     updateFullState(state) {
-        // Sprint info
         if (state.sprint_id) {
             this.elements.sprintId.textContent = state.sprint_id;
         }
-        this.updateProgress(state.completed_issues, state.total_issues);
+        this.updateIssueCount(state.completed_issues, state.total_issues);
 
-        // Issue info
         if (state.current_issue_id) {
             this.elements.issueName.textContent = state.current_issue_name || state.current_issue_id;
         } else {
-            this.elements.issueName.textContent = 'Waiting for issue...';
+            this.elements.issueName.textContent = 'Waiting...';
         }
 
-        // Step info
         if (state.current_step) {
             this.elements.currentStep.textContent = state.current_step;
             this.highlightStep(state.current_step);
@@ -146,58 +142,53 @@ class Dashboard {
             this.stepStartTime = new Date(state.step_start_time);
         }
 
-        // Metrics
         this.elements.retryCount.textContent = state.retry_count || 0;
         this.elements.maxRetry.textContent = state.max_retry || 5;
 
-        // Output
         if (state.output_lines && state.output_lines.length > 0) {
             state.output_lines.forEach(line => this.addOutput(line));
         }
     }
 
-    updateProgress(completed, total) {
+    updateIssueCount(completed, total) {
         total = total || 0;
         completed = completed || 0;
-
-        const percentage = total > 0 ? (completed / total) * 100 : 0;
-        this.elements.progressFill.style.width = `${percentage}%`;
-        this.elements.progressText.textContent = `${completed}/${total}`;
+        this.elements.issueCount.textContent = `${completed}/${total}`;
     }
 
     onSprintStarted(data) {
         this.elements.sprintId.textContent = data.sprint_id;
-        this.updateProgress(data.completed_count, data.total_count);
-        this.clearAllStepStates();
+        this.updateIssueCount(data.completed_count, data.total_count);
+        this.clearSteps();
     }
 
     onSprintCompleted(data) {
-        this.updateProgress(data.completed_count, data.total_count);
-        this.addOutput('Sprint completed!', 'success');
+        this.updateIssueCount(data.completed_count, data.total_count);
+        this.addOutput('SPRINT DONE', 'success');
     }
 
     onSprintIteration(data) {
-        this.updateProgress(data.completed_count, data.total_count);
+        this.updateIssueCount(data.completed_count, data.total_count);
     }
 
     onSelectingIssue() {
-        this.elements.issueName.textContent = 'Selecting next issue...';
-        this.elements.currentStep.textContent = 'selecting';
-        this.clearAllStepStates();
+        this.elements.issueName.textContent = 'Selecting...';
+        this.elements.currentStep.textContent = '-';
+        this.clearSteps();
     }
 
     onIssueStarted(data) {
         this.elements.issueName.textContent = data.issue_name || data.issue_id;
         this.elements.retryCount.textContent = '0';
-        this.clearAllStepStates();
+        this.clearSteps();
         this.elements.outputContent.innerHTML = '';
     }
 
     onIssueCompleted(data) {
-        this.addOutput(`Issue completed: ${data.issue_id}`, 'success');
-        this.elements.issueName.textContent = 'Waiting for issue...';
+        this.addOutput(`DONE: ${data.issue_id}`, 'success');
+        this.elements.issueName.textContent = 'Waiting...';
         this.elements.currentStep.textContent = '-';
-        this.clearAllStepStates();
+        this.clearSteps();
     }
 
     onIssueIteration(data) {
@@ -213,26 +204,20 @@ class Dashboard {
     }
 
     onStepCompleted(data) {
-        const stepName = data.step_name;
-        this.markStepCompleted(stepName);
+        this.clearSteps();
     }
 
     onStepFailed(data) {
-        const stepName = data.step_name;
-        this.markStepFailed(stepName);
         this.elements.retryCount.textContent = data.retry_count || 0;
+        this.clearSteps();
     }
 
     onSubprocessStarted(data) {
-        this.addOutput(`> ${data.command}`, 'command');
+        this.addOutput(`$ ${data.command}`, 'command');
     }
 
     onSubprocessOutput(data) {
         this.addOutput(data.line);
-    }
-
-    onSubprocessEnded() {
-        // No specific action needed
     }
 
     onOutput(data) {
@@ -245,47 +230,32 @@ class Dashboard {
         line.textContent = text;
         this.elements.outputContent.appendChild(line);
         this.elements.outputContent.appendChild(document.createTextNode('\n'));
-
-        // Auto-scroll to bottom
         this.elements.outputContainer.scrollTop = this.elements.outputContainer.scrollHeight;
     }
 
     highlightStep(stepName) {
-        // Clear previous states except completed
-        this.elements.workflowSteps.querySelectorAll('.step').forEach(el => {
-            if (!el.classList.contains('completed')) {
-                el.classList.remove('active', 'failed');
+        // Clear all steps first
+        for (const [name, el] of Object.entries(this.stepElements)) {
+            if (el) {
+                el.classList.remove('active');
+                el.textContent = `[ ] ${this.stepLabels[name]}`;
             }
-        });
-
-        // Highlight current step
-        const stepEl = this.elements.workflowSteps.querySelector(`[data-step="${stepName}"]`);
-        if (stepEl) {
-            stepEl.classList.remove('completed', 'failed');
-            stepEl.classList.add('active');
+        }
+        // Highlight active
+        const activeEl = this.stepElements[stepName];
+        if (activeEl) {
+            activeEl.classList.add('active');
+            activeEl.textContent = `[*] ${this.stepLabels[stepName]}`;
         }
     }
 
-    markStepCompleted(stepName) {
-        const stepEl = this.elements.workflowSteps.querySelector(`[data-step="${stepName}"]`);
-        if (stepEl) {
-            stepEl.classList.remove('active', 'failed');
-            stepEl.classList.add('completed');
+    clearSteps() {
+        for (const [name, el] of Object.entries(this.stepElements)) {
+            if (el) {
+                el.classList.remove('active');
+                el.textContent = `[ ] ${this.stepLabels[name]}`;
+            }
         }
-    }
-
-    markStepFailed(stepName) {
-        const stepEl = this.elements.workflowSteps.querySelector(`[data-step="${stepName}"]`);
-        if (stepEl) {
-            stepEl.classList.remove('active', 'completed');
-            stepEl.classList.add('failed');
-        }
-    }
-
-    clearAllStepStates() {
-        this.elements.workflowSteps.querySelectorAll('.step').forEach(el => {
-            el.classList.remove('active', 'completed', 'failed');
-        });
         this.stepStartTime = null;
         this.elements.stepElapsed.textContent = '-';
     }
@@ -300,16 +270,13 @@ class Dashboard {
     }
 
     formatElapsed(seconds) {
-        if (seconds < 60) {
-            return `${seconds}s`;
-        }
+        if (seconds < 60) return `${seconds}s`;
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}m ${secs}s`;
+        return `${mins}m${secs}s`;
     }
 }
 
-// Initialize dashboard when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.dashboard = new Dashboard();
 });

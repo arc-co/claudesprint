@@ -3,84 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClaudeSprint Terminal</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>ClaudeSprint</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="dashboard">
-        <header class="header">
-            <h1>ClaudeSprint Dashboard</h1>
-            <div class="connection-status" id="connection-status">
-                <span class="status-dot"></span>
-                <span class="status-text">Connecting...</span>
-            </div>
-        </header>
-
-        <section class="sprint-section">
-            <div class="section-header"><span class="header-text">SPRINT</span></div>
-            <div class="sprint-info">
-                <span class="sprint-id" id="sprint-id">-</span>
-                <div class="progress-container">
-                    <span class="progress-label">progress:</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
-                    <span class="progress-text" id="progress-text">[0/0]</span>
-                </div>
-            </div>
-        </section>
-
-        <section class="issue-section">
-            <div class="section-header"><span class="header-text">CURRENT ISSUE</span></div>
-            <div class="issue-info">
-                <div class="issue-name" id="issue-name">Waiting for issue...</div>
-                <div class="issue-metrics">
-                    <span class="metric">
-                        step: <strong id="current-step">-</strong>
-                    </span>
-                    <span class="metric">
-                        elapsed: <strong id="step-elapsed">-</strong>
-                    </span>
-                    <span class="metric">
-                        retry: <strong id="retry-count">0</strong>/<strong id="max-retry">5</strong>
-                    </span>
-                </div>
-            </div>
-        </section>
-
-        <section class="workflow-section">
-            <div class="section-header"><span class="header-text">WORKFLOW</span></div>
-            <div class="workflow-steps" id="workflow-steps">
-                <span class="step" data-step="read-docs">docs</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="implement">impl</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="write-tests">tests</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="run-tests">run</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="fix-tests">fix</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="code-review">review</span>
-                <span class="step-arrow">-></span>
-                <span class="step" data-step="commit-changes">commit</span>
-            </div>
-        </section>
-
-        <section class="output-section">
-            <div class="section-header">
-                <span class="header-text">OUTPUT</span>
-                <button class="clear-btn" id="clear-output">[clear]</button>
-            </div>
-            <div class="output-container" id="output-container">
-                <pre id="output-content"></pre>
-            </div>
-        </section>
+<div class="tui">
+    <div class="section header">
+        <span class="label">ClaudeSprint</span>
+        <span class="right">Status: <span id="conn-status">...</span></span>
     </div>
 
-    <script src="/static/dashboard.js"></script>
+    <div class="section">
+        <div class="section-title">Sprint</div>
+        <div class="row">
+            <span>ID: <span id="sprint-id">-</span></span>
+            <span>Issues: <span id="issue-count">0/0</span></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Issue</div>
+        <div id="issue-name">Waiting...</div>
+        <div class="row meta">
+            <span>Step: <span id="current-step">-</span></span>
+            <span>Elapsed: <span id="step-elapsed">-</span></span>
+            <span>Retry: <span id="retry-count">0</span>/<span id="max-retry">5</span></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Workflow</div>
+        <div class="workflow">
+            <span id="wf-docs" class="step" data-step="read-docs">[ ] docs</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-impl" class="step" data-step="implement">[ ] impl</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-tests" class="step" data-step="write-tests">[ ] tests</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-run" class="step" data-step="run-tests">[ ] run</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-fix" class="step" data-step="fix-tests">[ ] fix</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-review" class="step" data-step="code-review">[ ] review</span>
+            <span class="arrow">&gt;</span>
+            <span id="wf-commit" class="step" data-step="commit-changes">[ ] commit</span>
+        </div>
+    </div>
+
+    <div class="section output-section">
+        <div class="section-title">Output <span id="clear-output" class="btn">clear</span></div>
+        <div id="output-container"><pre id="output-content"></pre></div>
+    </div>
+</div>
+<script src="/static/dashboard.js"></script>
 </body>
 </html>

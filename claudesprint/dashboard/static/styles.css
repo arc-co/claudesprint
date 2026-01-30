@@ -1,24 +1,3 @@
-/* Terminal Dashboard Styles */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-
-:root {
-    --bg-primary: #0c0c0c;
-    --bg-secondary: #1a1a1a;
-    --bg-tertiary: #0a0a0a;
-    --text-primary: #c0c0c0;
-    --text-secondary: #808080;
-    --text-muted: #505050;
-    --term-green: #00ff00;
-    --term-cyan: #00ffff;
-    --term-yellow: #ffff00;
-    --term-red: #ff5555;
-    --term-magenta: #ff55ff;
-    --term-blue: #5555ff;
-    --term-white: #ffffff;
-    --border-color: #333333;
-    --font-size: 14px;
-}
-
 * {
     margin: 0;
     padding: 0;
@@ -26,311 +5,144 @@
 }
 
 body {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: var(--font-size);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    min-height: 100vh;
+    font-family: monospace;
+    font-size: 12px;
+    background: #000;
+    color: #888;
     line-height: 1.4;
 }
 
-.dashboard {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    min-height: 100vh;
+.tui {
+    max-width: 600px;
+    padding: 8px;
 }
 
-/* Terminal Separator */
-.separator {
-    color: var(--text-muted);
-    user-select: none;
+.section {
+    border: 1px solid #444;
+    padding: 6px 8px;
+    margin-bottom: -1px;
 }
 
-/* Header */
-.header {
+.section.header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: 8px;
+    background: #111;
 }
 
-.header h1 {
-    font-size: var(--font-size);
-    font-weight: 700;
-    color: var(--term-cyan);
+.section-title {
+    color: #666;
+    margin-bottom: 4px;
 }
 
-.header h1::before {
-    content: ">>> ";
-    color: var(--term-green);
+.label {
+    color: #0aa;
 }
 
-.connection-status {
+.right {
+    color: #888;
+}
+
+.row {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--font-size);
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--text-muted);
-    transition: background 0.3s;
-}
-
-.connection-status.connected .status-dot {
-    background: var(--term-green);
-    box-shadow: 0 0 4px var(--term-green);
-}
-
-.connection-status.disconnected .status-dot {
-    background: var(--term-red);
-}
-
-.connection-status.connecting .status-dot {
-    background: var(--term-yellow);
-    animation: blink 1s infinite;
-}
-
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-}
-
-.status-text {
-    color: var(--text-secondary);
-}
-
-.connection-status.connected .status-text {
-    color: var(--term-green);
-}
-
-.connection-status.disconnected .status-text {
-    color: var(--term-red);
-}
-
-/* Sections */
-section {
-    background: transparent;
-    padding: 8px 0;
-    border: none;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.section-header {
-    font-size: var(--font-size);
-    font-weight: 700;
-    color: var(--term-magenta);
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.header-text::before {
-    content: "[ ";
-    color: var(--text-muted);
-}
-
-.header-text::after {
-    content: " ]";
-    color: var(--text-muted);
-}
-
-/* Sprint Section */
-.sprint-info {
-    display: flex;
-    align-items: center;
     gap: 16px;
+}
+
+.meta {
+    margin-top: 4px;
+    color: #666;
+}
+
+#conn-status {
+    color: #888;
+}
+
+#conn-status.connected {
+    color: #0a0;
+}
+
+#conn-status.disconnected {
+    color: #a00;
+}
+
+#conn-status.connecting {
+    color: #aa0;
+}
+
+#sprint-id {
+    color: #0aa;
+}
+
+#issue-count {
+    color: #0a0;
+}
+
+#issue-name {
+    color: #fff;
+}
+
+#current-step {
+    color: #aa0;
+}
+
+#step-elapsed {
+    color: #888;
+}
+
+#retry-count {
+    color: #aa0;
+}
+
+#max-retry {
+    color: #666;
+}
+
+.workflow {
+    display: flex;
     flex-wrap: wrap;
-}
-
-.sprint-id {
-    font-size: var(--font-size);
-    font-weight: 700;
-    color: var(--term-cyan);
-}
-
-.sprint-id::before {
-    content: "id=";
-    color: var(--text-secondary);
-}
-
-.progress-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 200px;
-}
-
-.progress-label {
-    color: var(--text-secondary);
-    font-size: var(--font-size);
-}
-
-.progress-bar {
-    flex: 1;
-    height: 16px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    max-width: 300px;
-    position: relative;
-}
-
-.progress-fill {
-    height: 100%;
-    background: var(--term-green);
-    width: 0%;
-    transition: width 0.5s ease;
-}
-
-.progress-text {
-    font-weight: 700;
-    min-width: 60px;
-    color: var(--term-green);
-}
-
-/* Issue Section */
-.issue-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.issue-name {
-    font-size: var(--font-size);
-    font-weight: 400;
-    color: var(--term-white);
-}
-
-.issue-name::before {
-    content: "> ";
-    color: var(--term-green);
-}
-
-.issue-metrics {
-    display: flex;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-
-.metric {
-    font-size: var(--font-size);
-    color: var(--text-secondary);
-}
-
-.metric strong {
-    color: var(--term-yellow);
-}
-
-/* Workflow Section */
-.workflow-steps {
-    display: flex;
-    align-items: center;
     gap: 4px;
-    flex-wrap: wrap;
-    padding: 4px 0;
-    font-size: var(--font-size);
 }
 
 .step {
-    padding: 4px 8px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    font-size: var(--font-size);
-    color: var(--text-secondary);
-    transition: all 0.2s;
+    color: #555;
 }
 
 .step.active {
-    background: var(--bg-secondary);
-    color: var(--term-cyan);
-    border-color: var(--term-cyan);
-    box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+    color: #0aa;
 }
 
-.step.completed {
-    background: transparent;
-    color: var(--term-green);
-    border-color: var(--term-green);
+.arrow {
+    color: #333;
 }
 
-.step.completed::before {
-    content: "\2713 ";
+.btn {
+    color: #555;
+    cursor: pointer;
+    margin-left: 8px;
 }
 
-.step.failed {
-    background: transparent;
-    color: var(--term-red);
-    border-color: var(--term-red);
+.btn:hover {
+    text-decoration: underline;
+    color: #888;
 }
 
-.step.failed::before {
-    content: "\2717 ";
-}
-
-.step-arrow {
-    color: var(--text-muted);
-    font-size: var(--font-size);
-}
-
-/* Output Section */
 .output-section {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 300px;
-    border-bottom: none;
 }
 
-.output-section .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.clear-btn {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    padding: 2px 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: var(--font-size);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.clear-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--term-white);
-    border-color: var(--term-white);
-}
-
-.output-container {
-    flex: 1;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    overflow: auto;
-    max-height: 400px;
+#output-container {
+    margin-top: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    border-top: 1px solid #333;
+    padding-top: 4px;
 }
 
 #output-content {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: var(--font-size);
-    line-height: 1.4;
-    padding: 8px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #888;
     white-space: pre-wrap;
     word-break: break-all;
-    color: var(--text-primary);
 }
 
 .output-line {
@@ -338,77 +150,29 @@ section {
 }
 
 .output-line.command {
-    color: var(--term-cyan);
-}
-
-.output-line.command::before {
-    content: "$ ";
-    color: var(--term-green);
+    color: #0aa;
 }
 
 .output-line.error {
-    color: var(--term-red);
-}
-
-.output-line.error::before {
-    content: "ERROR: ";
+    color: #a00;
 }
 
 .output-line.success {
-    color: var(--term-green);
+    color: #0a0;
 }
 
 .output-line.warning {
-    color: var(--term-yellow);
+    color: #aa0;
 }
 
-.output-line.info {
-    color: var(--term-blue);
-}
-
-/* Scrollbar styling for terminal look */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--bg-tertiary);
+    background: #000;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .dashboard {
-        padding: 8px;
-    }
-
-    .sprint-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
-
-    .progress-container {
-        width: 100%;
-    }
-
-    .issue-metrics {
-        gap: 16px;
-    }
-
-    .workflow-steps {
-        gap: 2px;
-    }
-
-    .step {
-        padding: 2px 6px;
-    }
+    background: #333;
 }
