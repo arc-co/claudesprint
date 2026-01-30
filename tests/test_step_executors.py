@@ -431,14 +431,19 @@ class TestLlmStepExecutor:
         # Verify set_context was called on prompt_service
         mock_prompt_service.set_context.assert_called_once()
 
-    def test_updated_issue_step_respected(
+    def test_updated_issue_step_ignored(
         self,
         llm_executor: LlmStepExecutor,
         sample_current_issue: CurrentIssue,
         mock_issue_service: MagicMock,
     ) -> None:
-        """Test that if Claude updates the step field, it's respected."""
+        """Test that if Claude updates the step field, it's ignored.
+
+        Step transitions must go through the routing table to ensure valid
+        transitions and proper skip logic for disabled gates.
+        """
         # Configure mock to return updated issue with different step
+        # (simulating Claude writing to current_issue.json directly)
         updated_issue = CurrentIssue(
             schema_version="2.0",
             session_id="2026-01-28T12:00:00Z/write-tests",
@@ -447,7 +452,7 @@ class TestLlmStepExecutor:
             issue_id="test-issue-001",
             issue_title="Test issue",
             chunk_type=ChunkType.TEST,
-            step=IssueStep.WRITE_TESTS,  # Claude changed the step
+            step=IssueStep.WRITE_TESTS,  # Claude tried to change the step
             goal="Write tests",
             next_action="Write tests",
         )
@@ -456,8 +461,10 @@ class TestLlmStepExecutor:
         # Execute the step
         result = llm_executor.execute(sample_current_issue)
 
-        # Verify the updated step is used
-        assert result.next_step == IssueStep.WRITE_TESTS
+        # Verify Claude's override is IGNORED and routing table is used
+        # The mock claude_runner returns <routing_signal>pass</routing_signal>
+        # which maps to CODE_REVIEW in default_parse_step_output
+        assert result.next_step == IssueStep.CODE_REVIEW
 
     def test_non_zero_exit_code_without_next_step_fails(
         self,

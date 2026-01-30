@@ -47,10 +47,8 @@ git diff --stat 2>/dev/null
             <commands><![CDATA[
 # Record all test files created/modified
 claudesprint-tools issue change "<test_file>" "<tests added>"
-
-# Transition to next step
-claudesprint-tools issue step run-tests --goal="Run test suite to verify implementation"
             ]]></commands>
+            <note>Do NOT set the next step manually. Step transitions are handled automatically by the workflow engine.</note>
         </phase>
 
         <phase name="log_and_exit">

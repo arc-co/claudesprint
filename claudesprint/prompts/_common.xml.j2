@@ -28,11 +28,7 @@ echo "  <summary>" >> .claudesprint/project/current_issue.log
 <state_management>
     <rule>NEVER write to current_issue.json directly using bash/cat/jq.</rule>
     <rule>ALWAYS use the provided CLI tools:</rule>
-
-    <command name="step-transition" primary="true">
-        <syntax>claudesprint-tools issue step &lt;next_step&gt; [--goal="..."] [--next-action="..."] [--clear-failures]</syntax>
-        <example>claudesprint-tools issue step write-tests --goal="Write unit tests for auth"</example>
-    </command>
+    <rule priority="critical">Do NOT set the step field manually. Step transitions are handled automatically by the workflow engine based on routing rules and skip gates (require_testing, require_browser_qa).</rule>
 
     <command name="update-fields">
         <syntax>claudesprint-tools issue update [--goal="..."] [--next-action="..."]</syntax>
@@ -49,10 +45,17 @@ echo "  <summary>" >> .claudesprint/project/current_issue.log
         <example>claudesprint-tools issue failure "AssertionError: expected 200"</example>
     </command>
 
+    <command name="clear-failures">
+        <syntax>claudesprint-tools issue clear-failures</syntax>
+        <example>claudesprint-tools issue clear-failures</example>
+        <note>Use after fixing issues to clear failure state and reset retry count.</note>
+    </command>
+
     <forbidden>
         <action>cat > .claudesprint/...</action>
         <action>jq ... > tmp && mv tmp ...</action>
         <action>echo '{"..."}' > current_issue.json</action>
+        <action>claudesprint-tools issue step (step transitions are automatic)</action>
     </forbidden>
 </state_management>
 

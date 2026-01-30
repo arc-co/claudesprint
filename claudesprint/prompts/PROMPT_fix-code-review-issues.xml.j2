@@ -34,10 +34,11 @@ git diff --stat 2>/dev/null
 # Record all fixed files
 claudesprint-tools issue change "<file>" "<what fixed>"
 
-# Clear failures and transition to next step
-claudesprint-tools issue step run-tests --goal="Re-run tests after code review fixes" --clear-failures
+# Clear failures after fixing issues
+claudesprint-tools issue clear-failures
             ]]></commands>
             <important>Preserve existing changes array and ADD fix changes.</important>
+            <note>Do NOT set the next step manually. Step transitions are handled automatically by the workflow engine.</note>
         </phase>
 
         <phase name="log_and_exit">

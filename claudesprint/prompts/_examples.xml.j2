@@ -9,8 +9,9 @@
         Error: AssertionError: expected 200 but got 404
         Verdict: FAIL_CODE - route not registered
     </analysis>
-    <action>claudesprint-tools issue step implement --goal="Register missing route handler"</action>
+    <action>claudesprint-tools issue failure "AssertionError: expected 200 but got 404 - route not registered"</action>
     <routing_signal>fail_code</routing_signal>
+    <note>Step transition to implement is automatic based on routing_signal.</note>
 </example>
 {% endif %}
 
@@ -33,8 +34,9 @@
         AC states: "Return 201 Created on successful resource creation"
         Verdict: CODE_WRONG - implementation returns wrong status code
     </analysis>
-    <action>claudesprint-tools issue step implement --goal="Return 201 status for POST endpoints"</action>
+    <action>claudesprint-tools issue failure "expected status 201 but got 200 - wrong status code"</action>
     <routing_signal>code_wrong</routing_signal>
+    <note>Step transition to implement is automatic based on routing_signal.</note>
 </example>
 {% endif %}
 
@@ -58,8 +60,9 @@
         [AC3] Token expires after 24h: IMPLEMENTED
         Code Quality: Missing error handling for invalid credentials
     </analysis>
-    <action>claudesprint-tools issue step fix-code-review-issues --goal="Add proper 401 response for invalid credentials"</action>
+    <action>claudesprint-tools issue failure "AC2: Invalid credentials return 401 - MISSING, returns 500 on invalid password"</action>
     <routing_signal>issues</routing_signal>
+    <note>Step transition to fix-code-review-issues is automatic based on routing_signal.</note>
 </example>
 {% endif %}
 
@@ -72,8 +75,7 @@
         3. Approach: Add route handler with JWT generation
     </analysis>
     <action>claudesprint-tools issue change src/auth.py "Added login endpoint with JWT generation"</action>
-    <action>claudesprint-tools issue step write-tests --goal="Write tests for login endpoint"</action>
-    <routing_signal>pass</routing_signal>
+    <note>Step transition to write-tests is automatic. Do NOT call claudesprint-tools issue step.</note>
 </example>
 {% endif %}
 
@@ -86,7 +88,6 @@
         3. Approach: Write tests for valid login, invalid credentials, token expiry
     </analysis>
     <action>claudesprint-tools issue change tests/test_auth.py "Added tests for login endpoint"</action>
-    <action>claudesprint-tools issue step run-tests --goal="Verify implementation passes tests"</action>
-    <routing_signal>pass</routing_signal>
+    <note>Step transition to run-tests is automatic. Do NOT call claudesprint-tools issue step.</note>
 </example>
 {% endif %}
