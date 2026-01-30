@@ -1,59 +1,65 @@
-"""HTTP server for the dashboard with SSE support."""
+"""NiceGUI-based dashboard server."""
 
 from __future__ import annotations
 
-import asyncio
-import json
+import contextlib
 import logging
 import threading
-from pathlib import Path
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, cast
 
-try:
-    from aiohttp import web
-except ImportError:
-    web = None  # type: ignore[assignment]
-
-from claudesprint.dashboard.bridge import DashboardEventBridge
+from claudesprint.dashboard.components import create_dashboard
 from claudesprint.dashboard.port_manager import find_available_port
+from claudesprint.dashboard.state import DashboardState
+from claudesprint.events.workflow_event_bus import EventPayload, WorkflowEvent
 
 if TYPE_CHECKING:
     from claudesprint.events.workflow_event_bus import WorkflowEventBus
 
+try:
+    from nicegui import app, ui
+except ImportError:
+    app = None
+    ui = None
+
 logger = logging.getLogger(__name__)
 
-STATIC_DIR = Path(__file__).parent / "static"
+
+def _get_str(payload: EventPayload, key: str, default: str = "") -> str:
+    """Safely get a string value from payload."""
+    value = cast(dict[str, Any], payload).get(key, default)
+    return str(value) if value is not None else default
+
+
+def _get_int(payload: EventPayload, key: str, default: int = 0) -> int:
+    """Safely get an int value from payload."""
+    value = cast(dict[str, Any], payload).get(key, default)
+    return value if isinstance(value, int) else default
 
 
 class DashboardServer:
-    """HTTP server for the real-time dashboard.
+    """NiceGUI-based dashboard server.
 
-    Runs aiohttp in a background thread, serving:
-    - GET / - Dashboard HTML page
-    - GET /events - SSE stream of workflow events
-    - GET /state - Current state as JSON
-    - GET /static/* - Static files (CSS, JS)
+    Replaces the aiohttp/SSE implementation with NiceGUI's built-in
+    WebSocket reactivity for simpler real-time updates.
     """
 
     def __init__(self, event_bus: WorkflowEventBus) -> None:
         """Initialize the dashboard server.
 
         Args:
-            event_bus: The workflow event bus to bridge events from.
+            event_bus: The workflow event bus to subscribe to.
         """
-        if web is None:
-            raise ImportError("aiohttp is required for the dashboard. Install with: pip install aiohttp")
+        if ui is None:
+            raise ImportError("nicegui is required for the dashboard. Install with: pip install nicegui")
 
         self._event_bus = event_bus
-        self._bridge = DashboardEventBridge(event_bus)
-        self._app: web.Application | None = None
-        self._runner: web.AppRunner | None = None
-        self._site: web.TCPSite | None = None
-        self._thread: threading.Thread | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
+        self._state = DashboardState()
+        self._refresh_callbacks: dict[str, Callable[[], None]] = {}
         self._port: int = 0
         self._running = False
-        self._shutdown_event: asyncio.Event | None = None
+        self._thread: threading.Thread | None = None
 
     def start(self, start_port: int = 9500) -> str | None:
         """Start the dashboard server in a background thread.
@@ -75,24 +81,20 @@ class DashboardServer:
 
         self._port = port_result.port
 
-        # Connect the event bridge
-        self._bridge.connect()
+        # Subscribe to events
+        self._connect_events()
+
+        # Create the UI page
+        @ui.page("/")
+        def dashboard_page() -> None:
+            ui.page_title("ClaudeSprint")
+            create_dashboard(self._state, self._refresh_callbacks)
 
         # Start server in background thread
         self._thread = threading.Thread(target=self._run_server, daemon=True)
         self._thread.start()
 
-        # Wait for server to start (with timeout)
-        import time
-        for _ in range(50):  # 5 seconds max
-            if self._running:
-                break
-            time.sleep(0.1)
-
-        if not self._running:
-            logger.warning("Dashboard: Server failed to start")
-            return None
-
+        self._running = True
         url = f"http://127.0.0.1:{self._port}"
         logger.info(f"Dashboard started at {url}")
         return url
@@ -103,102 +105,152 @@ class DashboardServer:
             return
 
         self._running = False
+        self._disconnect_events()
 
-        # Signal shutdown
-        if self._loop and self._shutdown_event:
-            self._loop.call_soon_threadsafe(self._shutdown_event.set)
-
-        # Wait for thread to finish
-        if self._thread:
-            self._thread.join(timeout=5.0)
-
-        # Disconnect the event bridge
-        self._bridge.disconnect()
+        # NiceGUI shutdown
+        with contextlib.suppress(Exception):
+            app.shutdown()
 
         logger.info("Dashboard stopped")
 
     def _run_server(self) -> None:
-        """Run the aiohttp server (called in background thread)."""
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-
+        """Run the NiceGUI server (called in background thread)."""
         try:
-            self._loop.run_until_complete(self._start_async())
+            ui.run(
+                host="127.0.0.1",
+                port=self._port,
+                reload=False,
+                show=False,
+                title="ClaudeSprint",
+            )
         except Exception as e:
             logger.exception(f"Dashboard server error: {e}")
-        finally:
-            self._loop.close()
 
-    async def _start_async(self) -> None:
-        """Start the async server components."""
-        self._shutdown_event = asyncio.Event()
+    def _connect_events(self) -> None:
+        """Subscribe to all relevant workflow events."""
+        self._event_bus.subscribe(WorkflowEvent.SPRINT_STARTED, self._on_sprint_started)
+        self._event_bus.subscribe(WorkflowEvent.SPRINT_COMPLETED, self._on_sprint_completed)
+        self._event_bus.subscribe(WorkflowEvent.SPRINT_ITERATION, self._on_sprint_iteration)
+        self._event_bus.subscribe(WorkflowEvent.SELECTING_ISSUE, self._on_selecting_issue)
+        self._event_bus.subscribe(WorkflowEvent.ISSUE_STARTED, self._on_issue_started)
+        self._event_bus.subscribe(WorkflowEvent.ISSUE_COMPLETED, self._on_issue_completed)
+        self._event_bus.subscribe(WorkflowEvent.ISSUE_FAILED, self._on_issue_failed)
+        self._event_bus.subscribe(WorkflowEvent.ISSUE_ITERATION, self._on_issue_iteration)
+        self._event_bus.subscribe(WorkflowEvent.STEP_STARTED, self._on_step_started)
+        self._event_bus.subscribe(WorkflowEvent.STEP_COMPLETED, self._on_step_completed)
+        self._event_bus.subscribe(WorkflowEvent.STEP_FAILED, self._on_step_failed)
+        self._event_bus.subscribe(WorkflowEvent.SUBPROCESS_STARTED, self._on_subprocess_started)
+        self._event_bus.subscribe(WorkflowEvent.SUBPROCESS_OUTPUT, self._on_subprocess_output)
+        self._event_bus.subscribe(WorkflowEvent.OUTPUT, self._on_output)
+        logger.debug("Dashboard event handlers connected")
 
-        # Create app with routes
-        self._app = web.Application()
-        self._app.router.add_get("/", self._handle_index)
-        self._app.router.add_get("/events", self._handle_events)
-        self._app.router.add_get("/state", self._handle_state)
-        self._app.router.add_static("/static", STATIC_DIR)
+    def _disconnect_events(self) -> None:
+        """Unsubscribe from all workflow events."""
+        self._event_bus.unsubscribe(WorkflowEvent.SPRINT_STARTED, self._on_sprint_started)
+        self._event_bus.unsubscribe(WorkflowEvent.SPRINT_COMPLETED, self._on_sprint_completed)
+        self._event_bus.unsubscribe(WorkflowEvent.SPRINT_ITERATION, self._on_sprint_iteration)
+        self._event_bus.unsubscribe(WorkflowEvent.SELECTING_ISSUE, self._on_selecting_issue)
+        self._event_bus.unsubscribe(WorkflowEvent.ISSUE_STARTED, self._on_issue_started)
+        self._event_bus.unsubscribe(WorkflowEvent.ISSUE_COMPLETED, self._on_issue_completed)
+        self._event_bus.unsubscribe(WorkflowEvent.ISSUE_FAILED, self._on_issue_failed)
+        self._event_bus.unsubscribe(WorkflowEvent.ISSUE_ITERATION, self._on_issue_iteration)
+        self._event_bus.unsubscribe(WorkflowEvent.STEP_STARTED, self._on_step_started)
+        self._event_bus.unsubscribe(WorkflowEvent.STEP_COMPLETED, self._on_step_completed)
+        self._event_bus.unsubscribe(WorkflowEvent.STEP_FAILED, self._on_step_failed)
+        self._event_bus.unsubscribe(WorkflowEvent.SUBPROCESS_STARTED, self._on_subprocess_started)
+        self._event_bus.unsubscribe(WorkflowEvent.SUBPROCESS_OUTPUT, self._on_subprocess_output)
+        self._event_bus.unsubscribe(WorkflowEvent.OUTPUT, self._on_output)
+        logger.debug("Dashboard event handlers disconnected")
 
-        # Start the server
-        self._runner = web.AppRunner(self._app)
-        await self._runner.setup()
+    def _refresh_ui(self, *sections: str) -> None:
+        """Refresh specified UI sections."""
+        for section in sections:
+            if section in self._refresh_callbacks:
+                with contextlib.suppress(Exception):
+                    self._refresh_callbacks[section]()
 
-        self._site = web.TCPSite(self._runner, "127.0.0.1", self._port)
-        await self._site.start()
+    # Event handlers
 
-        self._running = True
+    def _on_sprint_started(self, payload: EventPayload) -> None:
+        self._state.sprint_id = _get_str(payload, "sprint_id")
+        self._state.total_issues = _get_int(payload, "total_count")
+        self._state.completed_issues = _get_int(payload, "completed_count")
+        self._state.clear_output()
+        issues_data = cast(dict[str, Any], payload).get("issues", [])
+        if issues_data:
+            self._state.set_issues(issues_data)
+        self._refresh_ui("task_board", "issue", "output")
 
-        # Wait for shutdown signal
-        await self._shutdown_event.wait()
+    def _on_sprint_completed(self, payload: EventPayload) -> None:
+        self._state.completed_issues = _get_int(payload, "completed_count")
+        self._state.add_output("SPRINT DONE")
+        self._refresh_ui("task_board", "output")
 
-        # Cleanup
-        await self._runner.cleanup()
+    def _on_sprint_iteration(self, payload: EventPayload) -> None:
+        self._state.completed_issues = _get_int(payload, "completed_count")
+        self._refresh_ui("task_board")
 
-    async def _handle_index(self, _request: web.Request) -> web.StreamResponse:
-        """Serve the dashboard HTML page."""
-        index_path = STATIC_DIR / "index.html"
-        if not index_path.exists():
-            return web.Response(text="Dashboard not found", status=404)
+    def _on_selecting_issue(self, _payload: EventPayload) -> None:
+        self._state.current_step = "selecting-issue"
+        self._state.step_start_time = datetime.now(timezone.utc)
+        self._refresh_ui("issue", "workflow")
 
-        return web.FileResponse(index_path)
+    def _on_issue_started(self, payload: EventPayload) -> None:
+        issue_id = _get_str(payload, "issue_id")
+        self._state.current_issue_id = issue_id
+        self._state.current_issue_name = _get_str(payload, "issue_name")
+        self._state.retry_count = 0
+        self._state.clear_output()
+        self._state.update_issue_status(issue_id, "in_progress")
+        self._refresh_ui("task_board", "issue", "output")
 
-    async def _handle_events(self, request: web.Request) -> web.StreamResponse:
-        """Handle SSE event stream."""
-        response = web.StreamResponse(
-            status=200,
-            reason="OK",
-            headers={
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-            },
-        )
-        await response.prepare(request)
+    def _on_issue_completed(self, _payload: EventPayload) -> None:
+        old_issue = self._state.current_issue_id
+        self._state.update_issue_status(old_issue, "completed")
+        self._state.completed_issues += 1
+        self._state.current_issue_id = ""
+        self._state.current_issue_name = ""
+        self._state.current_step = ""
+        self._state.add_output(f"DONE: {old_issue}")
+        self._refresh_ui("task_board", "issue", "workflow", "output")
 
-        # Track connected clients
-        self._bridge.state.connected_clients += 1
+    def _on_issue_failed(self, payload: EventPayload) -> None:
+        issue_id = _get_str(payload, "issue_id") or self._state.current_issue_id
+        self._state.update_issue_status(issue_id, "pending")
+        self._state.current_issue_id = ""
+        self._state.current_issue_name = ""
+        self._state.current_step = ""
+        self._state.add_output(f"FAILED: {issue_id}")
+        self._refresh_ui("task_board", "issue", "workflow", "output")
 
-        # Send initial state
-        initial_state = {
-            "type": "initial_state",
-            "data": self._bridge.state.to_dict(),
-        }
-        await response.write(f"data: {json.dumps(initial_state)}\n\n".encode())
+    def _on_issue_iteration(self, payload: EventPayload) -> None:
+        self._state.retry_count = _get_int(payload, "retry_count")
+        self._state.max_retry = _get_int(payload, "max_retry", 5)
+        self._refresh_ui("issue")
 
-        try:
-            async for event_data in self._bridge.get_events_async():
-                if not self._running:
-                    break
-                await response.write(event_data.encode())
-        except (asyncio.CancelledError, ConnectionResetError):
-            pass
-        finally:
-            self._bridge.state.connected_clients -= 1
+    def _on_step_started(self, payload: EventPayload) -> None:
+        self._state.current_step = _get_str(payload, "step_name")
+        self._state.step_start_time = datetime.now(timezone.utc)
+        self._refresh_ui("issue", "workflow")
 
-        return response
+    def _on_step_completed(self, _payload: EventPayload) -> None:
+        self._refresh_ui("workflow")
 
-    async def _handle_state(self, _request: web.Request) -> web.Response:
-        """Return current state as JSON."""
-        return web.json_response(self._bridge.state.to_dict())
+    def _on_step_failed(self, payload: EventPayload) -> None:
+        self._state.retry_count = _get_int(payload, "retry_count")
+        self._refresh_ui("issue", "workflow")
+
+    def _on_subprocess_started(self, payload: EventPayload) -> None:
+        command = _get_str(payload, "command")
+        self._state.add_output(f"> {command}")
+        self._refresh_ui("output")
+
+    def _on_subprocess_output(self, payload: EventPayload) -> None:
+        line = _get_str(payload, "line")
+        self._state.add_output(line)
+        self._refresh_ui("output")
+
+    def _on_output(self, payload: EventPayload) -> None:
+        text = _get_str(payload, "text")
+        self._state.add_output(text)
+        self._refresh_ui("output")
