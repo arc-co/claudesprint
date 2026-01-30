@@ -1,25 +1,51 @@
-"""Rate limit handling with exponential backoff.
+"""Rate limit handling with tenacity-based exponential backoff.
 
-Encapsulates rate limit tracking and backoff calculation for the sprint engine.
+Provides factory functions for creating tenacity retry decorators and
+context managers with configurable exponential backoff.
 """
 
-import random
-from dataclasses import dataclass
-from datetime import timedelta
+from dataclasses import dataclass, field
+from typing import Callable
+
+from tenacity import (
+    Retrying,
+    RetryCallState,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from claudesprint.exceptions import RateLimitDetected
 
 
 @dataclass
 class RateLimitConfig:
-    """Configuration for rate limit handling."""
+    """Configuration for rate limit handling with tenacity.
 
-    max_retries: int = 3
-    base_delay_seconds: float = 60.0
-    max_delay_seconds: float = 900.0
-    jitter_factor: float = 0.1
+    Attributes:
+        max_attempts: Maximum number of retry attempts (default: 5).
+        wait_min: Minimum wait time in seconds (default: 4).
+        wait_max: Maximum wait time in seconds (default: 60).
+        wait_multiplier: Multiplier for exponential backoff (default: 1).
+    """
+
+    max_attempts: int = 5
+    wait_min: float = 4.0
+    wait_max: float = 60.0
+    wait_multiplier: float = 1.0
+
+    # Callbacks for integration with event systems
+    before_sleep_callback: Callable[[RetryCallState], None] | None = field(
+        default=None, repr=False
+    )
 
 
 class RateLimitRetriesExhausted(Exception):
-    """Raised when max rate limit retries are exhausted."""
+    """Raised when max rate limit retries are exhausted.
+
+    Kept for backward compatibility with existing code.
+    """
 
     def __init__(self, retries: int, max_retries: int) -> None:
         self.retries = retries
@@ -29,107 +55,106 @@ class RateLimitRetriesExhausted(Exception):
         )
 
 
-class RateLimitHandler:
-    """Handles rate limiting with exponential backoff.
+def create_rate_limit_retry(
+    config: RateLimitConfig | None = None,
+) -> Callable:
+    """Create a tenacity retry decorator for rate limit handling.
 
-    Tracks retry count and calculates backoff delays with optional jitter.
+    The decorator will retry on RateLimitDetected exceptions using
+    exponential backoff with the configured parameters.
+
+    Args:
+        config: Rate limit configuration. Uses defaults if not provided.
+
+    Returns:
+        A tenacity retry decorator configured for rate limit handling.
 
     Example:
-        handler = RateLimitHandler(RateLimitConfig(max_retries=3))
+        config = RateLimitConfig(max_attempts=5, wait_min=4, wait_max=60)
 
-        while should_continue:
-            try:
-                result = api_call()
-            except RateLimitError:
-                handler.record_rate_limit()
-                if not handler.should_retry():
-                    raise RateLimitRetriesExhausted(...)
-                wait = handler.calculate_backoff()
-                time.sleep(wait.total_seconds())
+        @create_rate_limit_retry(config)
+        def call_api():
+            result = api.call()
+            if is_rate_limited(result):
+                raise RateLimitDetected("Rate limit detected")
+            return result
     """
+    config = config or RateLimitConfig()
 
-    def __init__(self, config: RateLimitConfig | None = None) -> None:
-        """Initialize rate limit handler.
+    decorator_kwargs = {
+        "retry": retry_if_exception_type(RateLimitDetected),
+        "stop": stop_after_attempt(config.max_attempts),
+        "wait": wait_exponential(
+            multiplier=config.wait_multiplier,
+            min=config.wait_min,
+            max=config.wait_max,
+        ),
+        "reraise": True,
+    }
 
-        Args:
-            config: Rate limit configuration. Uses defaults if not provided.
-        """
-        self.config = config or RateLimitConfig()
-        self._retry_count = 0
+    if config.before_sleep_callback:
+        decorator_kwargs["before_sleep"] = config.before_sleep_callback
 
-    @property
-    def retry_count(self) -> int:
-        """Current number of rate limit retries."""
-        return self._retry_count
+    return retry(**decorator_kwargs)
 
-    def reset(self) -> None:
-        """Reset the retry counter to zero.
 
-        Call this after a successful operation to reset the backoff state.
-        """
-        self._retry_count = 0
+def create_rate_limit_retrying(
+    config: RateLimitConfig | None = None,
+) -> Retrying:
+    """Create a tenacity Retrying context manager for rate limit handling.
 
-    def calculate_backoff(self, attempt: int | None = None) -> timedelta:
-        """Calculate exponential backoff delay.
+    Use this when you need programmatic control over the retry loop,
+    such as when rate limits are detected via output parsing rather
+    than exceptions.
 
-        Uses formula: base * 2^(attempt-1), capped at max_delay.
-        Adds random jitter of ±jitter_factor to prevent thundering herd.
+    Args:
+        config: Rate limit configuration. Uses defaults if not provided.
 
-        Args:
-            attempt: Retry attempt number (1-based). If None, uses current retry_count.
+    Returns:
+        A tenacity Retrying context manager configured for rate limit handling.
 
-        Returns:
-            Backoff delay as timedelta.
-        """
-        if attempt is None:
-            attempt = self._retry_count
+    Example:
+        config = RateLimitConfig(max_attempts=5, wait_min=4, wait_max=60)
 
-        # Handle edge case of attempt <= 0
-        if attempt <= 0:
-            attempt = 1
+        for attempt in create_rate_limit_retrying(config):
+            with attempt:
+                result = call_api()
+                if is_rate_limited(result):
+                    raise RateLimitDetected("Rate limit detected")
+                return result
+    """
+    config = config or RateLimitConfig()
 
-        # Exponential backoff: base * 2^(attempt-1)
-        exponent = attempt - 1
-        delay = self.config.base_delay_seconds * (2 ** exponent)
+    retrying_kwargs = {
+        "retry": retry_if_exception_type(RateLimitDetected),
+        "stop": stop_after_attempt(config.max_attempts),
+        "wait": wait_exponential(
+            multiplier=config.wait_multiplier,
+            min=config.wait_min,
+            max=config.wait_max,
+        ),
+        "reraise": True,
+    }
 
-        # Cap at max delay
-        delay = min(delay, self.config.max_delay_seconds)
+    if config.before_sleep_callback:
+        retrying_kwargs["before_sleep"] = config.before_sleep_callback
 
-        # Add jitter: ±jitter_factor
-        if self.config.jitter_factor > 0:
-            jitter_range = delay * self.config.jitter_factor
-            jitter = random.uniform(-jitter_range, jitter_range)
-            delay += jitter
-            # Ensure delay doesn't go below 0
-            delay = max(0, delay)
+    return Retrying(**retrying_kwargs)
 
-        return timedelta(seconds=delay)
 
-    def should_retry(self) -> bool:
-        """Check if another retry is allowed.
+def get_retry_state_info(retry_state: RetryCallState) -> dict:
+    """Extract useful information from a tenacity RetryCallState.
 
-        Returns:
-            True if retry_count < max_retries, False otherwise.
-        """
-        return self._retry_count < self.config.max_retries
+    Useful for logging and event emission in before_sleep callbacks.
 
-    def record_rate_limit(self) -> None:
-        """Record that a rate limit was encountered.
+    Args:
+        retry_state: The tenacity retry state object.
 
-        Increments the internal retry counter.
-        """
-        self._retry_count += 1
-
-    def get_backoff_seconds(self, attempt: int | None = None) -> int:
-        """Get backoff delay as integer seconds.
-
-        Convenience method that returns integer seconds for compatibility
-        with existing code that uses int seconds.
-
-        Args:
-            attempt: Retry attempt number (1-based). If None, uses current retry_count.
-
-        Returns:
-            Backoff delay in whole seconds.
-        """
-        return int(self.calculate_backoff(attempt).total_seconds())
+    Returns:
+        Dictionary with attempt_number, wait_seconds, and exception info.
+    """
+    return {
+        "attempt_number": retry_state.attempt_number,
+        "wait_seconds": retry_state.next_action.sleep if retry_state.next_action else 0,
+        "exception": str(retry_state.outcome.exception()) if retry_state.outcome else None,
+    }

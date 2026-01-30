@@ -37,6 +37,7 @@ dependencies = [
     "tomli-w>=1.0.0",  # TOML writer
     "jinja2>=3.1.0",  # Template engine for prompts
     "nicegui>=2.0.0",  # Dashboard UI framework
+    "tenacity>=8.2.0",  # Retry library with exponential backoff
 ]
 
 [project.optional-dependencies]
