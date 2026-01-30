@@ -151,8 +151,8 @@ class NotificationService:
                 self._queue = asyncio.Queue[tuple[NotificationType, str, str | None]]()
             if self._worker_task is None or self._worker_task.done():
                 self._worker_task = loop.create_task(self._consume_queue())
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.warning("Could not start notification worker (no event loop): %s. Notifications will use synchronous delivery.", e)
 
     async def _consume_queue(self) -> None:
         """Process notifications one by one to ensure FIFO ordering."""
