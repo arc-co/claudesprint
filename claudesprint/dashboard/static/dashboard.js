@@ -11,7 +11,14 @@ class Dashboard {
         this.stepElapsedInterval = null;
         this.stepStartTime = null;
 
+        // ASCII throbber animation
+        this.throbberFrames = ['|', '/', '-', '\\'];
+        this.throbberIndex = 0;
+        this.throbberInterval = null;
+        this.isWorking = false;
+
         this.elements = {
+            throbber: document.getElementById('throbber'),
             connStatus: document.getElementById('conn-status'),
             sprintId: document.getElementById('sprint-id'),
             issueCount: document.getElementById('issue-count'),
@@ -62,6 +69,26 @@ class Dashboard {
         this.startElapsedTimer();
     }
 
+    startThrobber() {
+        if (this.throbberInterval) return;
+        this.isWorking = true;
+        this.elements.throbber.classList.remove('hidden');
+        this.throbberInterval = setInterval(() => {
+            this.elements.throbber.textContent = this.throbberFrames[this.throbberIndex];
+            this.throbberIndex = (this.throbberIndex + 1) % this.throbberFrames.length;
+        }, 100);
+    }
+
+    stopThrobber() {
+        if (this.throbberInterval) {
+            clearInterval(this.throbberInterval);
+            this.throbberInterval = null;
+        }
+        this.isWorking = false;
+        this.elements.throbber.classList.add('hidden');
+        this.elements.throbber.textContent = '';
+    }
+
     setupEventListeners() {
         this.elements.clearOutput.addEventListener('click', () => {
             this.elements.outputContent.innerHTML = '';
@@ -102,6 +129,10 @@ class Dashboard {
         el.className = status;
         const text = { connecting: '...', connected: 'OK', disconnected: 'ERR' };
         el.textContent = text[status] || status;
+
+        if (status === 'connecting') {
+            this.startThrobber();
+        }
     }
 
     handleEvent(event) {
@@ -165,6 +196,7 @@ class Dashboard {
             // Highlight active issue
             if (state.current_issue_id) {
                 this.highlightActiveIssue(state.current_issue_id);
+                this.startThrobber();
             }
         }
     }
@@ -192,6 +224,7 @@ class Dashboard {
     onSprintCompleted(data) {
         this.updateIssueCount(data.completed_count, data.total_count);
         this.addOutput('SPRINT DONE', 'success');
+        this.stopThrobber();
     }
 
     onSprintIteration(data) {
@@ -212,6 +245,7 @@ class Dashboard {
         // Update task board
         this.updateIssueStatus(data.issue_id, 'in_progress');
         this.highlightActiveIssue(data.issue_id);
+        this.startThrobber();
     }
 
     onIssueCompleted(data) {
@@ -222,6 +256,7 @@ class Dashboard {
         // Update task board
         this.updateIssueStatus(data.issue_id, 'completed');
         this.clearActiveIssue();
+        this.stopThrobber();
     }
 
     onIssueFailed(data) {
@@ -232,6 +267,7 @@ class Dashboard {
         // Update task board - failed issues go back to pending
         this.updateIssueStatus(data.issue_id, 'pending');
         this.clearActiveIssue();
+        this.stopThrobber();
     }
 
     onIssueIteration(data) {

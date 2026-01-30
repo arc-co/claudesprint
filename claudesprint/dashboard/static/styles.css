@@ -7,122 +7,129 @@
 body {
     font-family: monospace;
     font-size: 12px;
-    background: #000;
-    color: #888;
-    line-height: 1.4;
+    background: #1F1F1F;
+    color: #BFBFBF;
+    line-height: 1.5;
 }
 
 .tui {
-    max-width: 900px;
-    padding: 8px;
+    max-width: 960px;
+    padding: 16px;
 }
 
 .section {
     border: 1px solid #444;
-    padding: 6px 8px;
+    padding: 12px 16px;
     margin-bottom: -1px;
 }
 
 .section.header {
     display: flex;
     justify-content: space-between;
-    background: #111;
+    align-items: center;
+    background: #2a2a2a;
+    padding: 14px 16px;
 }
 
 .section-title {
-    color: #666;
-    margin-bottom: 4px;
+    color: #BFBFBF;
+    font-weight: bold;
+    margin-bottom: 8px;
 }
 
 .label {
-    color: #0aa;
+    color: #D77757;
+    font-weight: bold;
 }
 
 .right {
-    color: #888;
+    color: #BFBFBF;
 }
 
 .row {
     display: flex;
-    gap: 16px;
+    gap: 24px;
 }
 
 .meta {
-    margin-top: 4px;
-    color: #666;
+    margin-top: 8px;
+    color: #BFBFBF;
 }
 
 #conn-status {
-    color: #888;
+    color: #BFBFBF;
 }
 
 #conn-status.connected {
-    color: #0a0;
+    color: #0db172;
 }
 
 #conn-status.disconnected {
-    color: #a00;
+    color: #ef6678;
 }
 
 #conn-status.connecting {
-    color: #aa0;
+    color: #e3e312;
 }
 
 #sprint-id {
-    color: #0aa;
+    color: #D77757;
 }
 
 #issue-count {
-    color: #0a0;
+    color: #0db172;
 }
 
 #issue-name {
-    color: #fff;
+    color: #f2f2f2;
+    font-weight: bold;
 }
 
 #current-step {
-    color: #aa0;
+    color: #e3e312;
 }
 
 #step-elapsed {
-    color: #888;
+    color: #BFBFBF;
 }
 
 #retry-count {
-    color: #aa0;
+    color: #e3e312;
 }
 
 #max-retry {
-    color: #666;
+    color: #BFBFBF;
 }
 
 .workflow {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 8px;
+    padding: 4px 0;
 }
 
 .step {
-    color: #555;
+    color: #BFBFBF;
 }
 
 .step.active {
-    color: #0aa;
+    color: #D77757;
+    font-weight: bold;
 }
 
 .arrow {
-    color: #333;
+    color: #444;
 }
 
 .btn {
-    color: #555;
+    color: #BFBFBF;
     cursor: pointer;
-    margin-left: 8px;
+    margin-left: 12px;
 }
 
 .btn:hover {
     text-decoration: underline;
-    color: #888;
+    color: #f2f2f2;
 }
 
 .output-section {
@@ -130,17 +137,17 @@ body {
 }
 
 #output-container {
-    margin-top: 4px;
+    margin-top: 8px;
     max-height: 300px;
     overflow-y: auto;
-    border-top: 1px solid #333;
-    padding-top: 4px;
+    border-top: 1px solid #444;
+    padding-top: 8px;
 }
 
 #output-content {
     font-family: monospace;
     font-size: 12px;
-    color: #888;
+    color: #BFBFBF;
     white-space: pre-wrap;
     word-break: break-all;
 }
@@ -150,31 +157,31 @@ body {
 }
 
 .output-line.command {
-    color: #0aa;
+    color: #D77757;
 }
 
 .output-line.error {
-    color: #a00;
+    color: #ef6678;
 }
 
 .output-line.success {
-    color: #0a0;
+    color: #0db172;
 }
 
 .output-line.warning {
-    color: #aa0;
+    color: #e3e312;
 }
 
 ::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #000;
+    background: #1F1F1F;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #333;
+    background: #444;
 }
 
 /* Task Board */
@@ -184,54 +191,53 @@ body {
 
 .task-board {
     display: flex;
-    gap: 8px;
-    margin-top: 4px;
+    gap: 12px;
+    margin-top: 8px;
     min-height: 120px;
 }
 
 .board-column {
     flex: 1;
-    border: 1px solid #333;
+    border: 1px solid #444;
     min-width: 0;
 }
 
 .column-header {
-    background: #111;
-    padding: 4px 6px;
-    color: #666;
-    font-size: 10px;
-    border-bottom: 1px solid #333;
+    background: #2a2a2a;
+    padding: 8px 10px;
+    color: #BFBFBF;
+    font-weight: bold;
+    border-bottom: 1px solid #444;
     text-align: center;
 }
 
 .board-column[data-status="pending"] .column-header {
-    color: #888;
+    color: #BFBFBF;
 }
 
 .board-column[data-status="in_progress"] .column-header {
-    color: #aa0;
+    color: #e3e312;
 }
 
 .board-column[data-status="completed"] .column-header {
-    color: #0a0;
+    color: #0db172;
 }
 
 .board-column[data-status="blocked"] .column-header {
-    color: #a00;
+    color: #ef6678;
 }
 
 .column-content {
-    padding: 4px;
+    padding: 8px;
     max-height: 200px;
     overflow-y: auto;
 }
 
 .issue-card {
-    background: #111;
-    border: 1px solid #333;
-    padding: 4px 6px;
-    margin-bottom: 4px;
-    font-size: 11px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    padding: 8px 10px;
+    margin-bottom: 8px;
 }
 
 .issue-card:last-child {
@@ -239,55 +245,68 @@ body {
 }
 
 .issue-card .issue-id {
-    color: #0aa;
-    font-size: 10px;
+    color: #D77757;
+    font-weight: bold;
 }
 
 .issue-card .issue-title {
-    color: #ccc;
+    color: #f2f2f2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-top: 4px;
 }
 
 .issue-card .issue-meta {
     display: flex;
-    gap: 8px;
-    margin-top: 2px;
-    font-size: 10px;
+    gap: 12px;
+    margin-top: 6px;
 }
 
 .issue-card .priority {
-    color: #666;
+    color: #BFBFBF;
 }
 
 .issue-card .priority.critical {
-    color: #f00;
+    color: #ef6678;
+    font-weight: bold;
 }
 
 .issue-card .priority.high {
-    color: #f80;
+    color: #D77757;
+    font-weight: bold;
 }
 
 .issue-card .priority.medium {
-    color: #aa0;
+    color: #e3e312;
 }
 
 .issue-card .priority.low {
-    color: #0a0;
+    color: #0db172;
 }
 
 .issue-card .category {
-    color: #555;
+    color: #BFBFBF;
 }
 
 .issue-card.active {
-    border-color: #0aa;
+    border-color: #D77757;
 }
 
 .empty-column {
-    color: #333;
+    color: #444;
     text-align: center;
-    padding: 8px;
-    font-size: 10px;
+    padding: 12px;
+}
+
+/* ASCII Throbber */
+.throbber {
+    display: inline-block;
+    color: #D77757;
+    font-weight: bold;
+    min-width: 12px;
+}
+
+.throbber.hidden {
+    visibility: hidden;
 }
