@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClaudeSprint Dashboard</title>
+    <title>ClaudeSprint Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -17,60 +20,60 @@
         </header>
 
         <section class="sprint-section">
-            <div class="section-header">SPRINT</div>
+            <div class="section-header"><span class="header-text">SPRINT</span></div>
             <div class="sprint-info">
                 <span class="sprint-id" id="sprint-id">-</span>
                 <div class="progress-container">
-                    <span class="progress-label">Progress:</span>
+                    <span class="progress-label">progress:</span>
                     <div class="progress-bar">
                         <div class="progress-fill" id="progress-fill"></div>
                     </div>
-                    <span class="progress-text" id="progress-text">0/0</span>
+                    <span class="progress-text" id="progress-text">[0/0]</span>
                 </div>
             </div>
         </section>
 
         <section class="issue-section">
-            <div class="section-header">CURRENT ISSUE</div>
+            <div class="section-header"><span class="header-text">CURRENT ISSUE</span></div>
             <div class="issue-info">
                 <div class="issue-name" id="issue-name">Waiting for issue...</div>
                 <div class="issue-metrics">
                     <span class="metric">
-                        Step: <strong id="current-step">-</strong>
+                        step: <strong id="current-step">-</strong>
                     </span>
                     <span class="metric">
-                        Elapsed: <strong id="step-elapsed">-</strong>
+                        elapsed: <strong id="step-elapsed">-</strong>
                     </span>
                     <span class="metric">
-                        Retry: <strong id="retry-count">0</strong>/<strong id="max-retry">5</strong>
+                        retry: <strong id="retry-count">0</strong>/<strong id="max-retry">5</strong>
                     </span>
                 </div>
             </div>
         </section>
 
         <section class="workflow-section">
-            <div class="section-header">WORKFLOW</div>
+            <div class="section-header"><span class="header-text">WORKFLOW</span></div>
             <div class="workflow-steps" id="workflow-steps">
                 <span class="step" data-step="read-docs">docs</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="implement">impl</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="write-tests">tests</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="run-tests">run</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="fix-tests">fix</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="code-review">review</span>
-                <span class="step-arrow">&rarr;</span>
+                <span class="step-arrow">-></span>
                 <span class="step" data-step="commit-changes">commit</span>
             </div>
         </section>
 
         <section class="output-section">
             <div class="section-header">
-                OUTPUT
-                <button class="clear-btn" id="clear-output" title="Clear output">Clear</button>
+                <span class="header-text">OUTPUT</span>
+                <button class="clear-btn" id="clear-output">[clear]</button>
             </div>
             <div class="output-container" id="output-container">
                 <pre id="output-content"></pre>
