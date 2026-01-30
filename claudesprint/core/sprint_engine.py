@@ -1364,11 +1364,21 @@ class SprintEngine:
             if error_result:
                 return error_result
 
-            # Emit sprint started event
+            # Emit sprint started event with full issue list for task board
             self._emit_event(WorkflowEvent.SPRINT_STARTED, {
                 "sprint_id": sprint.spec_id,
                 "completed_count": 0,
                 "total_count": len(sprint.issues),
+                "issues": [
+                    {
+                        "id": issue.id,
+                        "title": issue.title,
+                        "status": issue.status.value,
+                        "priority": issue.priority.value,
+                        "category": issue.category.value if issue.category else None,
+                    }
+                    for issue in sprint.issues
+                ],
             })
 
             # Reset iteration tracker for this sprint run

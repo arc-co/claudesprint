@@ -23,7 +23,15 @@ class Dashboard {
             outputContent: document.getElementById('output-content'),
             outputContainer: document.getElementById('output-container'),
             clearOutput: document.getElementById('clear-output'),
+            // Task board columns
+            boardPending: document.getElementById('board-pending'),
+            boardInProgress: document.getElementById('board-in-progress'),
+            boardCompleted: document.getElementById('board-completed'),
+            boardBlocked: document.getElementById('board-blocked'),
         };
+
+        // Track issues for task board
+        this.issues = {};
 
         this.stepElements = {
             'read-docs': document.getElementById('wf-docs'),
@@ -105,6 +113,7 @@ class Dashboard {
             selecting_issue: () => this.onSelectingIssue(),
             issue_started: (data) => this.onIssueStarted(data),
             issue_completed: (data) => this.onIssueCompleted(data),
+            issue_failed: (data) => this.onIssueFailed(data),
             issue_iteration: (data) => this.onIssueIteration(data),
             step_started: (data) => this.onStepStarted(data),
             step_completed: (data) => this.onStepCompleted(data),
@@ -148,6 +157,16 @@ class Dashboard {
         if (state.output_lines && state.output_lines.length > 0) {
             state.output_lines.forEach(line => this.addOutput(line));
         }
+
+        // Load issues for task board
+        if (state.issues) {
+            this.issues = state.issues;
+            this.renderTaskBoard();
+            // Highlight active issue
+            if (state.current_issue_id) {
+                this.highlightActiveIssue(state.current_issue_id);
+            }
+        }
     }
 
     updateIssueCount(completed, total) {
@@ -160,6 +179,14 @@ class Dashboard {
         this.elements.sprintId.textContent = data.sprint_id;
         this.updateIssueCount(data.completed_count, data.total_count);
         this.clearSteps();
+        // Load issues for task board
+        if (data.issues) {
+            this.issues = {};
+            data.issues.forEach(issue => {
+                this.issues[issue.id] = issue;
+            });
+            this.renderTaskBoard();
+        }
     }
 
     onSprintCompleted(data) {
@@ -182,6 +209,9 @@ class Dashboard {
         this.elements.retryCount.textContent = '0';
         this.clearSteps();
         this.elements.outputContent.innerHTML = '';
+        // Update task board
+        this.updateIssueStatus(data.issue_id, 'in_progress');
+        this.highlightActiveIssue(data.issue_id);
     }
 
     onIssueCompleted(data) {
@@ -189,6 +219,19 @@ class Dashboard {
         this.elements.issueName.textContent = 'Waiting...';
         this.elements.currentStep.textContent = '-';
         this.clearSteps();
+        // Update task board
+        this.updateIssueStatus(data.issue_id, 'completed');
+        this.clearActiveIssue();
+    }
+
+    onIssueFailed(data) {
+        this.addOutput(`FAILED: ${data.issue_id}`, 'error');
+        this.elements.issueName.textContent = 'Waiting...';
+        this.elements.currentStep.textContent = '-';
+        this.clearSteps();
+        // Update task board - failed issues go back to pending
+        this.updateIssueStatus(data.issue_id, 'pending');
+        this.clearActiveIssue();
     }
 
     onIssueIteration(data) {
@@ -274,6 +317,113 @@ class Dashboard {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}m${secs}s`;
+    }
+
+    // Task Board Methods
+
+    renderTaskBoard() {
+        // Clear all columns
+        this.elements.boardPending.innerHTML = '';
+        this.elements.boardInProgress.innerHTML = '';
+        this.elements.boardCompleted.innerHTML = '';
+        this.elements.boardBlocked.innerHTML = '';
+
+        // Group issues by status
+        const grouped = {
+            pending: [],
+            in_progress: [],
+            completed: [],
+            blocked: []
+        };
+
+        for (const issue of Object.values(this.issues)) {
+            const status = issue.status || 'pending';
+            if (grouped[status]) {
+                grouped[status].push(issue);
+            } else {
+                grouped.pending.push(issue);
+            }
+        }
+
+        // Render each column
+        this.renderColumn(this.elements.boardPending, grouped.pending);
+        this.renderColumn(this.elements.boardInProgress, grouped.in_progress);
+        this.renderColumn(this.elements.boardCompleted, grouped.completed);
+        this.renderColumn(this.elements.boardBlocked, grouped.blocked);
+    }
+
+    renderColumn(container, issues) {
+        if (issues.length === 0) {
+            container.innerHTML = '<div class="empty-column">-</div>';
+            return;
+        }
+
+        issues.forEach(issue => {
+            const card = this.createIssueCard(issue);
+            container.appendChild(card);
+        });
+    }
+
+    createIssueCard(issue) {
+        const card = document.createElement('div');
+        card.className = 'issue-card';
+        card.dataset.issueId = issue.id;
+
+        const idEl = document.createElement('div');
+        idEl.className = 'issue-id';
+        idEl.textContent = issue.id;
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'issue-title';
+        titleEl.textContent = issue.title;
+        titleEl.title = issue.title; // Show full title on hover
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'issue-meta';
+
+        const priorityEl = document.createElement('span');
+        priorityEl.className = `priority ${issue.priority || 'medium'}`;
+        priorityEl.textContent = (issue.priority || 'medium').toUpperCase();
+
+        metaEl.appendChild(priorityEl);
+
+        if (issue.category) {
+            const catEl = document.createElement('span');
+            catEl.className = 'category';
+            catEl.textContent = issue.category;
+            metaEl.appendChild(catEl);
+        }
+
+        card.appendChild(idEl);
+        card.appendChild(titleEl);
+        card.appendChild(metaEl);
+
+        return card;
+    }
+
+    updateIssueStatus(issueId, newStatus) {
+        if (this.issues[issueId]) {
+            this.issues[issueId].status = newStatus;
+            this.renderTaskBoard();
+        }
+    }
+
+    highlightActiveIssue(issueId) {
+        // Remove active class from all cards
+        document.querySelectorAll('.issue-card').forEach(card => {
+            card.classList.remove('active');
+        });
+        // Add active class to current issue
+        const activeCard = document.querySelector(`.issue-card[data-issue-id="${issueId}"]`);
+        if (activeCard) {
+            activeCard.classList.add('active');
+        }
+    }
+
+    clearActiveIssue() {
+        document.querySelectorAll('.issue-card').forEach(card => {
+            card.classList.remove('active');
+        });
     }
 }
 

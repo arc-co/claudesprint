@@ -189,6 +189,10 @@ class DashboardEventBridge:
             self._state.total_issues = _get_int(payload, "total_count")
             self._state.completed_issues = _get_int(payload, "completed_count")
             self._state.clear_output()
+            # Load issues for task board
+            issues_data = cast(dict[str, Any], payload).get("issues", [])
+            if issues_data:
+                self._state.set_issues(issues_data)
         self._queue_event("sprint_started", dict(cast(dict[str, Any], payload)))
 
     def _on_sprint_completed(self, payload: EventPayload) -> None:
@@ -213,12 +217,15 @@ class DashboardEventBridge:
 
     def _on_issue_started(self, payload: EventPayload) -> None:
         """Handle ISSUE_STARTED event."""
+        issue_id = _get_str(payload, "issue_id")
         with self._lock:
-            self._state.current_issue_id = _get_str(payload, "issue_id")
+            self._state.current_issue_id = issue_id
             self._state.current_issue_name = _get_str(payload, "issue_name")
             self._state.retry_count = 0
             self._state.total_iterations = 0
             self._state.clear_output()
+            # Update task board status
+            self._state.update_issue_status(issue_id, "in_progress")
         self._queue_event("issue_started", dict(cast(dict[str, Any], payload)))
 
     def _on_issue_completed(self, payload: EventPayload) -> None:
@@ -229,13 +236,22 @@ class DashboardEventBridge:
             self._state.current_issue_id = ""
             self._state.current_issue_name = ""
             self._state.current_step = ""
+            # Update task board status
+            self._state.update_issue_status(old_issue, "completed")
         self._queue_event(
             "issue_completed", {**dict(cast(dict[str, Any], payload)), "issue_id": old_issue}
         )
 
     def _on_issue_failed(self, payload: EventPayload) -> None:
         """Handle ISSUE_FAILED event."""
-        self._queue_event("issue_failed", dict(cast(dict[str, Any], payload)))
+        issue_id = _get_str(payload, "issue_id")
+        with self._lock:
+            self._state.current_issue_id = ""
+            self._state.current_issue_name = ""
+            self._state.current_step = ""
+            # Update task board status - failed issues go back to pending
+            self._state.update_issue_status(issue_id, "pending")
+        self._queue_event("issue_failed", {**dict(cast(dict[str, Any], payload)), "issue_id": issue_id})
 
     def _on_issue_iteration(self, payload: EventPayload) -> None:
         """Handle ISSUE_ITERATION event."""
