@@ -387,3 +387,8 @@ class ClaudesprintConfig(BaseSettings):
     def conversation_log_file(self) -> str:
         """Path to agent_conversations.log for debug mode."""
         return os.path.join(self.project_dir, "agent_conversations.log")
+
+    @property
+    def models_file(self) -> str:
+        """Path to models.json configuration file."""
+        return os.path.join(self.claudesprint_dir, "config", "models.json")
