@@ -8,6 +8,8 @@ from typing import TextIO
 
 from rich.console import Console
 
+from claudesprint.utils.styles import SYMBOLS, COLORS
+
 
 class LogLevel(StrEnum):
     """Log levels."""
@@ -110,17 +112,17 @@ class ClaudesprintLogger:
     def success(self, message: str) -> None:
         """Log success message."""
         if self._should_log(LogLevel.INFO):
-            self.log(f"[green]✓[/green] {message}")
+            self.log(f"[{COLORS.SUCCESS}]{SYMBOLS.SUCCESS}[/{COLORS.SUCCESS}] {message}")
 
     def warning(self, message: str) -> None:
         """Log warning message."""
         if self._should_log(LogLevel.WARNING):
-            self.log(f"[yellow]⚠[/yellow] {message}")
+            self.log(f"[{COLORS.WARNING}]{SYMBOLS.WARNING}[/{COLORS.WARNING}] {message}")
 
     def error(self, message: str) -> None:
         """Log error message."""
         if self._should_log(LogLevel.ERROR):
-            self.log(f"[red]✗[/red] {message}")
+            self.log(f"[{COLORS.ERROR}]{SYMBOLS.FAILURE}[/{COLORS.ERROR}] {message}")
 
     def __enter__(self) -> "ClaudesprintLogger":
         self.setup()
