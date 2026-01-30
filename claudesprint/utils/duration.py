@@ -1,5 +1,11 @@
 """Duration formatting utilities."""
 
+from datetime import timedelta
+from typing import Union
+
+import isodate  # type: ignore[import-untyped]
+from isodate import Duration, ISO8601Error
+
 
 def format_duration(seconds: int) -> str:
     """Format seconds into human-readable duration.
@@ -25,8 +31,8 @@ def format_duration(seconds: int) -> str:
     return f"{hours}h {mins}m"
 
 
-def parse_duration(duration_str: str) -> int:
-    """Parse a duration string into seconds.
+def _parse_simple_duration(duration_str: str) -> int:
+    """Parse a simple duration string into seconds.
 
     Supports formats:
         - "45s" or "45" -> 45 seconds
@@ -71,3 +77,66 @@ def parse_duration(duration_str: str) -> int:
         total += int(current_num)
 
     return total
+
+
+def _duration_to_seconds(duration: Union[timedelta, Duration]) -> int:
+    """Convert a timedelta or isodate.Duration to integer seconds.
+
+    Raises:
+        ValueError: If the duration contains years or months (cannot convert precisely).
+    """
+    if isinstance(duration, Duration):
+        # Duration has years, months, and a timedelta component
+        if duration.years != 0 or duration.months != 0:
+            raise ValueError(
+                "Cannot convert duration with years or months to seconds "
+                "(variable-length periods)"
+            )
+        # Get the timedelta component
+        td = duration.tdelta
+    else:
+        td = duration
+
+    return int(td.total_seconds())
+
+
+def _is_iso8601_duration(duration_str: str) -> bool:
+    """Check if a string looks like an ISO 8601 duration."""
+    stripped = duration_str.strip()
+    return stripped.startswith("P") or stripped.startswith("-P")
+
+
+def parse_duration(duration_str: str) -> int:
+    """Parse a duration string into seconds.
+
+    Supports both simple and ISO 8601 formats:
+
+    Simple formats:
+        - "45s" or "45" -> 45 seconds
+        - "5m" -> 300 seconds
+        - "1h" -> 3600 seconds
+        - "1h30m" -> 5400 seconds
+
+    ISO 8601 formats:
+        - "PT45S" -> 45 seconds
+        - "PT5M" -> 300 seconds
+        - "PT1H" -> 3600 seconds
+        - "PT1H30M" -> 5400 seconds
+        - "P1D" -> 86400 seconds (1 day)
+
+    Raises:
+        ValueError: If the format is invalid or contains years/months.
+    """
+    duration_str = duration_str.strip()
+
+    if not duration_str:
+        raise ValueError("Empty duration string")
+
+    if _is_iso8601_duration(duration_str):
+        try:
+            parsed = isodate.parse_duration(duration_str)
+            return _duration_to_seconds(parsed)
+        except ISO8601Error as e:
+            raise ValueError(f"Invalid ISO 8601 duration format: {duration_str}") from e
+
+    return _parse_simple_duration(duration_str)
