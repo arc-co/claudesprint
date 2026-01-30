@@ -7,14 +7,14 @@
 body {
     font-family: monospace;
     font-size: 12px;
+    font-weight: 300;
     background: #1F1F1F;
     color: #BFBFBF;
     line-height: 1.5;
 }
 
 .tui {
-    max-width: 960px;
-    padding: 16px;
+    padding: 16px 24px;
 }
 
 .section {
@@ -32,14 +32,20 @@ body {
 }
 
 .section-title {
-    color: #BFBFBF;
-    font-weight: bold;
+    color: #888;
+    font-weight: 500;
     margin-bottom: 8px;
 }
 
 .label {
-    color: #D77757;
-    font-weight: bold;
+    color: #BFBFBF;
+    font-weight: 500;
+}
+
+.version {
+    color: #666;
+    font-weight: 300;
+    margin-left: 8px;
 }
 
 .right {
@@ -82,7 +88,7 @@ body {
 
 #issue-name {
     color: #f2f2f2;
-    font-weight: bold;
+    font-weight: 500;
 }
 
 #current-step {
@@ -114,7 +120,7 @@ body {
 
 .step.active {
     color: #D77757;
-    font-weight: bold;
+    font-weight: 500;
 }
 
 .arrow {
@@ -204,9 +210,9 @@ body {
 
 .column-header {
     background: #2a2a2a;
-    padding: 8px 10px;
-    color: #BFBFBF;
-    font-weight: bold;
+    padding: 6px 10px;
+    color: #888;
+    font-weight: 500;
     border-bottom: 1px solid #444;
     text-align: center;
 }
@@ -229,15 +235,15 @@ body {
 
 .column-content {
     padding: 8px;
-    max-height: 200px;
+    max-height: 400px;
     overflow-y: auto;
 }
 
 .issue-card {
     background: #2a2a2a;
     border: 1px solid #444;
-    padding: 8px 10px;
-    margin-bottom: 8px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
 }
 
 .issue-card:last-child {
@@ -245,22 +251,24 @@ body {
 }
 
 .issue-card .issue-id {
-    color: #D77757;
-    font-weight: bold;
+    color: #888;
+    font-weight: 500;
+    font-size: 11px;
 }
 
 .issue-card .issue-title {
-    color: #f2f2f2;
+    color: #BFBFBF;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .issue-card .issue-meta {
     display: flex;
-    gap: 12px;
-    margin-top: 6px;
+    gap: 10px;
+    margin-top: 4px;
+    font-size: 11px;
 }
 
 .issue-card .priority {
@@ -269,12 +277,12 @@ body {
 
 .issue-card .priority.critical {
     color: #ef6678;
-    font-weight: bold;
+    font-weight: 500;
 }
 
 .issue-card .priority.high {
     color: #D77757;
-    font-weight: bold;
+    font-weight: 500;
 }
 
 .issue-card .priority.medium {
@@ -303,7 +311,7 @@ body {
 .throbber {
     display: inline-block;
     color: #D77757;
-    font-weight: bold;
+    font-weight: 500;
     min-width: 12px;
 }
 
