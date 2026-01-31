@@ -1,9 +1,12 @@
 """Lock file management to prevent concurrent instances."""
 
+import logging
 import os
 import signal
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # fcntl is Unix-only; use msvcrt on Windows
 _IS_WINDOWS = sys.platform == "win32"
@@ -81,8 +84,8 @@ class LockFile:
             if self._lock_fd is not None:
                 try:
                     os.close(self._lock_fd)
-                except OSError:
-                    pass
+                except OSError as close_err:
+                    logger.debug("Failed to close file descriptor during lock acquisition error: %s", close_err)
                 self._lock_fd = None
             return False, f"Failed to acquire lock: {e}"
 
@@ -105,8 +108,8 @@ class LockFile:
             # Remove the lock file
             try:
                 self.lock_path.unlink()
-            except OSError:
-                pass  # File may already be gone
+            except OSError as e:
+                logger.debug("Failed to remove lock file during release: %s", e)
 
             self._acquired = False
             return True
@@ -176,5 +179,5 @@ class CleanupHandler:
             try:
                 if path.exists():
                     path.unlink()
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("Failed to remove cleanup file %s: %s", path, e)

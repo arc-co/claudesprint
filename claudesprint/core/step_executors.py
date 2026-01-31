@@ -8,9 +8,12 @@ engine's orchestration logic. Each executor handles a specific type of step:
 """
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner, FailureCategory
 from claudesprint.core.step_types import ParseResult, StepResult
@@ -144,8 +147,8 @@ class LlmStepExecutor(StepExecutor):
                             }
 
                     sprint_json = json.dumps(sprint_data, indent=2)
-                except (json.JSONDecodeError, OSError):
-                    pass
+                except (json.JSONDecodeError, OSError) as e:
+                    logger.warning("Failed to load sprint.json for prompt context (step=%s): %s", step, e)
 
         # Serialize current_issue to JSON
         current_issue_json = current_issue.model_dump_json(indent=2)
