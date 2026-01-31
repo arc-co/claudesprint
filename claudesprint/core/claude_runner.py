@@ -229,7 +229,7 @@ class ClaudeRunner:
                 process.wait(timeout=grace)
                 return
             except subprocess.TimeoutExpired:
-                pass
+                logger.debug("Process %d did not terminate gracefully within %ds, proceeding to SIGKILL", process.pid, grace)
 
             # Force kill
             logger.debug(f"Force killing process {process.pid}")
@@ -260,7 +260,7 @@ class ClaudeRunner:
                 await asyncio.wait_for(process.wait(), timeout=grace)
                 return
             except asyncio.TimeoutError:
-                pass
+                logger.debug("Async process %d did not terminate gracefully within %ds, proceeding to SIGKILL", process.pid, grace)
 
             # Force kill
             logger.debug(f"Force killing async process {process.pid}")
@@ -701,7 +701,7 @@ class ClaudeRunner:
                 try:
                     await read_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("Read task cancelled during timeout cleanup")
 
                 # Kill process group
                 await self._force_kill_process_async(process)

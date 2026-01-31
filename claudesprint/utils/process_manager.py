@@ -1,12 +1,15 @@
 """Process manager for tracking and cleaning up spawned subprocesses."""
 
 import atexit
+import logging
 import os
 import signal
 import subprocess
 import weakref
 from threading import Lock
 from typing import Set
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessManager:
@@ -63,9 +66,8 @@ class ProcessManager:
         for sig in signals_to_handle:
             try:
                 self._original_handlers[sig] = signal.signal(sig, self._signal_handler)
-            except (OSError, ValueError):
-                # Some signals can't be caught (e.g., in threads)
-                pass
+            except (OSError, ValueError) as e:
+                logger.debug("Could not install signal handler for %s: %s", sig, e)
 
     def _signal_handler(self, signum: int, frame) -> None:
         """Handle signals by saving state, cleaning up, and re-raising."""
@@ -77,8 +79,8 @@ class ProcessManager:
             from claudesprint.core.state_manager import get_state_manager
             state_manager = get_state_manager()
             state_manager.save_emergency_state(signal_name)
-        except Exception:
-            pass  # Don't let state saving prevent cleanup
+        except Exception as e:
+            logger.debug("Failed to save emergency state during signal handling: %s", e)
 
         self.cleanup_all()
 
@@ -114,8 +116,8 @@ class ProcessManager:
                 pgid = os.getpgid(pid)
                 if pgid != os.getpgid(os.getpid()):
                     self._process_groups.add(pgid)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not get process group for PID %d during registration: %s", pid, e)
 
     def unregister_process(self, process: subprocess.Popen) -> None:
         """Unregister a process that has been cleaned up.
@@ -140,8 +142,8 @@ class ProcessManager:
             try:
                 pgid = os.getpgid(pid)
                 self._process_groups.discard(pgid)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not get process group for PID %d during unregistration: %s", pid, e)
 
     def cleanup_all(self, grace_period: float = 5.0) -> None:
         """Kill all tracked processes.
@@ -161,15 +163,15 @@ class ProcessManager:
         for pgid in pgids:
             try:
                 os.killpg(pgid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not send SIGTERM to process group %d: %s", pgid, e)
 
         # Also terminate individual processes (in case they're not in groups)
         for pid in pids:
             try:
                 os.kill(pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not send SIGTERM to PID %d: %s", pid, e)
 
         # Wait a bit for graceful termination
         import time
@@ -179,21 +181,21 @@ class ProcessManager:
         for pgid in pgids:
             try:
                 os.killpg(pgid, signal.SIGKILL)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not send SIGKILL to process group %d: %s", pgid, e)
 
         for pid in pids:
             try:
                 os.kill(pid, signal.SIGKILL)
-            except (OSError, ProcessLookupError):
-                pass
+            except (OSError, ProcessLookupError) as e:
+                logger.debug("Could not send SIGKILL to PID %d: %s", pid, e)
 
         # Clean up zombie processes
         for pid in pids:
             try:
                 os.waitpid(pid, os.WNOHANG)
-            except (OSError, ChildProcessError):
-                pass
+            except (OSError, ChildProcessError) as e:
+                logger.debug("Could not reap zombie process %d: %s", pid, e)
 
         # Clear tracking sets
         with self._pid_lock:
