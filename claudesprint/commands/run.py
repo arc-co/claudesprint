@@ -209,7 +209,7 @@ def _run_sprint_console(
             kill_timeout=config.kill_timeout,
             conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
-        return IssueEngine(
+        return IssueEngine.from_services(
             config=config,
             execution_config=resolved_config,
             issue_service=issue_service,
