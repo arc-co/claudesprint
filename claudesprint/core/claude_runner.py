@@ -736,7 +736,10 @@ class ClaudeRunner:
         This method is useful when prompts are loaded from package resources
         via importlib.resources rather than from filesystem paths.
 
-        For async callers, prefer run_with_content_async() to avoid event loop issues.
+        Note: When called within an existing async event loop, this falls back
+        to threading-based execution (_execute_session) since asyncio.run()
+        cannot be nested. For async contexts, use run_with_content_async()
+        directly to use the pure async implementation.
 
         Args:
             prompt_content: The prompt content to send to Claude.
