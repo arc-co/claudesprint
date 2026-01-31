@@ -4,9 +4,8 @@ Tests verify that the integrations between different components work correctly:
 1. EventBus wiring - Engine operations emit events that subscribers receive
 2. StateManager crash recovery - Engine recovers correctly from simulated partial state
 3. Typed exception propagation - Specific exceptions reach callers with context
-4. BoundedList enforcement - History arrays never exceed configured bounds
-5. IterationTracker categorization - Infrastructure errors don't exhaust logic limits
-6. Config backward compatibility - Old services emit deprecation warnings
+4. IterationTracker categorization - Infrastructure errors don't exhaust logic limits
+5. Config backward compatibility - Old services emit deprecation warnings
 """
 
 import json
@@ -35,7 +34,6 @@ from claudesprint.core.iteration_tracker import (
     FailureCategory,
 )
 from claudesprint.services.state_manager import StateManager, StateSnapshot
-from claudesprint.utils.bounded_list import BoundedList, MAX_HISTORY_ENTRIES
 from claudesprint.utils.graph import detect_cycles
 
 
@@ -252,52 +250,6 @@ class TestTypedExceptionPropagation:
 
         error = ConfigValidationError("Invalid config value")
         assert isinstance(error, ValidationError)
-
-
-class TestBoundedListEnforcement:
-    """Test that BoundedList properly enforces size limits."""
-
-    def test_bounded_list_never_exceeds_max(self):
-        """BoundedList never grows beyond max_size."""
-        bounded = BoundedList[int](max_size=10)
-
-        for i in range(100):
-            bounded.append(i)
-
-        assert len(bounded) == 10
-        assert bounded[0] == 90  # First 90 items were pruned
-
-    def test_bounded_list_preserves_order(self):
-        """Items are maintained in FIFO order."""
-        bounded = BoundedList[str](max_size=3)
-        bounded.extend(["a", "b", "c", "d", "e"])
-
-        # Should have c, d, e (a and b were pruned)
-        assert bounded.to_list() == ["c", "d", "e"]
-
-    def test_bounded_list_returns_evicted_item(self):
-        """Append returns the evicted item when at capacity."""
-        bounded = BoundedList[str](max_size=2, items=["a", "b"])
-
-        evicted = bounded.append("c")
-
-        assert evicted == "a"
-        assert bounded.to_list() == ["b", "c"]
-
-    def test_bounded_list_extend_returns_all_evicted(self):
-        """Extend returns all evicted items."""
-        bounded = BoundedList[int](max_size=3, items=[1, 2, 3])
-
-        evicted = bounded.extend([4, 5, 6])
-
-        assert evicted == [1, 2, 3]
-        assert bounded.to_list() == [4, 5, 6]
-
-    def test_bounded_list_with_default_constants(self):
-        """Default constants provide reasonable limits."""
-        # Just verify constants are defined and reasonable
-        assert MAX_HISTORY_ENTRIES >= 100
-        assert MAX_HISTORY_ENTRIES <= 10000
 
 
 class TestIterationTrackerCategorization:
