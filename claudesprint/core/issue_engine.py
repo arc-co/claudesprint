@@ -209,6 +209,17 @@ class IssueEngine:
         self.event_bus = services.event_bus
         self._config_manager = services.config_manager
 
+        # Initialize routing signal parser
+        self._routing_parser = RoutingSignalParser(
+            step_routing=self.STEP_ROUTING,
+            output_patterns=self.OUTPUT_PATTERNS,
+            config=create_default_parser_config(),
+        )
+
+        # Step executors registry
+        self._step_executors: dict[IssueStep, StepExecutor] = {}
+        self._init_step_executors()
+
     @classmethod
     def from_services(
         cls,
@@ -255,17 +266,6 @@ class IssueEngine:
             config_manager=config_manager,
         )
         return cls(config, execution_config, services)
-
-        # Initialize routing signal parser
-        self._routing_parser = RoutingSignalParser(
-            step_routing=self.STEP_ROUTING,
-            output_patterns=self.OUTPUT_PATTERNS,
-            config=create_default_parser_config(),
-        )
-
-        # Step executors registry
-        self._step_executors: dict[IssueStep, StepExecutor] = {}
-        self._init_step_executors()
 
     def _init_step_executors(self) -> None:
         """Initialize and register step executors.
