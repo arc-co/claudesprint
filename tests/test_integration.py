@@ -488,15 +488,17 @@ class TestIssueEngineEventEmission:
     """Test that IssueEngine emits events when event_bus is provided."""
 
     def test_issue_engine_accepts_event_bus(self):
-        """IssueEngine should accept event_bus parameter."""
+        """IssueEngine should accept event_bus via ServiceContainer."""
         from claudesprint.core.issue_engine import IssueEngine
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+        from claudesprint.services.service_container import ServiceContainer
 
-        # Just verify the class accepts the parameter without error
-        # Full initialization requires many dependencies
+        # Verify IssueEngine accepts services parameter (which contains event_bus)
         assert hasattr(IssueEngine.__init__, '__code__')
         params = IssueEngine.__init__.__code__.co_varnames
-        assert 'event_bus' in params
+        assert 'services' in params
+
+        # Verify ServiceContainer has event_bus property
+        assert hasattr(ServiceContainer, 'event_bus')
 
     def test_emit_event_helper_exists(self):
         """IssueEngine should have _emit_event helper method."""

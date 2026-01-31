@@ -44,6 +44,7 @@ from claudesprint.services.issue_service import IssueService
 from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.prompt_service import PromptService, PromptContext
+from claudesprint.services.service_container import ServiceContainer
 from claudesprint.services.state_manager import StateManager
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
@@ -105,52 +106,98 @@ class SprintEngine:
         self,
         sprint_path: Path,
         config: ClaudesprintConfig,
-        # Injected Services
+        services: ServiceContainer,
+        issue_engine_factory: IssueEngineFactory,
+        state_manager: StateManager | None = None,
+    ) -> None:
+        """Initialize SprintEngine.
+
+        Args:
+            sprint_path: Path to the sprint.json file.
+            config: ClaudesprintConfig for the project.
+            services: ServiceContainer with all required and optional services.
+            issue_engine_factory: Factory function to create IssueEngine instances.
+            state_manager: Optional StateManager for safe state operations.
+
+        Example:
+            >>> container = ServiceContainer.create(
+            ...     issue_service=issue_svc,
+            ...     sprint_service=sprint_svc,
+            ...     notification_service=notif_svc,
+            ...     prompt_service=prompt_svc,
+            ...     claude_runner=runner,
+            ...     event_bus=bus,
+            ...     git_service=git_svc,
+            ... )
+            >>> engine = SprintEngine(sprint_path, config, services, factory)
+        """
+        self.sprint_path = sprint_path
+        self.config = config
+        self.project_root = Path(config.project_dir)
+
+        # Extract services from container
+        self.git_service = services.git_service
+        self.sprint_service = services.sprint_service
+        self.issue_service = services.issue_service
+        self.notification_service = services.notification_service
+        self.prompt_service = services.prompt_service
+        self.claude_runner = services.claude_runner
+
+        # Injected factory
+        self.issue_engine_factory = issue_engine_factory
+
+        # Optional integrations
+        self.event_bus = services.event_bus
+        self.state_manager = state_manager
+
+    @classmethod
+    def from_services(
+        cls,
+        sprint_path: Path,
+        config: ClaudesprintConfig,
         git_service: GitService,
         sprint_service: SprintService,
         issue_service: IssueService,
         notification_service: NotificationService,
         prompt_service: PromptService,
         claude_runner: ClaudeRunner,
-        # Injected Factory
         issue_engine_factory: IssueEngineFactory,
-        # Optional integrations
         event_bus: WorkflowEventBus | None = None,
         state_manager: StateManager | None = None,
-    ) -> None:
-        """Initialize SprintEngine.
+    ) -> SprintEngine:
+        """Factory method providing backward-compatible initialization.
+
+        DEPRECATED: Use ServiceContainer directly instead.
+
+        This method exists to support existing code that passes services as
+        individual parameters. New code should use the ServiceContainer pattern.
 
         Args:
-            sprint_path: Path to the sprint.json file
-            config: ClaudesprintConfig for the project
-            git_service: Injected GitService instance
-            sprint_service: Injected SprintService instance
-            issue_service: Injected IssueService instance
-            notification_service: Injected NotificationService instance
-            prompt_service: Injected PromptService instance
-            claude_runner: Injected ClaudeRunner instance
-            issue_engine_factory: Factory function to create IssueEngine instances
-            event_bus: Optional WorkflowEventBus for event emission
-            state_manager: Optional StateManager for safe state operations
+            sprint_path: Path to the sprint.json file.
+            config: ClaudesprintConfig for the project.
+            git_service: Injected GitService instance.
+            sprint_service: Injected SprintService instance.
+            issue_service: Injected IssueService instance.
+            notification_service: Injected NotificationService instance.
+            prompt_service: Injected PromptService instance.
+            claude_runner: Injected ClaudeRunner instance.
+            issue_engine_factory: Factory function to create IssueEngine instances.
+            event_bus: Optional WorkflowEventBus for event emission.
+            state_manager: Optional StateManager for safe state operations.
+
+        Returns:
+            A new SprintEngine instance.
         """
-        self.sprint_path = sprint_path
-        self.config = config
-        self.project_root = Path(config.project_dir)
-
-        # Injected services
-        self.git_service = git_service
-        self.sprint_service = sprint_service
-        self.issue_service = issue_service
-        self.notification_service = notification_service
-        self.prompt_service = prompt_service
-        self.claude_runner = claude_runner
-
-        # Injected factory
-        self.issue_engine_factory = issue_engine_factory
-
-        # Optional integrations
-        self.event_bus = event_bus
-        self.state_manager = state_manager
+        services = ServiceContainer.create(
+            issue_service=issue_service,
+            sprint_service=sprint_service,
+            notification_service=notification_service,
+            prompt_service=prompt_service,
+            claude_runner=claude_runner,
+            event_bus=event_bus,
+            git_service=git_service,
+        )
+        return cls(sprint_path, config, services, issue_engine_factory, state_manager)
 
         # Iteration tracker for categorized failure handling
         self._iteration_tracker = IterationTracker(
