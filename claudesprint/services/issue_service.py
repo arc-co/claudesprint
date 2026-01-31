@@ -91,21 +91,22 @@ class IssueService:
                 self._store.write(self.current_issue_file, issue)
 
     def is_current_issue_valid(self) -> bool:
-        """Check if current_issue.json exists and is valid JSON.
+        """Check if current_issue.json exists and is valid JSON with locking.
 
         Returns:
             True if valid, False otherwise
         """
-        if not self.current_issue_file.exists():
-            return False
         try:
-            data = json.loads(self.current_issue_file.read_text())
-            # Basic structure check
-            return (
-                isinstance(data, dict)
-                and "sprint_path" in data
-                and "step" in data
-            )
+            with self._lock.locked():
+                if not self.current_issue_file.exists():
+                    return False
+                data = json.loads(self.current_issue_file.read_text())
+                # Basic structure check
+                return (
+                    isinstance(data, dict)
+                    and "sprint_path" in data
+                    and "step" in data
+                )
         except json.JSONDecodeError as e:
             logger.debug(f"Invalid JSON in current_issue.json: {e}")
             return False
@@ -114,16 +115,17 @@ class IssueService:
             return False
 
     def clear_current_issue(self) -> bool:
-        """Delete current_issue files (main, backup, log).
+        """Delete current_issue files (main, backup, log) with locking.
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            if self.current_issue_file.exists():
-                self.current_issue_file.unlink()
-            if self.current_issue_log.exists():
-                self.current_issue_log.unlink()
+            with self._lock.locked():
+                if self.current_issue_file.exists():
+                    self.current_issue_file.unlink()
+                if self.current_issue_log.exists():
+                    self.current_issue_log.unlink()
             return True
         except OSError as e:
             logger.warning(f"Failed to clear current_issue files: {e}")
@@ -141,7 +143,7 @@ class IssueService:
         return CurrentIssue.create_initial(sprint_path)
 
     def reset_current_issue(self, sprint_path: str) -> bool:
-        """Reset current_issue.json to initial state for a sprint.
+        """Reset current_issue.json to initial state for a sprint with locking.
 
         Args:
             sprint_path: Path to the sprint.json file
@@ -149,8 +151,10 @@ class IssueService:
         Returns:
             True if successful, False otherwise
         """
-        current_issue = self.create_initial(sprint_path)
-        return self.write_current_issue(current_issue)
+        with self._lock.locked():
+            current_issue = self.create_initial(sprint_path)
+            current_issue.update_timestamp()
+            return self._store.write(self.current_issue_file, current_issue)
 
     # Log operations
 
