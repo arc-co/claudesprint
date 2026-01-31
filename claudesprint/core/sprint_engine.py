@@ -152,6 +152,26 @@ class SprintEngine:
         self.event_bus = services.event_bus
         self.state_manager = state_manager
 
+        # Iteration tracker for categorized failure handling
+        self._iteration_tracker = IterationTracker(
+            max_iterations=config.max_total_iterations,
+            max_logic_errors=3,
+            max_infra_errors=10,
+            max_consecutive_failures=5,
+        )
+
+        # Rate limit configuration for tenacity-based retries
+        self._rate_limit_config = RateLimitConfig(
+            max_attempts=config.rate_limit_retries,
+            wait_min=float(config.rate_limit_base_wait),
+            wait_max=float(config.rate_limit_max_wait),
+            wait_multiplier=1.0,
+            before_sleep_callback=self._on_rate_limit_retry,
+        )
+
+        # Issue state machine for result handling
+        self._state_machine = IssueStateMachine()
+
     @classmethod
     def from_services(
         cls,
@@ -200,26 +220,6 @@ class SprintEngine:
             git_service=git_service,
         )
         return cls(sprint_path, config, services, issue_engine_factory, state_manager)
-
-        # Iteration tracker for categorized failure handling
-        self._iteration_tracker = IterationTracker(
-            max_iterations=config.max_total_iterations,
-            max_logic_errors=3,
-            max_infra_errors=10,
-            max_consecutive_failures=5,
-        )
-
-        # Rate limit configuration for tenacity-based retries
-        self._rate_limit_config = RateLimitConfig(
-            max_attempts=config.rate_limit_retries,
-            wait_min=float(config.rate_limit_base_wait),
-            wait_max=float(config.rate_limit_max_wait),
-            wait_multiplier=1.0,
-            before_sleep_callback=self._on_rate_limit_retry,
-        )
-
-        # Issue state machine for result handling
-        self._state_machine = IssueStateMachine()
 
     def _emit_event(self, event: WorkflowEvent, payload: dict) -> None:
         """Emit an event to the event bus if configured.
