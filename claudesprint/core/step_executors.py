@@ -15,7 +15,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner
+from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner, FailureCategory
 from claudesprint.core.step_types import ParseResult, StepResult
 from claudesprint.models.current_issue import CurrentIssue, IssueStep
 from claudesprint.models.sprint import IssueStatus
@@ -247,8 +247,8 @@ class LlmStepExecutor(StepExecutor):
                 rate_limited=True,
             )
 
-        # Check for crash
-        if result.crashed:
+        # Check for system error (crash)
+        if result.failure_category == FailureCategory.SYSTEM_ERROR:
             return StepResult(
                 success=False,
                 next_step=None,

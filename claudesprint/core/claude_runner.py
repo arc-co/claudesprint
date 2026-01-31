@@ -8,7 +8,8 @@ import signal
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional
 
@@ -19,6 +20,16 @@ from claudesprint.utils.process_manager import get_process_manager
 logger = logging.getLogger(__name__)
 
 
+class FailureCategory(StrEnum):
+    """Categories of failure for Claude CLI execution."""
+
+    NONE = "none"  # Success (exit_code == 0)
+    RATE_LIMITED = "rate_limited"  # Rate limit hit
+    TIMEOUT = "timeout"  # exit_code == 124
+    REJECTED = "rejected"  # Claude refused task (exit 1)
+    SYSTEM_ERROR = "system_error"  # Actual crash (signal death, exit >= 128)
+
+
 @dataclass
 class ClaudeResult:
     """Result of a Claude session."""
@@ -27,8 +38,8 @@ class ClaudeResult:
     duration_seconds: int
     timed_out: bool
     rate_limited: bool
-    crashed: bool
     output: str
+    failure_category: FailureCategory = FailureCategory.NONE
     error_type: str | None = None
 
 
@@ -48,8 +59,9 @@ class ClaudeRunner:
         r"api rate limit",
     ]
 
-    # Patterns indicating Claude CLI crashed or had unhandled errors
-    CRASH_PATTERNS = [
+    # Diagnostic patterns for logging/debugging - NOT used for crash decisions
+    # Exit code is the primary determinant of crash status
+    DIAGNOSTIC_PATTERNS = [
         r"No messages returned",
         r"unhandled.*promise.*rejection",
         r"async function without a catch block",
@@ -66,25 +78,6 @@ class ClaudeRunner:
         r"core dumped",
     ]
 
-    # Patterns for valid short outputs that are NOT crashes
-    # These are legitimate error messages from Claude that happen to be short
-    VALID_SHORT_OUTPUT_PATTERNS = [
-        r"no changes",
-        r"nothing to commit",
-        r"up to date",
-        r"already exists",
-        r"permission denied",
-        r"file not found",
-        r"command not found",
-        r"successfully",
-        r"completed",
-        r"done",
-        r"skipping",
-        r"no.*tasks",
-    ]
-
-    # Default minimum output length to consider non-crash for unknown exit codes
-    DEFAULT_MIN_OUTPUT_LENGTH = 50
     # Default grace period before SIGKILL
     DEFAULT_KILL_TIMEOUT = 10
 
@@ -93,22 +86,17 @@ class ClaudeRunner:
         project_root: str | Path,
         timeout: int = 1800,  # 30 minutes default
         kill_timeout: int | None = None,  # Grace period before SIGKILL (from config)
-        min_output_length: int | None = None,  # Override min output length (from config)
         conversation_log_file: str | Path | None = None,  # Debug conversation logging
         conversation_logger: ConversationLogger | None = None,  # Injected logger (for testing)
     ) -> None:
         self.project_root = Path(project_root)
         self.timeout = timeout
         self.kill_timeout = kill_timeout if kill_timeout is not None else self.DEFAULT_KILL_TIMEOUT
-        self.min_output_length = min_output_length if min_output_length is not None else self.DEFAULT_MIN_OUTPUT_LENGTH
         self._rate_limit_patterns = [
             re.compile(p, re.IGNORECASE) for p in self.RATE_LIMIT_PATTERNS
         ]
-        self._crash_patterns = [
-            re.compile(p, re.IGNORECASE) for p in self.CRASH_PATTERNS
-        ]
-        self._valid_short_patterns = [
-            re.compile(p, re.IGNORECASE) for p in self.VALID_SHORT_OUTPUT_PATTERNS
+        self._diagnostic_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self.DIAGNOSTIC_PATTERNS
         ]
 
         # Initialize conversation logger: use injected logger, create from file path, or None
@@ -131,82 +119,61 @@ class ClaudeRunner:
                 return True
         return False
 
-    def _check_crash(self, output: str) -> tuple[bool, str | None]:
-        """Check if output indicates Claude CLI crashed.
+    def _check_diagnostic(self, output: str) -> str | None:
+        """Check output for diagnostic patterns (for logging only).
+
+        This is NOT used for crash determination - exit code is authoritative.
+        Returns the matched pattern for logging/debugging purposes.
 
         Returns:
-            Tuple of (crashed, error_type)
+            The matched diagnostic pattern or None.
         """
-        for pattern in self._crash_patterns:
+        for pattern in self._diagnostic_patterns:
             match = pattern.search(output)
             if match:
-                return True, match.group(0)
-        return False, None
+                return match.group(0)
+        return None
 
-    def _is_valid_short_output(self, output: str) -> bool:
-        """Check if short output matches known valid patterns.
-
-        Some legitimate Claude responses are short but not crashes.
-
-        Args:
-            output: The output to check.
-
-        Returns:
-            True if the output matches a known valid short pattern.
-        """
-        for pattern in self._valid_short_patterns:
-            if pattern.search(output):
-                return True
-        return False
-
-    def _should_mark_as_crash(
+    def _categorize_failure(
         self,
         exit_code: int,
-        output: str,
         rate_limited: bool,
-        explicit_crash: bool,
-    ) -> tuple[bool, str | None]:
-        """Determine if the result should be marked as a crash.
+        timed_out: bool,
+    ) -> tuple[FailureCategory, str | None]:
+        """Categorize failure based primarily on exit code.
 
-        Uses multiple heuristics to avoid false positives:
-        1. If explicit crash pattern found, mark as crash
-        2. If rate limited, don't mark as crash
-        3. If exit code is 0, don't mark as crash
-        4. If output is very short AND doesn't match valid patterns, mark as crash
+        Exit code is the authoritative source for crash determination:
+        - Exit code 0 = SUCCESS (never a crash)
+        - Exit code >= 128 = SYSTEM_ERROR (killed by signal)
+        - Exit code 124 = TIMEOUT
+        - Rate limited = RATE_LIMITED
+        - Exit code 1 = REJECTED (normal failure, not crash)
 
         Args:
             exit_code: Process exit code.
-            output: Full output text.
             rate_limited: Whether rate limiting was detected.
-            explicit_crash: Whether explicit crash pattern was found.
+            timed_out: Whether the process timed out.
 
         Returns:
-            Tuple of (is_crash, error_type)
+            Tuple of (FailureCategory, error_type for logging)
         """
-        if explicit_crash:
-            return True, "crash_pattern_detected"
+        if exit_code == 0:
+            return FailureCategory.NONE, None
 
-        if rate_limited or exit_code == 0:
-            return False, None
+        if timed_out or exit_code == 124:
+            return FailureCategory.TIMEOUT, "timeout"
 
-        stripped = output.strip()
+        if rate_limited:
+            return FailureCategory.RATE_LIMITED, "rate_limited"
 
-        # Very short output with non-zero exit often indicates crash
-        if len(stripped) < self.min_output_length:
-            # But check if it matches known valid short patterns
-            if self._is_valid_short_output(stripped):
-                logger.debug(f"Short output matches valid pattern, not marking as crash")
-                return False, None
+        # Exit code >= 128 means killed by signal (128 + signal_number)
+        if exit_code >= 128:
+            signal_num = exit_code - 128
+            return FailureCategory.SYSTEM_ERROR, f"signal_{signal_num}"
 
-            # Check for common valid exit codes with short output
-            # Exit code 1 with "Aborted" or similar is not a crash
-            if exit_code == 1 and any(word in stripped.lower() for word in ["abort", "cancel", "skip"]):
-                return False, None
+        # Exit code 1-127: Normal failure (Claude refused, validation failed, etc.)
+        return FailureCategory.REJECTED, f"exit_{exit_code}"
 
-            logger.debug(f"Short output ({len(stripped)} chars) with exit code {exit_code}, marking as crash")
-            return True, f"short_output_exit_{exit_code}"
-
-        return False, None
 
     def _force_kill_process(
         self,
@@ -315,10 +282,6 @@ class ClaudeRunner:
 
         process_manager = get_process_manager()
 
-        # Event to signal crash detected in reader thread
-        crash_detected = threading.Event()
-        crash_error_type: list[str] = []  # Use list to allow mutation from thread
-
         try:
             # Start Claude in its own process group for clean termination
             cmd = self._build_claude_command(model)
@@ -341,7 +304,8 @@ class ClaudeRunner:
             if self.on_subprocess_start and process.pid:
                 self.on_subprocess_start(process.pid, " ".join(cmd))
 
-            # Stream output while capturing (with exception handling and inline crash detection)
+            # Stream output while capturing
+            # Note: Crash detection is now done via exit code, not pattern matching
             def stream_reader() -> None:
                 nonlocal reader_exception
                 try:
@@ -354,14 +318,6 @@ class ClaudeRunner:
                         output_lines.append(line)
                         if on_output:
                             on_output(line.rstrip())
-
-                        # Inline crash detection - signal main thread immediately
-                        # This prevents waiting for full timeout when Claude crashes but doesn't exit
-                        crashed, error_type = self._check_crash(line)
-                        if crashed and not crash_detected.is_set():
-                            crash_error_type.append(error_type or "crash_detected")
-                            crash_detected.set()
-                            logger.debug(f"Crash pattern detected in output: {error_type}")
                 except BrokenPipeError:
                     # Expected when process dies - not an error
                     logger.debug("Reader thread: broken pipe (process died)")
@@ -384,25 +340,13 @@ class ClaudeRunner:
                 # Claude died before reading input
                 pass
 
-            # Wait for completion with timeout, but also check for crash detection
-            # Use shorter poll intervals to detect crashes faster
+            # Wait for completion with timeout
             poll_interval = 1.0  # Check every second
             elapsed_wait = 0.0
             timed_out = False
             exit_code = None
 
             while exit_code is None and elapsed_wait < self.timeout:
-                # Check if crash was detected - give brief grace period for clean exit
-                if crash_detected.is_set():
-                    logger.debug("Crash detected, giving 5s grace period for clean exit")
-                    try:
-                        exit_code = process.wait(timeout=5)
-                        break
-                    except subprocess.TimeoutExpired:
-                        logger.debug("Process didn't exit after crash, force killing")
-                        exit_code = 1
-                        break
-
                 # Poll process status
                 exit_code = process.poll()
                 if exit_code is not None:
@@ -463,7 +407,7 @@ class ClaudeRunner:
                 duration_seconds=int(time.time() - start_time),
                 timed_out=False,
                 rate_limited=False,
-                crashed=True,
+                failure_category=FailureCategory.SYSTEM_ERROR,
                 output=f"Error running Claude: {e}",
                 error_type=str(type(e).__name__),
             )
@@ -476,18 +420,21 @@ class ClaudeRunner:
             Path(output_file).write_text(full_output)
 
         rate_limited = self._check_rate_limit(full_output)
-        explicit_crash, explicit_error = self._check_crash(full_output)
 
-        # Improved crash detection with multiple heuristics
-        crashed, error_type = self._should_mark_as_crash(
+        # Exit-code-first failure categorization
+        failure_category, error_type = self._categorize_failure(
             exit_code=exit_code,
-            output=full_output,
             rate_limited=rate_limited,
-            explicit_crash=explicit_crash,
+            timed_out=timed_out,
         )
-        # Preserve explicit error type if available
-        if explicit_crash and explicit_error:
-            error_type = explicit_error
+
+        # Check for diagnostic patterns (logging only, not for decision-making)
+        diagnostic_match = self._check_diagnostic(full_output)
+        if diagnostic_match:
+            logger.debug(f"Diagnostic pattern found in output: {diagnostic_match}")
+            # Include diagnostic info in error_type if we have a failure
+            if failure_category != FailureCategory.NONE and error_type:
+                error_type = f"{error_type}:{diagnostic_match}"
 
         # Log conversation if debug mode is enabled
         if self.conversation_logger:
@@ -505,7 +452,173 @@ class ClaudeRunner:
             duration_seconds=duration,
             timed_out=timed_out,
             rate_limited=rate_limited,
-            crashed=crashed,
+            failure_category=failure_category,
+            output=full_output,
+            error_type=error_type,
+        )
+
+    async def _execute_session_async(
+        self,
+        prompt_content: str,
+        source_name: str,
+        output_file: str | Path | None = None,
+        on_output: Callable[[str], None] | None = None,
+        model: str | None = None,
+    ) -> ClaudeResult:
+        """Execute a Claude session asynchronously (primary async implementation).
+
+        This is the async core execution method using asyncio.create_subprocess_exec().
+        No background threads are used - output is read via async iteration.
+
+        Args:
+            prompt_content: The fully prepared prompt content to send to Claude.
+            source_name: Name for logging purposes (e.g., "PROMPT_init.xml.j2").
+            output_file: Optional file to capture output for rate limit detection.
+            on_output: Optional callback for streaming output lines.
+            model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
+
+        Returns:
+            ClaudeResult with exit code, duration, and status flags.
+        """
+        start_time = time.time()
+        output_lines: list[str] = []
+
+        process_manager = get_process_manager()
+
+        try:
+            cmd = self._build_claude_command(model)
+            logger.debug(f"Running Claude async with command: {' '.join(cmd)}")
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=self.project_root,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                start_new_session=True,  # Create new process group
+            )
+
+            # Register process for cleanup tracking
+            if process.pid:
+                process_manager.register_pid(process.pid)
+
+            # Notify subprocess start
+            if self.on_subprocess_start and process.pid:
+                self.on_subprocess_start(process.pid, " ".join(cmd))
+
+            # Read output asynchronously (no thread needed)
+            async def read_output() -> None:
+                assert process.stdout is not None
+                try:
+                    async for line in process.stdout:
+                        decoded = line.decode("utf-8", errors="replace")
+                        output_lines.append(decoded)
+                        if on_output:
+                            on_output(decoded.rstrip())
+                except asyncio.CancelledError:
+                    logger.debug("Async reader cancelled")
+                    raise
+                except Exception as e:
+                    logger.warning(f"Async reader exception: {type(e).__name__}: {e}")
+
+            # Start reading task
+            read_task = asyncio.create_task(read_output())
+
+            # Send prompt (handle broken pipe if Claude dies immediately)
+            assert process.stdin is not None
+            try:
+                process.stdin.write(prompt_content.encode())
+                await process.stdin.drain()
+                process.stdin.close()
+                await process.stdin.wait_closed()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # Claude died before reading input
+
+            # Wait with timeout
+            timed_out = False
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(read_task, process.wait(), return_exceptions=True),
+                    timeout=self.timeout,
+                )
+                exit_code = process.returncode or 0
+            except asyncio.TimeoutError:
+                timed_out = True
+                # Cancel the read task
+                read_task.cancel()
+                try:
+                    await read_task
+                except asyncio.CancelledError:
+                    pass
+
+                # Kill process group
+                await self._force_kill_process_async(process)
+                exit_code = 124
+
+            # Unregister process now that it's done
+            if process.pid:
+                process_manager.unregister_pid(process.pid)
+
+            # Notify subprocess end
+            if self.on_subprocess_end:
+                self.on_subprocess_end()
+
+        except Exception as e:
+            # Notify subprocess end on exception
+            if self.on_subprocess_end:
+                self.on_subprocess_end()
+            # Ensure process is unregistered on exception
+            if 'process' in locals() and process.pid:
+                process_manager.unregister_pid(process.pid)
+            return ClaudeResult(
+                exit_code=1,
+                duration_seconds=int(time.time() - start_time),
+                timed_out=False,
+                rate_limited=False,
+                failure_category=FailureCategory.SYSTEM_ERROR,
+                output=f"Error running Claude: {e}",
+                error_type=str(type(e).__name__),
+            )
+
+        duration = int(time.time() - start_time)
+        full_output = "".join(output_lines)
+
+        # Write to output file if specified
+        if output_file:
+            Path(output_file).write_text(full_output)
+
+        rate_limited = self._check_rate_limit(full_output)
+
+        # Exit-code-first failure categorization
+        failure_category, error_type = self._categorize_failure(
+            exit_code=exit_code,
+            rate_limited=rate_limited,
+            timed_out=timed_out,
+        )
+
+        # Check for diagnostic patterns (logging only)
+        diagnostic_match = self._check_diagnostic(full_output)
+        if diagnostic_match:
+            logger.debug(f"Diagnostic pattern found in output: {diagnostic_match}")
+            if failure_category != FailureCategory.NONE and error_type:
+                error_type = f"{error_type}:{diagnostic_match}"
+
+        # Log conversation if debug mode is enabled
+        if self.conversation_logger:
+            self.conversation_logger.log_interaction(
+                source=source_name,
+                input_text=prompt_content,
+                output_text=full_output,
+                exit_code=exit_code,
+                model=model,
+                duration_seconds=duration,
+            )
+
+        return ClaudeResult(
+            exit_code=exit_code,
+            duration_seconds=duration,
+            timed_out=timed_out,
+            rate_limited=rate_limited,
+            failure_category=failure_category,
             output=full_output,
             error_type=error_type,
         )
@@ -559,7 +672,7 @@ class ClaudeRunner:
                 duration_seconds=0,
                 timed_out=False,
                 rate_limited=False,
-                crashed=False,
+                failure_category=FailureCategory.REJECTED,
                 output=f"Prompt file not found: {prompt_path}",
             )
 
@@ -574,7 +687,7 @@ class ClaudeRunner:
             model=model,
         )
 
-    def run_with_content(
+    async def run_with_content_async(
         self,
         prompt_content: str,
         source_name: str = "prompt",
@@ -583,10 +696,10 @@ class ClaudeRunner:
         model: str | None = None,
         context: str | None = None,
     ) -> ClaudeResult:
-        """Run Claude with prompt content directly (not from a file).
+        """Run Claude with prompt content directly (async version).
 
-        This method is useful when prompts are loaded from package resources
-        via importlib.resources rather than from filesystem paths.
+        This is the primary async method for running Claude with content.
+        Uses asyncio subprocess handling - no background threads.
 
         Args:
             prompt_content: The prompt content to send to Claude.
@@ -601,12 +714,72 @@ class ClaudeRunner:
         """
         prompt_content = self._prepare_prompt_content(prompt_content, context)
 
-        return self._execute_session(
+        return await self._execute_session_async(
             prompt_content=prompt_content,
             source_name=source_name,
             output_file=output_file,
             on_output=on_output,
             model=model,
+        )
+
+    def run_with_content(
+        self,
+        prompt_content: str,
+        source_name: str = "prompt",
+        output_file: str | Path | None = None,
+        on_output: Callable[[str], None] | None = None,
+        model: str | None = None,
+        context: str | None = None,
+    ) -> ClaudeResult:
+        """Run Claude with prompt content directly (sync wrapper).
+
+        This method is useful when prompts are loaded from package resources
+        via importlib.resources rather than from filesystem paths.
+
+        Note: When called within an existing async event loop, this falls back
+        to threading-based execution (_execute_session) since asyncio.run()
+        cannot be nested. For async contexts, use run_with_content_async()
+        directly to use the pure async implementation.
+
+        Args:
+            prompt_content: The prompt content to send to Claude.
+            source_name: Name for logging purposes (e.g., "PROMPT_init.xml.j2").
+            output_file: Optional file to capture output for rate limit detection.
+            on_output: Optional callback for streaming output lines.
+            model: Model to use ("opus" or "sonnet"). If None, uses CLI default.
+            context: Optional context to prepend to the prompt content.
+
+        Returns:
+            ClaudeResult with exit code, duration, and status flags.
+        """
+        # Check if we're in an existing event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # We're already in an async context - can't use asyncio.run()
+            # Fall back to the threading-based sync implementation
+            prompt_content = self._prepare_prompt_content(prompt_content, context)
+            return self._execute_session(
+                prompt_content=prompt_content,
+                source_name=source_name,
+                output_file=output_file,
+                on_output=on_output,
+                model=model,
+            )
+
+        # Not in an event loop - use asyncio.run() with async implementation
+        return asyncio.run(
+            self.run_with_content_async(
+                prompt_content=prompt_content,
+                source_name=source_name,
+                output_file=output_file,
+                on_output=on_output,
+                model=model,
+                context=context,
+            )
         )
 
     async def run_prompt_async(
@@ -616,6 +789,8 @@ class ClaudeRunner:
         model: str | None = None,
     ) -> ClaudeResult:
         """Run Claude with a prompt file asynchronously.
+
+        Uses the async execution method - no background threads.
 
         Args:
             prompt_file: Path to the prompt file to pipe to Claude.
@@ -632,135 +807,17 @@ class ClaudeRunner:
                 duration_seconds=0,
                 timed_out=False,
                 rate_limited=False,
-                crashed=False,
+                failure_category=FailureCategory.REJECTED,
                 output=f"Prompt file not found: {prompt_path}",
             )
 
         prompt_content = prompt_path.read_text()
 
-        start_time = time.time()
-        output_lines: list[str] = []
-
-        process_manager = get_process_manager()
-
-        try:
-            cmd = self._build_claude_command(model)
-            logger.debug(f"Running Claude async with command: {' '.join(cmd)}")
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=self.project_root,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                start_new_session=True,  # Create new process group
-            )
-
-            # Register process for cleanup tracking
-            if process.pid:
-                process_manager.register_pid(process.pid)
-
-            # Send prompt and read output concurrently
-            async def read_output():
-                assert process.stdout is not None
-                try:
-                    async for line in process.stdout:
-                        decoded = line.decode("utf-8", errors="replace")
-                        output_lines.append(decoded)
-                        if on_output:
-                            on_output(decoded.rstrip())
-                except asyncio.CancelledError:
-                    logger.debug("Async reader cancelled")
-                    raise
-                except Exception as e:
-                    logger.warning(f"Async reader exception: {type(e).__name__}: {e}")
-
-            # Start reading
-            read_task = asyncio.create_task(read_output())
-
-            # Send prompt (handle broken pipe if Claude dies immediately)
-            assert process.stdin is not None
-            try:
-                process.stdin.write(prompt_content.encode())
-                await process.stdin.drain()
-                process.stdin.close()
-                await process.stdin.wait_closed()
-            except (BrokenPipeError, ConnectionResetError):
-                pass  # Claude died before reading input
-
-            # Wait with timeout
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(read_task, process.wait(), return_exceptions=True),
-                    timeout=self.timeout,
-                )
-                exit_code = process.returncode or 0
-                timed_out = False
-            except asyncio.TimeoutError:
-                # Cancel the read task
-                read_task.cancel()
-                try:
-                    await read_task
-                except asyncio.CancelledError:
-                    logger.debug("Read task cancelled during timeout cleanup")
-
-                # Kill process group
-                await self._force_kill_process_async(process)
-                exit_code = 124
-                timed_out = True
-
-            # Unregister process now that it's done
-            if process.pid:
-                process_manager.unregister_pid(process.pid)
-
-        except Exception as e:
-            # Ensure process is unregistered on exception
-            if 'process' in locals() and process.pid:
-                process_manager.unregister_pid(process.pid)
-            return ClaudeResult(
-                exit_code=1,
-                duration_seconds=int(time.time() - start_time),
-                timed_out=False,
-                rate_limited=False,
-                crashed=True,
-                output=f"Error running Claude: {e}",
-                error_type=str(type(e).__name__),
-            )
-
-        duration = int(time.time() - start_time)
-        full_output = "".join(output_lines)
-        rate_limited = self._check_rate_limit(full_output)
-        explicit_crash, explicit_error = self._check_crash(full_output)
-
-        # Improved crash detection with multiple heuristics
-        crashed, error_type = self._should_mark_as_crash(
-            exit_code=exit_code,
-            output=full_output,
-            rate_limited=rate_limited,
-            explicit_crash=explicit_crash,
-        )
-        # Preserve explicit error type if available
-        if explicit_crash and explicit_error:
-            error_type = explicit_error
-
-        # Log conversation if debug mode is enabled
-        if self.conversation_logger:
-            self.conversation_logger.log_interaction(
-                source=str(prompt_path.name),
-                input_text=prompt_content,
-                output_text=full_output,
-                exit_code=exit_code,
-                model=model,
-                duration_seconds=duration,
-            )
-
-        return ClaudeResult(
-            exit_code=exit_code,
-            duration_seconds=duration,
-            timed_out=timed_out,
-            rate_limited=rate_limited,
-            crashed=crashed,
-            output=full_output,
-            error_type=error_type,
+        return await self._execute_session_async(
+            prompt_content=prompt_content,
+            source_name=str(prompt_path.name),
+            on_output=on_output,
+            model=model,
         )
 
     async def stream_prompt(
@@ -842,11 +899,10 @@ class ClaudeRunner:
                 decoded = line.decode("utf-8", errors="replace").rstrip()
                 yield decoded
 
-                # Check for crash patterns in output
-                crashed, error_type = self._check_crash(decoded)
-                if crashed:
-                    yield f"Error: Claude crash detected: {error_type}"
-                    break
+                # Check for diagnostic patterns (for logging info only)
+                diagnostic_match = self._check_diagnostic(decoded)
+                if diagnostic_match:
+                    logger.debug(f"Diagnostic pattern in stream: {diagnostic_match}")
 
         finally:
             # Clean up process

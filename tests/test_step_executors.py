@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from claudesprint.core.claude_runner import ClaudeResult
+from claudesprint.core.claude_runner import ClaudeResult, FailureCategory
 from claudesprint.core.issue_engine import ParseResult, StepResult
 from claudesprint.core.step_executors import (
     CompletionStepExecutor,
@@ -57,7 +57,7 @@ def mock_claude_runner() -> MagicMock:
         duration_seconds=10,
         timed_out=False,
         rate_limited=False,
-        crashed=False,
+        failure_category=FailureCategory.NONE,
         output="Successful execution output\n<routing_signal>pass</routing_signal>",
         error_type=None,
     )
@@ -210,7 +210,7 @@ class TestLlmStepExecutor:
             duration_seconds=5,
             timed_out=False,
             rate_limited=True,
-            crashed=False,
+            failure_category=FailureCategory.RATE_LIMITED,
             output="You've hit your limit. Please try again later.",
             error_type=None,
         )
@@ -230,16 +230,16 @@ class TestLlmStepExecutor:
         sample_current_issue: CurrentIssue,
         mock_claude_runner: MagicMock,
     ) -> None:
-        """Test handling of crash (result.crashed = True)."""
-        # Configure mock to return crashed result
+        """Test handling of crash (result.crashed = True via SYSTEM_ERROR)."""
+        # Configure mock to return crashed result (SYSTEM_ERROR category)
         mock_claude_runner.run_with_content.return_value = ClaudeResult(
-            exit_code=1,
+            exit_code=137,  # SIGKILL (128 + 9)
             duration_seconds=2,
             timed_out=False,
             rate_limited=False,
-            crashed=True,
+            failure_category=FailureCategory.SYSTEM_ERROR,
             output="No messages returned",
-            error_type="crash_pattern_detected",
+            error_type="signal_9",
         )
 
         # Execute the step
@@ -250,7 +250,7 @@ class TestLlmStepExecutor:
         assert result.crashed is True
         assert result.rate_limited is False
         assert result.next_step is None
-        assert result.error == "crash_pattern_detected"
+        assert result.error == "signal_9"
 
     def test_prompt_not_found_error(
         self,
@@ -322,7 +322,7 @@ class TestLlmStepExecutor:
             duration_seconds=10,
             timed_out=False,
             rate_limited=False,
-            crashed=False,
+            failure_category=FailureCategory.NONE,
             output="Tests completed but no status tag provided",
             error_type=None,
         )
@@ -502,15 +502,15 @@ class TestLlmStepExecutor:
             output_patterns={},
         )
 
-        # Configure mock to return non-zero exit code
+        # Configure mock to return non-zero exit code (REJECTED category)
         mock_claude_runner.run_with_content.return_value = ClaudeResult(
             exit_code=1,
             duration_seconds=10,
             timed_out=False,
             rate_limited=False,
-            crashed=False,
+            failure_category=FailureCategory.REJECTED,
             output="Command failed with error",
-            error_type=None,
+            error_type="exit_1",
         )
 
         current_issue = CurrentIssue(
@@ -727,7 +727,7 @@ class TestEdgeCases:
             duration_seconds=5,
             timed_out=False,
             rate_limited=False,
-            crashed=False,
+            failure_category=FailureCategory.NONE,
             output="",
             error_type=None,
         )
