@@ -125,7 +125,6 @@ Read the spec file and populate the sprint.json with all required issues.
         project_root,
         config.claude_timeout,
         kill_timeout=config.kill_timeout,
-        min_output_length=config.min_output_length,
         conversation_log_file=(
             config.conversation_log_file if debug_conversations else None
         ),
@@ -210,7 +209,6 @@ def run_planner(
         project_root,
         config.claude_timeout,
         kill_timeout=config.kill_timeout,
-        min_output_length=config.min_output_length,
         conversation_log_file=(
             config.conversation_log_file if debug_conversations else None
         ),

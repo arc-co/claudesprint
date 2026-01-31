@@ -196,7 +196,6 @@ def _run_sprint_console(
         project_root=project_root,
         timeout=config.claude_timeout,
         kill_timeout=config.kill_timeout,
-        min_output_length=config.min_output_length,
         conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
     )
 
@@ -208,7 +207,6 @@ def _run_sprint_console(
             project_root=project_root,
             timeout=config.claude_timeout,
             kill_timeout=config.kill_timeout,
-            min_output_length=config.min_output_length,
             conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
         return IssueEngine(
