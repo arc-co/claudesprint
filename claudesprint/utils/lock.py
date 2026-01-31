@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
 
 class LockFile:
@@ -40,8 +40,10 @@ class LockFile:
                 pass
 
             return True, ""
-        except Exception as e:
-            return False, f"Another instance is running: {e}"
+        except Timeout:
+            return False, "Another instance is running"
+        except OSError as e:
+            return False, f"Failed to acquire lock: {e}"
 
     def release(self) -> bool:
         """Release the lock."""
