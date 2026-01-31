@@ -222,7 +222,7 @@ def _run_sprint_console(
         )
 
     # Create SprintEngine with all dependencies
-    engine = SprintEngine(
+    engine = SprintEngine.from_services(
         sprint_path=sprint_path,
         config=config,
         git_service=git_service,
