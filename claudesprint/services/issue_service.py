@@ -2,11 +2,14 @@
 
 import json
 import logging
+from contextlib import contextmanager
 from datetime import datetime, UTC
 from pathlib import Path
+from typing import Generator
 
 from claudesprint.models.current_issue import CurrentIssue
 from claudesprint.services.base.json_store import JsonStore
+from claudesprint.utils.issue_lock import get_issue_lock, IssueLock
 
 
 class CurrentIssueStore(JsonStore[CurrentIssue]):
@@ -22,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 
 class IssueService:
-    """Service for CurrentIssue file I/O and session management."""
+    """Service for CurrentIssue file I/O and session management.
+
+    This service provides thread-safe and process-safe access to issue state
+    files via file locking. All read/write operations acquire a lock to prevent
+    race conditions between the Engine main loop and Agent subprocesses.
+    """
 
     def __init__(self, project_dir: str | Path) -> None:
         """Initialize IssueService.
@@ -34,17 +42,19 @@ class IssueService:
         self.current_issue_file = self.project_dir / "current_issue.json"
         self.current_issue_log = self.project_dir / "current_issue.log"
         self._store = CurrentIssueStore()
+        self._lock = get_issue_lock(self.project_dir)
 
     def read_current_issue(self) -> CurrentIssue | None:
-        """Read and parse current_issue.json.
+        """Read and parse current_issue.json with locking.
 
         Returns:
             CurrentIssue model or None if not found/invalid
         """
-        return self._store.read(self.current_issue_file)
+        with self._lock.locked():
+            return self._store.read(self.current_issue_file)
 
     def write_current_issue(self, issue: CurrentIssue) -> bool:
-        """Write current_issue.json atomically.
+        """Write current_issue.json atomically with locking.
 
         Args:
             issue: CurrentIssue model to write
@@ -52,26 +62,51 @@ class IssueService:
         Returns:
             True if successful, False otherwise
         """
-        # Update timestamp before writing
-        issue.update_timestamp()
-        return self._store.write(self.current_issue_file, issue)
+        with self._lock.locked():
+            # Update timestamp before writing
+            issue.update_timestamp()
+            return self._store.write(self.current_issue_file, issue)
+
+    @contextmanager
+    def atomic_update(self) -> Generator[CurrentIssue | None, None, None]:
+        """Context manager for read-modify-write with lock held for entire operation.
+
+        This is useful when you need to read the current issue, modify it, and write
+        it back atomically without another process modifying it in between.
+
+        Example:
+            with issue_service.atomic_update() as issue:
+                if issue:
+                    issue.goal = "New goal"
+                    # Issue will be written back on exit
+
+        Yields:
+            CurrentIssue model or None if not found
+        """
+        with self._lock.locked():
+            issue = self._store.read(self.current_issue_file)
+            yield issue
+            if issue:
+                issue.update_timestamp()
+                self._store.write(self.current_issue_file, issue)
 
     def is_current_issue_valid(self) -> bool:
-        """Check if current_issue.json exists and is valid JSON.
+        """Check if current_issue.json exists and is valid JSON with locking.
 
         Returns:
             True if valid, False otherwise
         """
-        if not self.current_issue_file.exists():
-            return False
         try:
-            data = json.loads(self.current_issue_file.read_text())
-            # Basic structure check
-            return (
-                isinstance(data, dict)
-                and "sprint_path" in data
-                and "step" in data
-            )
+            with self._lock.locked():
+                if not self.current_issue_file.exists():
+                    return False
+                data = json.loads(self.current_issue_file.read_text())
+                # Basic structure check
+                return (
+                    isinstance(data, dict)
+                    and "sprint_path" in data
+                    and "step" in data
+                )
         except json.JSONDecodeError as e:
             logger.debug(f"Invalid JSON in current_issue.json: {e}")
             return False
@@ -80,16 +115,17 @@ class IssueService:
             return False
 
     def clear_current_issue(self) -> bool:
-        """Delete current_issue files (main, backup, log).
+        """Delete current_issue files (main, backup, log) with locking.
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            if self.current_issue_file.exists():
-                self.current_issue_file.unlink()
-            if self.current_issue_log.exists():
-                self.current_issue_log.unlink()
+            with self._lock.locked():
+                if self.current_issue_file.exists():
+                    self.current_issue_file.unlink()
+                if self.current_issue_log.exists():
+                    self.current_issue_log.unlink()
             return True
         except OSError as e:
             logger.warning(f"Failed to clear current_issue files: {e}")
@@ -107,7 +143,7 @@ class IssueService:
         return CurrentIssue.create_initial(sprint_path)
 
     def reset_current_issue(self, sprint_path: str) -> bool:
-        """Reset current_issue.json to initial state for a sprint.
+        """Reset current_issue.json to initial state for a sprint with locking.
 
         Args:
             sprint_path: Path to the sprint.json file
@@ -115,13 +151,15 @@ class IssueService:
         Returns:
             True if successful, False otherwise
         """
-        current_issue = self.create_initial(sprint_path)
-        return self.write_current_issue(current_issue)
+        with self._lock.locked():
+            current_issue = self.create_initial(sprint_path)
+            current_issue.update_timestamp()
+            return self._store.write(self.current_issue_file, current_issue)
 
     # Log operations
 
     def append_log(self, entry: str) -> bool:
-        """Append an entry to current_issue.log.
+        """Append an entry to current_issue.log with locking.
 
         Args:
             entry: Log entry text
@@ -130,11 +168,12 @@ class IssueService:
             True if successful, False otherwise
         """
         try:
-            self.project_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-            log_line = f"[{timestamp}] {entry}\n"
-            with open(self.current_issue_log, "a") as f:
-                f.write(log_line)
+            with self._lock.locked():
+                self.project_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                log_line = f"[{timestamp}] {entry}\n"
+                with open(self.current_issue_log, "a") as f:
+                    f.write(log_line)
             return True
         except OSError as e:
             logger.warning(f"Failed to append to log: {e}")
