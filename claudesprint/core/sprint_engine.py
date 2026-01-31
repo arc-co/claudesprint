@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Sprint engine - outer loop orchestration for sprint-based workflows.
 
 The SprintEngine manages the outer loop:
