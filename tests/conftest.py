@@ -163,13 +163,14 @@ def mock_claude_runner():
 
     Example:
         def test_something(mock_claude_runner):
+            from claudesprint.core.claude_runner import ClaudeResult, FailureCategory
             mock_claude_runner.run_prompt.return_value = ClaudeResult(
                 exit_code=0,
                 duration_seconds=10,
                 timed_out=False,
                 rate_limited=False,
-                crashed=False,
                 output="Test output",
+                failure_category=FailureCategory.NONE,
             )
     """
     return Mock(spec=ClaudeRunner)

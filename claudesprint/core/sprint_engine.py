@@ -15,7 +15,7 @@ from typing import Callable
 
 import re
 
-from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult
+from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult, FailureCategory as ClaudeFailureCategory
 from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
 from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
 from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
@@ -469,8 +469,8 @@ class SprintEngine:
                 error="Rate limited during issue selection",
             )
 
-        # Handle crash
-        if result.crashed:
+        # Handle system error (crash)
+        if result.failure_category == ClaudeFailureCategory.SYSTEM_ERROR:
             return IssueSelectionResult(
                 success=False,
                 issue_id=None,
