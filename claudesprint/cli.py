@@ -26,6 +26,7 @@ from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MOD
 from claudesprint.services.notification_service import NotificationService, NotificationType
 from claudesprint.services.path_service import PathService
 from claudesprint.services.prompt_service import PromptService
+from claudesprint.services.service_container import ServiceContainer
 from claudesprint.simple_logs import LogVerbosity, SimpleLogsOutput
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.process_manager import get_process_manager
@@ -264,9 +265,7 @@ def _run_sprint_console(
             min_output_length=config.min_output_length,
             conversation_log_file=config.conversation_log_file if config.debug_conversations else None,
         )
-        return IssueEngine(
-            config=config,
-            execution_config=resolved_config,
+        issue_services = ServiceContainer.create(
             issue_service=issue_service,
             sprint_service=sprint_service,
             notification_service=notification_service,
@@ -275,19 +274,29 @@ def _run_sprint_console(
             event_bus=event_bus,
             config_manager=cm,
         )
+        return IssueEngine(
+            config=config,
+            execution_config=resolved_config,
+            services=issue_services,
+        )
+
+    # Create ServiceContainer for SprintEngine
+    sprint_services = ServiceContainer.create(
+        issue_service=issue_service,
+        sprint_service=sprint_service,
+        notification_service=notification_service,
+        prompt_service=prompt_service,
+        claude_runner=claude_runner,
+        event_bus=event_bus,
+        git_service=git_service,
+    )
 
     # Create SprintEngine with all dependencies
     engine = SprintEngine(
         sprint_path=sprint_path,
         config=config,
-        git_service=git_service,
-        sprint_service=sprint_service,
-        issue_service=issue_service,
-        notification_service=notification_service,
-        prompt_service=prompt_service,
-        claude_runner=claude_runner,
+        services=sprint_services,
         issue_engine_factory=issue_engine_factory,
-        event_bus=event_bus,
     )
 
     # Connect event bus to log output via subscriber

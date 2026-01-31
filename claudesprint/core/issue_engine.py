@@ -9,7 +9,6 @@ The IssueEngine manages the inner loop:
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,10 +17,15 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from claudesprint.core.claude_runner import ClaudeRunner
+from claudesprint.core.routing_parser import (
+    RoutingSignalParser,
+    create_default_parser_config,
+)
 
 if TYPE_CHECKING:
     from claudesprint.events.workflow_event_bus import WorkflowEventBus
     from claudesprint.services.configuration_manager import ConfigurationManager
+    from claudesprint.services.service_container import ServiceContainer
 
 from claudesprint.events.workflow_event_bus import WorkflowEvent, IssueIterationPayload, RoutingSignalPayload
 from claudesprint.core.step_executors import (
@@ -172,7 +176,44 @@ class IssueEngine:
         self,
         config: ClaudesprintConfig,
         execution_config: ResolvedConfig,
-        # Injected Dependencies:
+        services: ServiceContainer,
+    ) -> None:
+        """Initialize IssueEngine.
+
+        Args:
+            config: ClaudesprintConfig with timeout and retry settings.
+            execution_config: ResolvedConfig with resolved execution gates for this issue.
+            services: ServiceContainer with all required and optional services.
+
+        Example:
+            >>> container = ServiceContainer.create(
+            ...     issue_service=issue_svc,
+            ...     sprint_service=sprint_svc,
+            ...     notification_service=notif_svc,
+            ...     prompt_service=prompt_svc,
+            ...     claude_runner=runner,
+            ...     event_bus=bus,
+            ...     config_manager=cm,
+            ... )
+            >>> engine = IssueEngine(config, execution_config, services=container)
+        """
+        self.config = config
+        self.execution_config = execution_config
+
+        # Extract services from container
+        self.issue_service = services.issue_service
+        self.sprint_service = services.sprint_service
+        self.notification_service = services.notification_service
+        self.prompt_service = services.prompt_service
+        self.claude_runner = services.claude_runner
+        self.event_bus = services.event_bus
+        self._config_manager = services.config_manager
+
+    @classmethod
+    def from_services(
+        cls,
+        config: ClaudesprintConfig,
+        execution_config: ResolvedConfig,
         issue_service: IssueService,
         sprint_service: SprintService,
         notification_service: NotificationService,
@@ -180,29 +221,47 @@ class IssueEngine:
         claude_runner: ClaudeRunner,
         event_bus: WorkflowEventBus | None = None,
         config_manager: ConfigurationManager | None = None,
-    ) -> None:
-        """Initialize IssueEngine.
+    ) -> IssueEngine:
+        """Factory method providing backward-compatible initialization.
+
+        DEPRECATED: Use ServiceContainer directly instead.
+
+        This method exists to support existing code that passes services as
+        individual parameters. New code should use the ServiceContainer pattern.
 
         Args:
-            config: ClaudesprintConfig with timeout and retry settings
-            execution_config: ResolvedConfig with resolved execution gates for this issue
-            issue_service: Service for managing current issue state
-            sprint_service: Service for managing sprint data
-            notification_service: Service for sending notifications
-            prompt_service: Service for loading prompt templates
-            claude_runner: Runner for executing Claude commands
-            event_bus: Optional event bus for emitting workflow events
-            config_manager: Optional ConfigurationManager for model configuration
+            config: ClaudesprintConfig with timeout and retry settings.
+            execution_config: ResolvedConfig with resolved execution gates.
+            issue_service: Service for managing current issue state.
+            sprint_service: Service for managing sprint data.
+            notification_service: Service for sending notifications.
+            prompt_service: Service for loading prompt templates.
+            claude_runner: Runner for executing Claude commands.
+            event_bus: Optional event bus for emitting workflow events.
+            config_manager: Optional ConfigurationManager for model configuration.
+
+        Returns:
+            A new IssueEngine instance.
         """
-        self.config = config
-        self.execution_config = execution_config
-        self.issue_service = issue_service
-        self.sprint_service = sprint_service
-        self.notification_service = notification_service
-        self.prompt_service = prompt_service
-        self.claude_runner = claude_runner
-        self.event_bus = event_bus
-        self._config_manager = config_manager
+        from claudesprint.services.service_container import ServiceContainer
+
+        services = ServiceContainer.create(
+            issue_service=issue_service,
+            sprint_service=sprint_service,
+            notification_service=notification_service,
+            prompt_service=prompt_service,
+            claude_runner=claude_runner,
+            event_bus=event_bus,
+            config_manager=config_manager,
+        )
+        return cls(config, execution_config, services)
+
+        # Initialize routing signal parser
+        self._routing_parser = RoutingSignalParser(
+            step_routing=self.STEP_ROUTING,
+            output_patterns=self.OUTPUT_PATTERNS,
+            config=create_default_parser_config(),
+        )
 
         # Step executors registry
         self._step_executors: dict[IssueStep, StepExecutor] = {}
@@ -562,6 +621,8 @@ class IssueEngine:
     def _parse_step_output(self, step: IssueStep, output: str) -> ParseResult:
         """Parse step output to determine next step based on signals.
 
+        Delegates to RoutingSignalParser which uses XML parsing with regex fallback.
+
         Args:
             step: Current step
             output: Claude output text
@@ -569,27 +630,7 @@ class IssueEngine:
         Returns:
             ParseResult with next step and whether a signal matched
         """
-        routing = self.STEP_ROUTING.get(step, {})
-        patterns = self.OUTPUT_PATTERNS.get(step, {})
-
-        # Strip trailing whitespace/newlines to handle Claude adding extra newlines
-        # while still requiring STATUS token to be at end of meaningful content
-        output_lower = output.lower().strip()
-
-        # Try to match patterns for conditional routing
-        for signal, signal_patterns in patterns.items():
-            for pattern in signal_patterns:
-                if re.search(pattern, output_lower, re.IGNORECASE) and signal in routing:
-                    return ParseResult(
-                        next_step=routing[signal],
-                        matched_signal=signal,
-                    )
-
-        # Fall back to default routing
-        return ParseResult(
-            next_step=routing.get("default"),
-            matched_signal=None,
-        )
+        return self._routing_parser.parse(step, output)
 
     def _should_skip_step(self, step: IssueStep) -> bool:
         """Check if a step should be skipped based on execution gates.
