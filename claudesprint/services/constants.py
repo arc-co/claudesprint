@@ -180,16 +180,13 @@ claudesprint doctor --fix               # Auto-fix issues
 ### Full sprint workflow
 
 ```bash
-# 1. Initialize repo (first time only)
-claudesprint initrepo
+# 1. Create spec file
+claudesprint spec create
 
-# 2. Create spec file
-# Write your spec to .claudesprint/specs/my-feature.md
+# 2. Initialize sprint from spec
+claudesprint init --spec my-feature
 
-# 3. Initialize sprint from spec
-claudesprint init --spec my-feature.md
-
-# 4. Run the sprint
+# 3. Run the sprint
 claudesprint run
 
 # 5. Monitor progress

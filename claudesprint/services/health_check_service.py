@@ -295,7 +295,8 @@ class HealthCheckService:
     def check_claude_auth(self, verbose: bool = False) -> CheckResult:
         """Check if Claude CLI is authenticated.
 
-        Runs a simple Claude CLI command to verify authentication status.
+        Checks for the presence of Claude credentials file to verify auth status.
+        This is faster and more reliable than running CLI commands.
 
         Args:
             verbose: Include authentication details.
@@ -313,65 +314,36 @@ class HealthCheckService:
                 details="Install Claude CLI first" if verbose else None,
             )
 
-        try:
-            # Use 'claude api-key' or similar lightweight check
-            # The 'claude --version' works but doesn't test auth
-            # Try using 'claude config list' which requires auth
-            result = subprocess.run(
-                ["claude", "config", "list"],
-                capture_output=True,
-                text=True,
-                timeout=self.version_check_timeout,
-            )
+        # Check for credentials file directly - this is fast and reliable
+        credentials_path = Path.home() / ".claude" / ".credentials.json"
 
-            if result.returncode == 0:
-                return CheckResult(
-                    name="Claude CLI Auth",
-                    status=CheckStatus.OK,
-                    message="Claude CLI authenticated",
-                    details=f"Config available" if verbose else None,
-                )
-            else:
-                # Check for specific auth error messages
-                error_output = result.stderr.lower()
-                if "not logged in" in error_output or "auth" in error_output:
+        if credentials_path.exists():
+            try:
+                # Verify the file has some content (basic sanity check)
+                content = credentials_path.read_text()
+                if len(content) > 10:  # Minimal valid JSON would be at least this long
                     return CheckResult(
                         name="Claude CLI Auth",
-                        status=CheckStatus.ERROR,
-                        message="Claude CLI not authenticated",
-                        details=(
-                            "Run 'claude login' to authenticate with your Anthropic account"
-                            if verbose
-                            else None
-                        ),
-                        fixable=False,
-                        fix_command="claude login",
+                        status=CheckStatus.OK,
+                        message="Claude CLI authenticated",
+                        details=f"Credentials found at {credentials_path}" if verbose else None,
                     )
-                else:
-                    return CheckResult(
-                        name="Claude CLI Auth",
-                        status=CheckStatus.WARNING,
-                        message="Claude CLI auth status unclear",
-                        details=(
-                            f"Check manually with 'claude config list'\nError: {result.stderr.strip()}"
-                            if verbose
-                            else None
-                        ),
-                    )
-        except subprocess.TimeoutExpired:
-            return CheckResult(
-                name="Claude CLI Auth",
-                status=CheckStatus.WARNING,
-                message="Auth check timed out",
-                details="Claude CLI may be unresponsive" if verbose else None,
-            )
-        except (subprocess.SubprocessError, OSError) as e:
-            return CheckResult(
-                name="Claude CLI Auth",
-                status=CheckStatus.WARNING,
-                message="Could not check auth status",
-                details=str(e) if verbose else None,
-            )
+            except (OSError, PermissionError):
+                pass
+
+        # No credentials file found
+        return CheckResult(
+            name="Claude CLI Auth",
+            status=CheckStatus.ERROR,
+            message="Claude CLI not authenticated",
+            details=(
+                "Run 'claude login' to authenticate with your Anthropic account"
+                if verbose
+                else None
+            ),
+            fixable=False,
+            fix_command="claude login",
+        )
 
     def check_project_initialized(self, verbose: bool = False) -> CheckResult:
         """Check if project has been initialized with ClaudeSprint.
@@ -390,12 +362,12 @@ class HealthCheckService:
                 status=CheckStatus.WARNING,
                 message="Project not initialized",
                 details=(
-                    "Run 'claudesprint quickstart' or 'claudesprint initrepo' to initialize"
+                    "Run 'claudesprint quickstart' or 'claudesprint quickstart' to initialize"
                     if verbose
                     else None
                 ),
                 fixable=True,
-                fix_command="claudesprint initrepo",
+                fix_command="claudesprint quickstart",
             )
 
         # Check for essential directories
@@ -405,9 +377,9 @@ class HealthCheckService:
                 name="Project Initialized",
                 status=CheckStatus.WARNING,
                 message="Project partially initialized (missing state/)",
-                details="Run 'claudesprint initrepo' to complete setup" if verbose else None,
+                details="Run 'claudesprint quickstart' to complete setup" if verbose else None,
                 fixable=True,
-                fix_command="claudesprint initrepo",
+                fix_command="claudesprint quickstart",
             )
 
         return CheckResult(
@@ -565,12 +537,12 @@ class HealthCheckService:
                 status=CheckStatus.WARNING,
                 message="No .claudesprint/ directory found",
                 details=(
-                    "Run 'claudesprint initrepo' to initialize ClaudeSprint in this project"
+                    "Run 'claudesprint quickstart' to initialize ClaudeSprint in this project"
                     if verbose
                     else None
                 ),
                 fixable=True,
-                fix_command="claudesprint initrepo",
+                fix_command="claudesprint quickstart",
             )
 
         # Check for expected subdirectories

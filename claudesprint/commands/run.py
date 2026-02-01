@@ -56,12 +56,8 @@ def run_workflow(
     ] = False,
     verbose: Annotated[
         int,
-        typer.Option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv, -vvv)"),
+        typer.Option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv)"),
     ] = 0,
-    dashboard: Annotated[
-        bool,
-        typer.Option("--dashboard", help="Start the web dashboard for real-time monitoring"),
-    ] = False,
 ) -> None:
     """Run the sprint workflow loop.
 
@@ -99,7 +95,7 @@ def run_workflow(
             console.print("  claudesprint run --sprint path/to/sprint.json")
             raise typer.Exit(1)
 
-    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose), dashboard)
+    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose))
 
 
 def _run_sprint_console(
@@ -108,7 +104,6 @@ def _run_sprint_console(
     sprint_path: Path,
     max_iterations: int,
     verbosity: LogVerbosity = LogVerbosity.NORMAL,
-    enable_dashboard: bool = False,
 ) -> None:
     """Run the sprint workflow with console output."""
     # Lazy imports - only load heavy modules when actually running
@@ -241,31 +236,9 @@ def _run_sprint_console(
     logs_subscriber = LogsEventSubscriber(output, event_bus)
     logs_subscriber.connect()
 
-    # Start dashboard server (only if explicitly enabled)
-    from claudesprint.dashboard.server import DashboardServer
-
-    dashboard_server: DashboardServer | None = None
-    if enable_dashboard:
-        try:
-            dashboard_server = DashboardServer(event_bus)
-            dashboard_url = dashboard_server.start()
-            if dashboard_url:
-                console.print(f"[cyan]Dashboard: {dashboard_url}[/cyan]")
-        except Exception as e:
-            # Dashboard is optional - log and continue without it
-            import logging
-
-            logging.getLogger(__name__).debug(f"Dashboard failed to start: {e}")
-            dashboard_server = None
-
     # Run sprint
-    try:
-        with output:
-            result = engine.run(max_iterations=max_iterations)
-    finally:
-        # Stop dashboard server
-        if dashboard_server:
-            dashboard_server.stop()
+    with output:
+        result = engine.run(max_iterations=max_iterations)
 
     # Disconnect subscriber after sprint completes
     logs_subscriber.disconnect()

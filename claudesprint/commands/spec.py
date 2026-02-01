@@ -217,28 +217,3 @@ def spec_create(
     except OSError as e:
         console.print(error(f"Failed to create spec: {e}"))
         raise typer.Exit(1)
-
-
-@spec_app.command("templates")
-def spec_templates() -> None:
-    """List available spec templates."""
-    # Lazy imports
-    from claudesprint.services.spec_service import SpecService
-
-    project_root = get_project_root()
-    service = SpecService(project_root)
-    templates = service.get_templates()
-
-    console.print(Panel.fit("Available Templates", style=STYLES.PANEL_HEADER))
-    console.print("")
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Name")
-    table.add_column("Description")
-
-    for t in templates:
-        table.add_row(t.name, t.description)
-
-    console.print(table)
-    console.print("")
-    console.print(f"Use with: {info('claudesprint spec create --template <name>')}")

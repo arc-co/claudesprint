@@ -9,12 +9,9 @@ from rich.panel import Panel
 from claudesprint.commands._shared import (
     console,
     get_config,
-    ConsoleThrobber,
     STYLES,
-    success,
     error,
     warning,
-    muted,
     info,
     success_icon,
     error_icon,
@@ -202,105 +199,30 @@ def quickstart(
 
     console.print("")
 
-    # Step 4: Initialize sprint
+    # Step 4: Initialize sprint (delegates to init command)
     console.print("[bold][4/4] Initializing sprint...[/bold]")
+    console.print("")
 
-    # Import init components lazily
-    from claudesprint.core.claude_runner import ClaudeRunner
-    from claudesprint.services.configuration_manager import ConfigurationManager
-    from claudesprint.services.models_service import ModelsService
-    from claudesprint.services.path_service import PathService
-    from claudesprint.services.prompt_service import PromptService
+    from claudesprint.commands.init import init_project
+
+    try:
+        init_project(spec=spec_name, description=description or "")
+    except typer.Exit as e:
+        if e.exit_code != 0:
+            raise
+    except SystemExit as e:
+        if e.code != 0:
+            raise typer.Exit(1)
+
+    # Get sprint info for summary
     from claudesprint.services.sprint_service import SprintService
 
     config = get_config()
-
-    # Create sprint from spec
     sprint_service = SprintService(config.sprints_dir)
-    try:
-        relative_spec_path = spec_path.relative_to(project_root)
-    except ValueError:
-        relative_spec_path = spec_path
-
-    sprint_path, sprint = sprint_service.create_sprint_from_spec(
-        relative_spec_path, description or ""
-    )
-
-    # Ensure sprints directory exists
-    sprint_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write sprint skeleton
-    if not sprint_service.write_sprint(sprint, sprint_path):
-        console.print(f"  {error_icon()} Failed to create sprint")
-        raise typer.Exit(1)
-
-    console.print(f"  {success_icon()} Sprint skeleton created")
-
-    # Load init prompt
-    path_service = PathService(project_root=project_root)
-    prompt_service = PromptService(path_service, project_root=project_root)
-    try:
-        prompt_content = prompt_service.get_prompt_content("init")
-    except FileNotFoundError:
-        console.print(f"  {error_icon()} Init prompt template not found")
-        raise typer.Exit(1)
-
-    # Get model for init step
-    cm = ConfigurationManager(project_root)
-    models_service = ModelsService.from_config_manager(cm)
-    model = models_service.get_model_for_special_step("init")
-
-    # Build context for the agent
-    context = f"""## Initialization Context
-
-You are initializing a sprint for:
-- **Spec ID**: {sprint.spec_id}
-- **Spec file**: {relative_spec_path}
-- **Sprint file**: {sprint_path.relative_to(project_root)}
-
-Read the spec file and populate the sprint.json with all required issues.
-
----"""
-
-    runner = ClaudeRunner(
-        project_root,
-        config.claude_timeout,
-        kill_timeout=config.kill_timeout,
-    )
-
-    # Run init agent with throbber
-    throbber = ConsoleThrobber(console)
-    throbber.start(f"  Generating issues from spec (model: {model})")
-    first_output_received = [False]
-
-    def on_output(line: str) -> None:
-        if not first_output_received[0]:
-            first_output_received[0] = True
-            throbber.stop()
-        # Don't show verbose output in quickstart
-
-    result = runner.run_with_content(
-        prompt_content,
-        source_name="PROMPT_init.xml.j2",
-        on_output=on_output,
-        model=model,
-        context=context,
-    )
-
-    if throbber.is_running:
-        throbber.stop()
-
-    if result.exit_code != 0:
-        console.print(f"  {error_icon()} Sprint initialization failed")
-        if result.rate_limited:
-            console.print(warning("  Rate limit detected. Please wait and try again."))
-        raise typer.Exit(1)
-
-    # Count issues in sprint
-    updated_sprint = sprint_service.read_sprint(sprint_path)
-    issue_count = len(updated_sprint.issues) if updated_sprint else 0
-
-    console.print(f"  {success_icon()} Sprint ready with {issue_count} issue(s)")
+    sprint_path = sprint_service.get_sprint_path(spec_name)
+    sprint = sprint_service.read_sprint(sprint_path)
+    issue_count = len(sprint.issues) if sprint else 0
+    spec_id = sprint.spec_id if sprint else spec_name
 
     console.print("")
 
@@ -321,14 +243,11 @@ Read the spec file and populate the sprint.json with all required issues.
         start_run = typer.confirm("Start the sprint now?", default=False)
         if start_run:
             console.print("")
-            console.print(f"Starting: {info(f'claudesprint run --spec {sprint.spec_id}')}")
-            console.print("")
-            # Import and call run command
             from claudesprint.commands.run import run_workflow
-            # We need to exit and re-invoke since run_workflow takes control
-            raise typer.Exit(0)
+            run_workflow(spec=spec_id)
 
-    # Show next steps
-    console.print("[bold]Next steps:[/bold]")
-    console.print(f"  1. Review spec:  {info(f'claudesprint spec show {spec_name}')}")
-    console.print(f"  2. Start sprint: {info(f'claudesprint run --spec {sprint.spec_id}')}")
+    # Show next steps if not starting run
+    if skip_run or non_interactive:
+        console.print("[bold]Next steps:[/bold]")
+        console.print(f"  1. Review spec:  {info(f'claudesprint spec show {spec_name}')}")
+        console.print(f"  2. Start sprint: {info(f'claudesprint run --spec {spec_id}')}")
