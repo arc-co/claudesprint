@@ -183,34 +183,30 @@ claudesprint run
 
 For detailed instructions, see the [Quickstart Guide](docs/getting-started/quickstart.md).
 
-## Demo: TextBook Exchange MVP
+## Demo: URL Shortener
 
-The repository includes a complete example specification for a textbook exchange marketplace:
+Try the built-in demo to see ClaudeSprint in action:
 
 **Tech Stack:**
 - TypeScript + Express + Handlebars
-- SQLite + Drizzle ORM
+- JSON file database
 - HTMX for interactivity
-- Session-based auth with OTP
+- Vitest for testing
 
 **Features:**
-- User authentication via email OTP
-- Browse listings with pagination
-- Create/edit/delete your own listings
-- Seller contact information on detail pages
+- Shorten long URLs to short codes
+- Redirect short URLs to original destinations
+- Persist URLs across server restarts
+- Clean HTMX-powered UI
 
 To build this demo:
 
 ```bash
-# Initialize the sprint (assumes claudesprint is installed)
-claudesprint init --spec .claudesprint/specs/examples/textbook-exchange-mvp.md
+# Create and run the demo project
+claudesprint demo
 
-# Run ClaudeSprint - it will autonomously:
-# 1. Set up the project structure
-# 2. Create the database schema
-# 3. Build the Express app with routes
-# 4. Implement auth, listings, and UI
-# 5. Test and commit each feature
+# Or manually:
+claudesprint init --spec path/to/demo.md
 claudesprint run
 ```
 
