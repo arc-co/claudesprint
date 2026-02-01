@@ -21,9 +21,13 @@ from claudesprint.commands._shared import (
 
 def init_project(
     spec: Annotated[
-        str,
+        Optional[str],
         typer.Option("--spec", "-s", help="Spec file to create sprint from"),
-    ],
+    ] = None,
+    goal: Annotated[
+        Optional[str],
+        typer.Option("--goal", "-g", help="Quick goal description (creates minimal spec automatically)"),
+    ] = None,
     description: Annotated[
         Optional[str],
         typer.Option("--description", "-d", help="Sprint description"),
@@ -40,6 +44,8 @@ def init_project(
 
     Creates a new sprint.json in .claudesprint/sprints/<spec_id>/ and invokes
     the init agent to populate it with issues from the spec.
+
+    Use --spec to provide an existing spec file, or --goal for quick inline specs.
     """
     # Lazy imports for faster startup
     from claudesprint.core.claude_runner import ClaudeRunner
@@ -52,22 +58,70 @@ def init_project(
     project_root = get_project_root()
     config = get_config()
 
-    # Find spec file
-    spec_path = Path(spec)
-    if not spec_path.exists():
-        # Try looking in .claudesprint/specs/
-        spec_path = Path(config.specs_dir) / spec
-        if not spec_path.exists():
-            # Try adding .md extension
-            spec_path = Path(config.specs_dir) / f"{spec}.md"
-
-    if not spec_path.exists():
-        console.print(error(f"Spec file not found: {spec}"))
-        console.print("Looked in:")
-        console.print(f"  • {spec}")
-        console.print(f"  • .claudesprint/specs/{spec}")
-        console.print(f"  • .claudesprint/specs/{spec}.md")
+    # Validate that either --spec or --goal is provided
+    if spec is None and goal is None:
+        console.print(error("Either --spec or --goal is required"))
+        console.print("")
+        console.print("Usage:")
+        console.print(f"  claudesprint init --spec <spec_file>")
+        console.print(f"  claudesprint init --goal \"Build a TODO app with Express\"")
         raise typer.Exit(1)
+
+    # Handle --goal option: create a minimal spec automatically
+    if goal is not None:
+        from claudesprint.services.spec_service import SpecService
+
+        spec_service = SpecService(project_root)
+
+        # Generate a spec name from the goal
+        import re
+        goal_slug = re.sub(r"[^a-z0-9]+", "-", goal.lower())[:30].strip("-")
+        spec_name = f"goal-{goal_slug}" if goal_slug else "goal-spec"
+
+        # Create minimal spec content
+        spec_content = f"""# {goal}
+
+## Overview
+
+{goal}
+
+## Issues
+
+### Issue 1: Implement the Goal
+
+{goal}
+
+**Acceptance Criteria:**
+- The implementation meets the stated goal
+- Code is functional and tested
+"""
+
+        # Ensure specs directory exists
+        spec_service.specs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write the spec
+        spec_path = spec_service.specs_dir / f"{spec_name}.md"
+        spec_path.write_text(spec_content)
+
+        console.print(success(f"Created quick spec: {spec_path.relative_to(project_root)}"))
+        console.print("")
+    else:
+        # Find spec file (original behavior)
+        spec_path = Path(spec)
+        if not spec_path.exists():
+            # Try looking in .claudesprint/specs/
+            spec_path = Path(config.specs_dir) / spec
+            if not spec_path.exists():
+                # Try adding .md extension
+                spec_path = Path(config.specs_dir) / f"{spec}.md"
+
+        if not spec_path.exists():
+            console.print(error(f"Spec file not found: {spec}"))
+            console.print("Looked in:")
+            console.print(f"  • {spec}")
+            console.print(f"  • .claudesprint/specs/{spec}")
+            console.print(f"  • .claudesprint/specs/{spec}.md")
+            raise typer.Exit(1)
 
     sprint_service = SprintService(config.sprints_dir)
     # Convert to relative path for storage

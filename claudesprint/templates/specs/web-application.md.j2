@@ -1,0 +1,107 @@
+# {{ project_name }}
+
+{{ description if description else "A modern web application with API backend and interactive frontend." }}
+
+## Overview
+
+This project implements a full-stack web application with:
+- **Backend**: Express.js REST API with SQLite database
+- **Frontend**: React single-page application
+- **Authentication**: JWT-based user authentication
+- **Testing**: Jest for backend, React Testing Library for frontend
+
+## Technical Stack
+
+- **Runtime**: Node.js 18+
+- **Backend Framework**: Express.js
+- **Database**: SQLite with better-sqlite3
+- **Frontend Framework**: React 18
+- **Build Tool**: Vite
+- **Testing**: Jest, React Testing Library
+
+## Project Structure
+
+```
+{{ project_name | lower | replace(' ', '-') }}/
+├── server/
+│   ├── src/
+│   │   ├── index.ts          # Express app entry
+│   │   ├── routes/           # API routes
+│   │   ├── models/           # Database models
+│   │   └── middleware/       # Express middleware
+│   └── tests/
+├── client/
+│   ├── src/
+│   │   ├── App.tsx           # Main component
+│   │   ├── components/       # React components
+│   │   ├── pages/            # Page components
+│   │   └── hooks/            # Custom hooks
+│   └── tests/
+└── package.json
+```
+
+## Issues
+
+### Issue 1: Project Setup
+Set up the monorepo structure with server and client directories. Initialize package.json with scripts for development, testing, and building.
+
+**Acceptance Criteria:**
+- Running `npm install` installs all dependencies
+- Running `npm run dev` starts both server and client
+- TypeScript configured for both packages
+
+### Issue 2: Database Schema and Models
+Design and implement the SQLite database schema. Create model classes for data access.
+
+**Acceptance Criteria:**
+- Database file created on first run
+- Migration system for schema changes
+- Model methods for CRUD operations
+
+### Issue 3: REST API Endpoints
+Implement the core REST API endpoints with Express.js.
+
+**Acceptance Criteria:**
+- RESTful endpoints following conventions
+- Request validation with appropriate error responses
+- API documentation in code comments
+
+### Issue 4: Authentication System
+Implement JWT-based authentication with login, logout, and protected routes.
+
+**Acceptance Criteria:**
+- User registration and login endpoints
+- JWT token generation and validation
+- Protected route middleware
+
+### Issue 5: React Frontend Setup
+Set up the React frontend with Vite, routing, and basic layout.
+
+**Acceptance Criteria:**
+- Vite development server configured
+- React Router for navigation
+- Base layout with navigation component
+
+### Issue 6: Frontend Components
+Build the main UI components for interacting with the API.
+
+**Acceptance Criteria:**
+- Form components for data entry
+- List/table components for data display
+- Loading and error state handling
+
+### Issue 7: API Integration
+Connect the frontend to the backend API with proper error handling.
+
+**Acceptance Criteria:**
+- API client utility for HTTP requests
+- Authentication token handling
+- Error boundary for API failures
+
+### Issue 8: Testing Suite
+Implement comprehensive tests for both backend and frontend.
+
+**Acceptance Criteria:**
+- Unit tests for API endpoints
+- Component tests for React components
+- Integration tests for critical flows

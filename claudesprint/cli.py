@@ -18,7 +18,9 @@ from claudesprint.commands import doctor as doctor_module
 from claudesprint.commands import hook as hook_module
 from claudesprint.commands import init as init_module
 from claudesprint.commands import initrepo as initrepo_module
+from claudesprint.commands import quickstart as quickstart_module
 from claudesprint.commands import run as run_module
+from claudesprint.commands import spec as spec_module
 from claudesprint.commands import status as status_module
 from claudesprint.commands import utils as utils_module
 
@@ -64,9 +66,11 @@ app.command("notify")(utils_module.send_notification)
 app.command("doctor")(doctor_module.doctor)
 app.command("hook")(hook_module.run_hook)
 app.command("initrepo")(initrepo_module.init_repo)
+app.command("quickstart")(quickstart_module.quickstart)
 
-# Register config sub-app
+# Register command groups
 app.add_typer(config_module.config_app, name="config")
+app.add_typer(spec_module.spec_app, name="spec")
 
 
 if __name__ == "__main__":

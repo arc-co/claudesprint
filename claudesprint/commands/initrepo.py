@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.panel import Panel
 
 from claudesprint.commands._shared import (
     console,
@@ -11,6 +12,7 @@ from claudesprint.commands._shared import (
     error,
     warning,
     muted,
+    info,
 )
 
 
@@ -76,7 +78,13 @@ def init_repo(
             console.print(warning("Claude hooks were not injected"))
 
     console.print("")
-    console.print("[bold]Next steps:[/bold]")
-    console.print("  1. Create a spec file in .claudesprint/specs/")
-    console.print("  2. Run: claudesprint init --spec <spec_file>")
-    console.print("  3. Run: claudesprint run")
+    next_steps = (
+        "[bold]Next Steps[/bold]\n\n"
+        "[bold cyan]Quickstart (Recommended):[/bold cyan]\n"
+        f"  {info('claudesprint quickstart')}\n\n"
+        "[bold]Manual Setup:[/bold]\n"
+        f"  1. {info('claudesprint spec create')} - Create a project spec\n"
+        f"  2. {info('claudesprint init --spec <file>')} - Initialize sprint\n"
+        f"  3. {info('claudesprint run')} - Start the workflow"
+    )
+    console.print(Panel(next_steps, border_style="blue"))
