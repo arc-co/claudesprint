@@ -32,6 +32,10 @@ _ENV_VAR_MAP: dict[str, str] = {
     "notifications_enabled": "CLAUDESPRINT_NOTIFICATIONS_ENABLED",
     "bark_enabled": "CLAUDESPRINT_BARK_ENABLED",
     "bark_url": "CLAUDESPRINT_BARK_URL",
+    "webhook_enabled": "CLAUDESPRINT_WEBHOOK_ENABLED",
+    "webhook_url": "CLAUDESPRINT_WEBHOOK_URL",
+    "webhook_timeout": "CLAUDESPRINT_WEBHOOK_TIMEOUT",
+    "webhook_retry_count": "CLAUDESPRINT_WEBHOOK_RETRY_COUNT",
 }
 
 

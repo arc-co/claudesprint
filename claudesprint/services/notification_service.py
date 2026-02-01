@@ -1,11 +1,13 @@
-"""Notification service for Bark push notifications."""
+"""Notification service for Bark push notifications and generic webhooks."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 import httpx
@@ -31,6 +33,29 @@ class NotificationType(StrEnum):
     HUNG_PROCESS = "hung_process"
 
 
+@dataclass
+class WebhookPayload:
+    """Payload for webhook notifications."""
+
+    notification_type: str
+    title: str
+    message: str
+    timestamp: str
+    metadata: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert payload to dictionary for JSON serialization."""
+        result: dict[str, Any] = {
+            "notification_type": self.notification_type,
+            "title": self.title,
+            "message": self.message,
+            "timestamp": self.timestamp,
+        }
+        if self.metadata:
+            result["metadata"] = self.metadata
+        return result
+
+
 class NotificationService:
     """Service for sending push notifications via Bark."""
 
@@ -52,7 +77,7 @@ class NotificationService:
     ) -> None:
         self._notifications_config: NotificationsConfig | None = None
         self._client: httpx.AsyncClient | None = None
-        self._queue: asyncio.Queue[tuple[NotificationType, str, str | None]] | None = None
+        self._queue: asyncio.Queue[tuple[NotificationType, str, str | None, dict[str, Any] | None]] | None = None
         self._worker_task: asyncio.Task[None] | None = None
         self._http_timeout = http_timeout if http_timeout is not None else self.DEFAULT_HTTP_TIMEOUT
 
@@ -76,9 +101,9 @@ class NotificationService:
         return instance
 
     @property
-    def enabled(self) -> bool:
-        """Check if notifications are enabled."""
-        if self._notifications_config is None:
+    def bark_enabled(self) -> bool:
+        """Check if Bark notifications are enabled."""
+        if not self._notifications_config:
             return False
         return (
             self._notifications_config.enabled
@@ -86,18 +111,33 @@ class NotificationService:
             and bool(self._notifications_config.bark.url)
         )
 
-    async def send(
+    @property
+    def webhook_enabled(self) -> bool:
+        """Check if webhook notifications are enabled."""
+        if not self._notifications_config:
+            return False
+        return (
+            self._notifications_config.enabled
+            and self._notifications_config.webhook.enabled
+            and bool(self._notifications_config.webhook.url)
+        )
+
+    @property
+    def enabled(self) -> bool:
+        """Check if any notification provider is enabled."""
+        return self.bark_enabled or self.webhook_enabled
+
+    async def _send_bark(
         self,
         notification_type: NotificationType,
         message: str,
-        title: str | None = None,
+        title: str,
     ) -> bool:
-        """Send a notification asynchronously."""
-        if not self.enabled or not self._notifications_config:
+        """Send a notification via Bark."""
+        if not self.bark_enabled or not self._notifications_config:
             return False
 
-        actual_title = title or self.TITLES.get(notification_type, "ClaudeSprint")
-        encoded_title = quote(actual_title)
+        encoded_title = quote(title)
         encoded_message = quote(message)
         url = f"{self._notifications_config.bark.url}/{encoded_title}/{encoded_message}"
 
@@ -106,49 +146,210 @@ class NotificationService:
                 response = await client.get(url)
                 if response.status_code != 200:
                     logger.warning(
-                        f"Notification failed: {notification_type} - HTTP {response.status_code}"
+                        f"Bark notification failed: {notification_type} - HTTP {response.status_code}"
                     )
                     return False
                 return True
         except Exception as e:
-            logger.warning(f"Notification failed: {notification_type} - {e}")
+            logger.warning(f"Bark notification failed: {notification_type} - {e}")
             return False
+
+    async def _send_webhook(
+        self,
+        notification_type: NotificationType,
+        message: str,
+        title: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Send a notification via generic webhook with retry logic."""
+        if not self.webhook_enabled or not self._notifications_config:
+            return False
+
+        webhook_config = self._notifications_config.webhook
+
+        # Check event filter
+        if webhook_config.events and notification_type.value not in webhook_config.events:
+            logger.debug(f"Webhook: skipping {notification_type} (not in event filter)")
+            return True  # Not an error, just filtered
+
+        # Build payload
+        payload = WebhookPayload(
+            notification_type=notification_type.value,
+            title=title,
+            message=message,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            metadata=metadata,
+        )
+
+        # Send with retries (single client for connection pooling)
+        last_error: Exception | None = None
+        async with httpx.AsyncClient(timeout=webhook_config.timeout) as client:
+            for attempt in range(webhook_config.retry_count + 1):
+                try:
+                    response = await client.post(
+                        webhook_config.url,
+                        json=payload.to_dict(),
+                        headers=webhook_config.headers,
+                    )
+                    if response.status_code >= 200 and response.status_code < 300:
+                        return True
+                    logger.warning(
+                        f"Webhook notification failed: {notification_type} - HTTP {response.status_code}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Webhook notification error: {notification_type} - {e}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
+
+                # Wait before retry (exponential backoff)
+                if attempt < webhook_config.retry_count:
+                    await asyncio.sleep(2 ** attempt)
+
+        if last_error:
+            logger.error(f"Webhook notification failed after {webhook_config.retry_count + 1} attempts: {last_error}")
+        return False
+
+    async def send(
+        self,
+        notification_type: NotificationType,
+        message: str,
+        title: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Send a notification asynchronously to all enabled providers."""
+        if not self.enabled or not self._notifications_config:
+            return False
+
+        actual_title = title or self.TITLES.get(notification_type, "ClaudeSprint")
+
+        # Send to all enabled providers
+        results = await asyncio.gather(
+            self._send_bark(notification_type, message, actual_title),
+            self._send_webhook(notification_type, message, actual_title, metadata),
+            return_exceptions=True,
+        )
+
+        # Log any exceptions that were returned
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error(f"Notification provider error: {notification_type} - {r}")
+
+        # Return True if at least one provider succeeded
+        return any(r is True for r in results)
+
+    def _send_bark_sync(
+        self,
+        notification_type: NotificationType,
+        message: str,
+        title: str,
+    ) -> bool:
+        """Send a notification via Bark synchronously."""
+        if not self.bark_enabled or not self._notifications_config:
+            return False
+
+        encoded_title = quote(title)
+        encoded_message = quote(message)
+        url = f"{self._notifications_config.bark.url}/{encoded_title}/{encoded_message}"
+
+        try:
+            with httpx.Client(timeout=self._http_timeout) as client:
+                response = client.get(url)
+                if response.status_code != 200:
+                    logger.warning(
+                        f"Bark notification failed: {notification_type} - HTTP {response.status_code}"
+                    )
+                    return False
+            return True
+        except Exception as e:
+            logger.warning(f"Bark notification failed: {notification_type} - {e}")
+            return False
+
+    def _send_webhook_sync(
+        self,
+        notification_type: NotificationType,
+        message: str,
+        title: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Send a notification via webhook synchronously with retry logic."""
+        if not self.webhook_enabled or not self._notifications_config:
+            return False
+
+        webhook_config = self._notifications_config.webhook
+
+        # Check event filter
+        if webhook_config.events and notification_type.value not in webhook_config.events:
+            logger.debug(f"Webhook: skipping {notification_type} (not in event filter)")
+            return True
+
+        # Build payload
+        payload = WebhookPayload(
+            notification_type=notification_type.value,
+            title=title,
+            message=message,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            metadata=metadata,
+        )
+
+        # Send with retries (single client for connection pooling)
+        import time
+        last_error: Exception | None = None
+        with httpx.Client(timeout=webhook_config.timeout) as client:
+            for attempt in range(webhook_config.retry_count + 1):
+                try:
+                    response = client.post(
+                        webhook_config.url,
+                        json=payload.to_dict(),
+                        headers=webhook_config.headers,
+                    )
+                    if response.status_code >= 200 and response.status_code < 300:
+                        return True
+                    logger.warning(
+                        f"Webhook notification failed: {notification_type} - HTTP {response.status_code}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Webhook notification error: {notification_type} - {e}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
+
+                if attempt < webhook_config.retry_count:
+                    time.sleep(2 ** attempt)
+
+        if last_error:
+            logger.error(f"Webhook notification failed after {webhook_config.retry_count + 1} attempts: {last_error}")
+        return False
 
     def send_sync(
         self,
         notification_type: NotificationType,
         message: str,
         title: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
-        """Send a notification synchronously (non-blocking, fire-and-forget)."""
+        """Send a notification synchronously to all enabled providers."""
         if not self.enabled or not self._notifications_config:
             return False
 
         actual_title = title or self.TITLES.get(notification_type, "ClaudeSprint")
-        encoded_title = quote(actual_title)
-        encoded_message = quote(message)
-        url = f"{self._notifications_config.bark.url}/{encoded_title}/{encoded_message}"
 
-        try:
-            # Fire and forget - don't wait for response
-            with httpx.Client(timeout=self._http_timeout) as client:
-                response = client.get(url)
-                if response.status_code != 200:
-                    logger.warning(
-                        f"Notification failed: {notification_type} - HTTP {response.status_code}"
-                    )
-                    return False
-            return True
-        except Exception as e:
-            logger.warning(f"Notification failed: {notification_type} - {e}")
-            return False
+        # Send to all enabled providers
+        bark_result = self._send_bark_sync(notification_type, message, actual_title)
+        webhook_result = self._send_webhook_sync(notification_type, message, actual_title, metadata)
+
+        return bark_result or webhook_result
 
     def _ensure_worker_running(self) -> None:
         """Start the background worker if loop is running and worker is dead."""
         try:
             loop = asyncio.get_event_loop()
             if self._queue is None:
-                self._queue = asyncio.Queue[tuple[NotificationType, str, str | None]]()
+                self._queue = asyncio.Queue[tuple[NotificationType, str, str | None, dict[str, Any] | None]]()
             if self._worker_task is None or self._worker_task.done():
                 self._worker_task = loop.create_task(self._consume_queue())
         except RuntimeError as e:
@@ -160,10 +361,10 @@ class NotificationService:
             if self._queue is None:
                 break
             # Wait for next item
-            notif_type, message, title = await self._queue.get()
+            notif_type, message, title, metadata = await self._queue.get()
             try:
                 # Await the actual network call so strict ordering is preserved
-                await self.send(notif_type, message, title)
+                await self.send(notif_type, message, title, metadata)
             except Exception as e:
                 logger.error(f"Notification worker error: {e}")
             finally:
@@ -174,6 +375,7 @@ class NotificationService:
         notification_type: NotificationType,
         message: str,
         title: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Enqueue notification for ordered delivery (non-blocking).
 
@@ -186,13 +388,13 @@ class NotificationService:
                 self._ensure_worker_running()
                 # Put in queue (non-blocking)
                 if self._queue is not None:
-                    self._queue.put_nowait((notification_type, message, title))
+                    self._queue.put_nowait((notification_type, message, title, metadata))
             else:
                 # Fallback for synchronous contexts (e.g., startup/shutdown errors)
-                self.send_sync(notification_type, message, title)
+                self.send_sync(notification_type, message, title, metadata)
         except RuntimeError:
             # If no event loop, run synchronously
-            self.send_sync(notification_type, message, title)
+            self.send_sync(notification_type, message, title, metadata)
 
     # Convenience methods
     def notify_step(self, message: str) -> None:
@@ -258,8 +460,21 @@ class NotificationService:
             completed, total = progress
             body_part += f"\nProgress: {completed}/{total}"
 
+        # Build metadata for webhook
+        metadata: dict[str, Any] = {
+            "step": step,
+            "next_step": next_step,
+            "status": status,
+        }
+        if task_id:
+            metadata["issue_id"] = task_id
+        if task_title:
+            metadata["issue_title"] = task_title
+        if progress:
+            metadata["progress"] = {"completed": progress[0], "total": progress[1]}
+
         # Send via the queue system
-        self.send_background(NotificationType.STEP, body_part, title=title_part)
+        self.send_background(NotificationType.STEP, body_part, title=title_part, metadata=metadata)
 
     def notify_failure_with_context(
         self,
@@ -281,4 +496,12 @@ class NotificationService:
             parts.append(f"Step: {step}")
 
         full_message = " | ".join(parts)
-        self.send_background(NotificationType.FAILURE, full_message)
+
+        # Build metadata for webhook
+        metadata: dict[str, Any] = {"error": message}
+        if task_id:
+            metadata["issue_id"] = task_id
+        if step:
+            metadata["step"] = step
+
+        self.send_background(NotificationType.FAILURE, full_message, metadata=metadata)

@@ -14,6 +14,7 @@ from claudesprint.services.project_config_service import (
     NotificationsConfig,
     ProjectConfig,
     ServerConfig,
+    WebhookNotificationConfig,
 )
 
 
@@ -159,6 +160,61 @@ class TestNotificationsConfig:
         assert config.bark.url == "https://example.com"
 
 
+class TestWebhookNotificationConfig:
+    """Tests for WebhookNotificationConfig model."""
+
+    def test_default_values(self) -> None:
+        """Test WebhookNotificationConfig has expected defaults."""
+        config = WebhookNotificationConfig()
+
+        assert config.enabled is False
+        assert config.url == ""
+        assert config.timeout == 10.0
+        assert config.retry_count == 3
+        assert config.headers == {}
+        assert config.events == []
+
+    def test_custom_values(self) -> None:
+        """Test WebhookNotificationConfig with custom values."""
+        config = WebhookNotificationConfig(
+            enabled=True,
+            url="https://webhook.example.com/endpoint",
+            timeout=15.0,
+            retry_count=5,
+            headers={"Authorization": "Bearer token123"},
+            events=["failure", "exit"],
+        )
+
+        assert config.enabled is True
+        assert config.url == "https://webhook.example.com/endpoint"
+        assert config.timeout == 15.0
+        assert config.retry_count == 5
+        assert config.headers == {"Authorization": "Bearer token123"}
+        assert config.events == ["failure", "exit"]
+
+    def test_timeout_validation(self) -> None:
+        """Test timeout minimum validation."""
+        with pytest.raises(ValueError):
+            WebhookNotificationConfig(timeout=0.5)  # Below minimum of 1.0
+
+    def test_retry_count_validation(self) -> None:
+        """Test retry_count range validation."""
+        # Below minimum
+        with pytest.raises(ValueError):
+            WebhookNotificationConfig(retry_count=-1)
+
+        # Above maximum
+        with pytest.raises(ValueError):
+            WebhookNotificationConfig(retry_count=11)
+
+        # Valid boundary values
+        config_min = WebhookNotificationConfig(retry_count=0)
+        assert config_min.retry_count == 0
+
+        config_max = WebhookNotificationConfig(retry_count=10)
+        assert config_max.retry_count == 10
+
+
 class TestProjectConfigWithNotifications:
     """Tests for ProjectConfig with notifications section."""
 
@@ -168,3 +224,35 @@ class TestProjectConfigWithNotifications:
 
         assert hasattr(config, "notifications")
         assert isinstance(config.notifications, NotificationsConfig)
+
+    def test_project_config_includes_webhook(self) -> None:
+        """Test ProjectConfig notifications include webhook."""
+        config = ProjectConfig()
+
+        assert hasattr(config.notifications, "webhook")
+        assert isinstance(config.notifications.webhook, WebhookNotificationConfig)
+
+
+class TestDefaultProjectConfigTomlWebhook:
+    """Tests for webhook section in default TOML template."""
+
+    def test_template_has_webhook_section(self) -> None:
+        """Test template has notifications.webhook section."""
+        assert "[notifications.webhook]" in DEFAULT_PROJECT_CONFIG_TOML
+
+    def test_template_webhook_defaults(self) -> None:
+        """Test template has expected webhook defaults."""
+        import sys
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
+
+        data = tomllib.loads(DEFAULT_PROJECT_CONFIG_TOML)
+
+        assert "webhook" in data["notifications"]
+        webhook = data["notifications"]["webhook"]
+        assert webhook["enabled"] is False
+        assert webhook["url"] == ""
+        assert webhook["timeout"] == 10.0
+        assert webhook["retry_count"] == 3
