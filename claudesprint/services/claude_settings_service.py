@@ -10,44 +10,84 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Hook configuration to inject into settings.json
-CLAUDESPRINT_HOOKS: dict[str, Any] = {
-    "hooks": {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "claudesprint hook --type server-guard",
-                        "timeout": 5,
-                    }
-                ],
-            },
-            {
-                "matcher": "Skill",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "claudesprint hook --type browser-guard",
-                        "timeout": 10,
-                    }
-                ],
-            },
-        ],
-        "Stop": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "claudesprint hook --type autonomous-continue",
-                        "timeout": 5,
-                    }
-                ],
-            }
-        ],
-    }
+# Individual hook definitions for conditional composition
+SERVER_GUARD_HOOK: dict[str, Any] = {
+    "matcher": "Bash",
+    "hooks": [
+        {
+            "type": "command",
+            "command": "claudesprint hook --type server-guard",
+            "timeout": 5,
+        }
+    ],
 }
+
+BROWSER_GUARD_HOOK: dict[str, Any] = {
+    "matcher": "Skill",
+    "hooks": [
+        {
+            "type": "command",
+            "command": "claudesprint hook --type browser-guard",
+            "timeout": 10,
+        }
+    ],
+}
+
+AUTONOMOUS_CONTINUE_HOOK: dict[str, Any] = {
+    "hooks": [
+        {
+            "type": "command",
+            "command": "claudesprint hook --type autonomous-continue",
+            "timeout": 5,
+        }
+    ],
+}
+
+
+def build_hooks_config(
+    include_browser_guard: bool = True,
+    enabled_plugins: dict[str, bool] | None = None,
+) -> dict[str, Any]:
+    """Build hooks configuration based on available features.
+
+    Args:
+        include_browser_guard: Whether to include the browser-guard hook.
+        enabled_plugins: Dictionary of plugin keys to enable.
+
+    Returns:
+        Configuration dict suitable for merging into settings.json.
+    """
+    config: dict[str, Any] = {
+        "hooks": {
+            "PreToolUse": [],
+            "Stop": [],
+        }
+    }
+
+    # Always add server-guard
+    config["hooks"]["PreToolUse"].append(SERVER_GUARD_HOOK)
+
+    # Conditionally add browser-guard
+    if include_browser_guard:
+        config["hooks"]["PreToolUse"].append(BROWSER_GUARD_HOOK)
+
+    # Always add autonomous-continue
+    config["hooks"]["Stop"].append(AUTONOMOUS_CONTINUE_HOOK)
+
+    # Add enabled plugins if any
+    if enabled_plugins:
+        active_plugins = {k: v for k, v in enabled_plugins.items() if v}
+        if active_plugins:
+            config["enabledPlugins"] = active_plugins
+
+    return config
+
+
+# Default hook configuration (all features enabled) for backward compatibility
+CLAUDESPRINT_HOOKS: dict[str, Any] = build_hooks_config(
+    include_browser_guard=True,
+    enabled_plugins=None,
+)
 
 # Marker to identify claudesprint-managed hooks
 CLAUDESPRINT_HOOK_MARKER = "claudesprint hook"
@@ -139,7 +179,11 @@ class ClaudeSettingsService:
         except OSError:
             return None
 
-    def inject_hooks(self) -> HookInjectionResult:
+    def inject_hooks(
+        self,
+        include_browser_guard: bool = True,
+        enabled_plugins: dict[str, bool] | None = None,
+    ) -> HookInjectionResult:
         """Inject ClaudeSprint hooks into settings.json.
 
         This method:
@@ -147,6 +191,10 @@ class ClaudeSettingsService:
         2. Backs up existing settings.json if it exists
         3. Merges ClaudeSprint hooks with existing hooks
         4. Preserves user-defined hooks that don't conflict
+
+        Args:
+            include_browser_guard: Whether to include browser-guard hook.
+            enabled_plugins: Dictionary of plugin keys to enable.
 
         Returns:
             HookInjectionResult with operation details
@@ -174,16 +222,29 @@ class ClaudeSettingsService:
         # Start with existing settings or empty dict
         settings = existing_settings or {}
 
+        # Build hooks config based on available features
+        hooks_config = build_hooks_config(
+            include_browser_guard=include_browser_guard,
+            enabled_plugins=enabled_plugins,
+        )
+
         # Merge hooks
         merged_hooks = self._merge_hooks(
-            settings.get("hooks", {}), CLAUDESPRINT_HOOKS["hooks"]
+            settings.get("hooks", {}), hooks_config["hooks"]
         )
         settings["hooks"] = merged_hooks
 
+        # Merge enabled plugins
+        if "enabledPlugins" in hooks_config:
+            existing_plugins = settings.get("enabledPlugins", {})
+            existing_plugins.update(hooks_config["enabledPlugins"])
+            settings["enabledPlugins"] = existing_plugins
+
         # Track what was added
-        result.hooks_added = ["server-guard (PreToolUse:Bash)",
-                             "browser-guard (PreToolUse:Skill)",
-                             "autonomous-continue (Stop)"]
+        result.hooks_added = ["server-guard (PreToolUse:Bash)"]
+        if include_browser_guard:
+            result.hooks_added.append("browser-guard (PreToolUse:Skill)")
+        result.hooks_added.append("autonomous-continue (Stop)")
 
         # Write updated settings
         if not self.write_settings(settings):

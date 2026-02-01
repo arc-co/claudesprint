@@ -17,6 +17,7 @@ from claudesprint.utils.process_manager import get_process_manager
 from claudesprint.commands import config as config_module
 from claudesprint.commands import demo as demo_module
 from claudesprint.commands import doctor as doctor_module
+from claudesprint.commands import features as features_module
 from claudesprint.commands import hook as hook_module
 from claudesprint.commands import init as init_module
 from claudesprint.commands import quickstart as quickstart_module
@@ -171,6 +172,7 @@ app.command("hook", rich_help_panel=PANEL_UTILITIES)(hook_module.run_hook)
 # Register command groups
 app.add_typer(config_module.config_app, name="config", rich_help_panel=PANEL_UTILITIES)
 app.add_typer(spec_module.spec_app, name="spec", rich_help_panel=PANEL_SETUP)
+app.add_typer(features_module.app, name="features", rich_help_panel=PANEL_UTILITIES)
 
 
 if __name__ == "__main__":

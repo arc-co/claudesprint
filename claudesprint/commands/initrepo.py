@@ -25,6 +25,18 @@ def init_repo(
         bool,
         typer.Option("--skip-hooks", help="Skip injecting Claude hooks into .claude/settings.json"),
     ] = False,
+    skip_optional: Annotated[
+        bool,
+        typer.Option("--skip-optional", help="Skip all optional features (browser, context7)"),
+    ] = False,
+    enable_browser: Annotated[
+        bool | None,
+        typer.Option("--browser/--no-browser", help="Enable/disable browser automation"),
+    ] = None,
+    enable_context7: Annotated[
+        bool | None,
+        typer.Option("--context7/--no-context7", help="Enable/disable Context7 MCP"),
+    ] = None,
 ) -> None:
     """Initialize .claudesprint/ directory in the current repository.
 
@@ -36,14 +48,34 @@ def init_repo(
 
     Also adds .claudesprint/ to .gitignore and injects ClaudeSprint hooks
     into .claude/settings.json (unless --skip-hooks is specified).
+
+    Optional features (browser automation, context7) are auto-detected by default.
+    Use --skip-optional to disable all, or --browser/--no-browser and
+    --context7/--no-context7 for granular control.
     """
     # Lazy import
     from claudesprint.services.init_repo_service import InitRepoService
+    from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     project_root = Path.cwd()
     service = InitRepoService(project_root)
 
-    result = service.init(force=force, inject_hooks=not skip_hooks)
+    # Resolve feature flags
+    if skip_optional:
+        detected_features = {"agent-browser": False, "context7": False}
+    else:
+        features_service = OptionalFeaturesService()
+        detected = features_service.detect_all()
+        detected_features = {
+            "agent-browser": enable_browser if enable_browser is not None else detected.get("agent-browser", False),
+            "context7": enable_context7 if enable_context7 is not None else detected.get("context7", False),
+        }
+
+    result = service.init(
+        force=force,
+        inject_hooks=not skip_hooks,
+        detected_features=detected_features,
+    )
 
     # Show warnings first
     for warn in result.warnings:
@@ -76,6 +108,21 @@ def init_repo(
                 console.print(f"  {muted(f'Backup created: {result.hooks_backup_path}')}")
         else:
             console.print(warning("Claude hooks were not injected"))
+
+    # Show feature status
+    console.print("")
+    console.print("[bold]Features:[/bold]")
+    console.print("  ✓ Core workflow hooks configured")
+    if detected_features.get("agent-browser", False):
+        console.print("  ✓ Browser automation: Available")
+    else:
+        console.print("  ⚠ Browser automation: Not available")
+        console.print(f"    → Install: {info('npm install -g agent-browser')}")
+    if detected_features.get("context7", False):
+        console.print("  ✓ Context7 MCP: Available")
+    else:
+        console.print("  ⚠ Context7 MCP: Not available")
+        console.print("    → Install: See https://context7.dev")
 
     console.print("")
     next_steps = (

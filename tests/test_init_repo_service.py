@@ -429,31 +429,49 @@ class TestInitRepoResult:
 
 
 class TestInitRepoServiceAgentBrowserSkill:
-    """Tests for agent-browser skill creation."""
+    """Tests for agent-browser skill creation.
 
-    def test_creates_agent_browser_skill_directory_and_file(self) -> None:
-        """Test init creates .claude/skills/agent-browser/SKILL.md."""
+    Note: agent-browser skill is only created when the feature is detected as available.
+    These tests explicitly pass detected_features to test conditional skill creation.
+    """
+
+    def test_creates_agent_browser_skill_when_feature_available(self) -> None:
+        """Test init creates .claude/skills/agent-browser/SKILL.md when feature is available."""
         with tempfile.TemporaryDirectory() as tmpdir:
             service = InitRepoService(tmpdir)
-            result = service.init()
+            # Explicitly enable agent-browser feature
+            result = service.init(detected_features={"agent-browser": True, "context7": False})
 
             assert result.success is True
             skill_path = Path(tmpdir) / ".claude" / "skills" / "agent-browser" / "SKILL.md"
             assert skill_path.exists()
             assert skill_path.read_text() == AGENT_BROWSER_SKILL_CONTENT
 
-    def test_agent_browser_skill_in_created_items(self) -> None:
-        """Test agent-browser skill directory and file are listed in result."""
+    def test_does_not_create_agent_browser_skill_when_feature_unavailable(self) -> None:
+        """Test init does not create agent-browser skill when feature is unavailable."""
         with tempfile.TemporaryDirectory() as tmpdir:
             service = InitRepoService(tmpdir)
-            result = service.init()
+            # Explicitly disable agent-browser feature
+            result = service.init(detected_features={"agent-browser": False, "context7": False})
+
+            assert result.success is True
+            skill_path = Path(tmpdir) / ".claude" / "skills" / "agent-browser" / "SKILL.md"
+            assert not skill_path.exists()
+            assert ".claude/skills/agent-browser/" not in result.created_dirs
+            assert ".claude/skills/agent-browser/SKILL.md" not in result.created_files
+
+    def test_agent_browser_skill_in_created_items_when_available(self) -> None:
+        """Test agent-browser skill directory and file are listed in result when available."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init(detected_features={"agent-browser": True, "context7": False})
 
             assert result.success is True
             assert ".claude/skills/agent-browser/" in result.created_dirs
             assert ".claude/skills/agent-browser/SKILL.md" in result.created_files
 
-    def test_force_overwrites_agent_browser_skill(self) -> None:
-        """Test --force overwrites agent-browser SKILL.md."""
+    def test_force_overwrites_agent_browser_skill_when_available(self) -> None:
+        """Test --force overwrites agent-browser SKILL.md when feature is available."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create initial structure with custom skill
             skill_dir = Path(tmpdir) / ".claude" / "skills" / "agent-browser"
@@ -465,16 +483,19 @@ class TestInitRepoServiceAgentBrowserSkill:
             (Path(tmpdir) / ".claudesprint").mkdir()
 
             service = InitRepoService(tmpdir)
-            result = service.init(force=True)
+            result = service.init(
+                force=True,
+                detected_features={"agent-browser": True, "context7": False},
+            )
 
             assert result.success is True
             assert skill_path.read_text() == AGENT_BROWSER_SKILL_CONTENT
 
-    def test_creates_both_skills(self) -> None:
-        """Test init creates both claudesprint and agent-browser skills."""
+    def test_creates_both_skills_when_agent_browser_available(self) -> None:
+        """Test init creates both claudesprint and agent-browser skills when feature available."""
         with tempfile.TemporaryDirectory() as tmpdir:
             service = InitRepoService(tmpdir)
-            result = service.init()
+            result = service.init(detected_features={"agent-browser": True, "context7": False})
 
             assert result.success is True
             # Both skills should exist
@@ -487,3 +508,21 @@ class TestInitRepoServiceAgentBrowserSkill:
             assert ".claude/skills/agent-browser/" in result.created_dirs
             assert ".claude/skills/claudesprint/SKILL.md" in result.created_files
             assert ".claude/skills/agent-browser/SKILL.md" in result.created_files
+
+    def test_only_claudesprint_skill_when_agent_browser_unavailable(self) -> None:
+        """Test init creates only claudesprint skill when agent-browser is unavailable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = InitRepoService(tmpdir)
+            result = service.init(detected_features={"agent-browser": False, "context7": False})
+
+            assert result.success is True
+            # Only claudesprint skill should exist
+            claudesprint_skill = Path(tmpdir) / ".claude" / "skills" / "claudesprint" / "SKILL.md"
+            agent_browser_skill = Path(tmpdir) / ".claude" / "skills" / "agent-browser" / "SKILL.md"
+            assert claudesprint_skill.exists()
+            assert not agent_browser_skill.exists()
+            # Only claudesprint should be in created items
+            assert ".claude/skills/claudesprint/" in result.created_dirs
+            assert ".claude/skills/claudesprint/SKILL.md" in result.created_files
+            assert ".claude/skills/agent-browser/" not in result.created_dirs
+            assert ".claude/skills/agent-browser/SKILL.md" not in result.created_files

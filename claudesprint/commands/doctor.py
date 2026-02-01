@@ -79,6 +79,7 @@ def doctor(
         CheckStatus,
         HealthCheckService,
     )
+    from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     project_root = get_project_root()
     config = get_config()
@@ -87,6 +88,7 @@ def doctor(
         version_check_timeout=config.version_check_timeout,
         install_timeout=config.install_timeout,
     )
+    features_service = OptionalFeaturesService()
 
     console.print(Panel.fit("ClaudeSprint Doctor", style=STYLES.PANEL_HEADER))
     console.print("")
@@ -107,6 +109,16 @@ def doctor(
     # Merge setup checks into main report for summary
     for check in setup_report.checks:
         report.add(check)
+
+    # Show optional features section
+    console.print("")
+    console.print(f"[bold]=== Optional Features ===[/bold]")
+    for name, display_name, available, install_hint in features_service.get_features_summary():
+        if available:
+            console.print(f"  {success_icon()} {display_name}: Available")
+        else:
+            console.print(f"  {warning_icon()} {display_name}: Not available")
+            console.print(f"      → {info(install_hint)}")
 
     console.print("")
 

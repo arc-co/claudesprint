@@ -75,12 +75,19 @@ class InitRepoService:
         """
         return self.claudesprint_dir.exists()
 
-    def init(self, force: bool = False, inject_hooks: bool = True) -> InitRepoResult:
+    def init(
+        self,
+        force: bool = False,
+        inject_hooks: bool = True,
+        detected_features: dict[str, bool] | None = None,
+    ) -> InitRepoResult:
         """Initialize the .claudesprint/ directory structure.
 
         Args:
             force: If True, overwrite existing README even if directory exists
             inject_hooks: If True, inject ClaudeSprint hooks into .claude/settings.json
+            detected_features: Optional dict of feature availability. If None,
+                features will be auto-detected.
 
         Returns:
             InitRepoResult with details of what was created/modified
@@ -93,6 +100,11 @@ class InitRepoService:
                 success=False,
                 error=f"Directory {self.CLAUDESPRINT_DIR}/ already exists. Use --force to reinitialize.",
             )
+
+        # Auto-detect features if not provided
+        if detected_features is None:
+            from claudesprint.services.optional_features_service import OptionalFeaturesService
+            detected_features = OptionalFeaturesService().detect_all()
 
         # Check for git repository
         git_service = GitService(self.project_root)
@@ -140,7 +152,7 @@ class InitRepoService:
                 else:
                     result.created_files.append(".gitignore (updated)")
 
-            # Create claudesprint skill
+            # Create claudesprint skill (always created)
             claudesprint_skill_dir_existed = self.claudesprint_skill_dir.exists()
             self.claudesprint_skill_dir.mkdir(parents=True, exist_ok=True)
             if not claudesprint_skill_dir_existed:
@@ -154,19 +166,20 @@ class InitRepoService:
                     f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.CLAUDESPRINT_SKILL_NAME}/{self.SKILL_FILE}"
                 )
 
-            # Create agent-browser skill
-            agent_browser_skill_dir_existed = self.agent_browser_skill_dir.exists()
-            self.agent_browser_skill_dir.mkdir(parents=True, exist_ok=True)
-            if not agent_browser_skill_dir_existed:
-                result.created_dirs.append(
-                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/"
-                )
+            # Create agent-browser skill only if feature is available
+            if detected_features.get("agent-browser", False):
+                agent_browser_skill_dir_existed = self.agent_browser_skill_dir.exists()
+                self.agent_browser_skill_dir.mkdir(parents=True, exist_ok=True)
+                if not agent_browser_skill_dir_existed:
+                    result.created_dirs.append(
+                        f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/"
+                    )
 
-            if not self.agent_browser_skill_file.exists() or force:
-                self.agent_browser_skill_file.write_text(AGENT_BROWSER_SKILL_CONTENT)
-                result.created_files.append(
-                    f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/{self.SKILL_FILE}"
-                )
+                if not self.agent_browser_skill_file.exists() or force:
+                    self.agent_browser_skill_file.write_text(AGENT_BROWSER_SKILL_CONTENT)
+                    result.created_files.append(
+                        f"{self.CLAUDE_DIR}/{self.SKILLS_DIR}/{self.AGENT_BROWSER_SKILL_NAME}/{self.SKILL_FILE}"
+                    )
 
         except OSError as e:
             return InitRepoResult(
@@ -176,7 +189,7 @@ class InitRepoService:
 
         # Inject hooks into .claude/settings.json
         if inject_hooks:
-            hook_result = self._inject_hooks()
+            hook_result = self._inject_hooks(detected_features)
             result.hooks_injected = hook_result.hooks_injected
             result.hooks_backup_path = hook_result.hooks_backup_path
             result.warnings.extend(hook_result.warnings)
@@ -187,13 +200,17 @@ class InitRepoService:
 
         return result
 
-    def _inject_hooks(self) -> "HookInjectionInfo":
+    def _inject_hooks(self, detected_features: dict[str, bool]) -> "HookInjectionInfo":
         """Inject ClaudeSprint hooks into .claude/settings.json.
+
+        Args:
+            detected_features: Dict of feature availability for conditional config.
 
         Returns:
             HookInjectionInfo with operation details
         """
         from claudesprint.services.claude_settings_service import ClaudeSettingsService
+        from claudesprint.services.optional_features_service import OptionalFeaturesService
 
         info = HookInjectionInfo()
         settings_service = ClaudeSettingsService(self.project_root)
@@ -201,8 +218,15 @@ class InitRepoService:
         # Check if settings.json already exists
         settings_existed = settings_service.settings_exist()
 
-        # Inject hooks
-        hook_result = settings_service.inject_hooks()
+        # Get enabled plugins based on detected features
+        features_service = OptionalFeaturesService()
+        enabled_plugins = features_service.get_enabled_plugins(detected_features)
+
+        # Inject hooks with feature-based configuration
+        hook_result = settings_service.inject_hooks(
+            include_browser_guard=detected_features.get("agent-browser", False),
+            enabled_plugins=enabled_plugins,
+        )
 
         if hook_result.success:
             info.hooks_injected = True

@@ -442,112 +442,98 @@ class TestPromptServiceTemplateRendering:
 
 
 class TestPromptServiceDependencyDetection:
-    """Tests for dependency detection (agent-browser, context7)."""
+    """Tests for dependency detection via OptionalFeaturesService."""
 
     @pytest.fixture
     def mock_path_service(self, tmp_path: Path) -> PathService:
         """Create a mock PathService."""
         return PathService(project_root=tmp_path)
 
-    @patch("claudesprint.services.prompt_service.subprocess.run")
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_agent_browser_not_installed(
+    @patch("claudesprint.services.optional_features_service.OptionalFeaturesService.detect_all")
+    def test_detect_context_agent_browser_not_installed(
         self,
-        mock_which: MagicMock,
-        mock_run: MagicMock,
+        mock_detect_all: MagicMock,
         mock_path_service: PathService,
         tmp_path: Path,
     ) -> None:
         """Test agent-browser detection when not installed."""
-        mock_which.return_value = "/usr/bin/npm"
-        mock_run.return_value = MagicMock(
-            stdout="/usr/lib/node_modules\n└── (empty)",
-            returncode=1,
-        )
+        mock_detect_all.return_value = {
+            "agent-browser": False,
+            "context7": False,
+        }
 
         service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_agent_browser()
-        assert result is False
+        context = service._detect_context()
+        assert context.browser_validation_enabled is False
 
-    @patch("claudesprint.services.prompt_service.subprocess.run")
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_agent_browser_installed(
+    @patch("claudesprint.services.optional_features_service.OptionalFeaturesService.detect_all")
+    def test_detect_context_agent_browser_installed(
         self,
-        mock_which: MagicMock,
-        mock_run: MagicMock,
+        mock_detect_all: MagicMock,
         mock_path_service: PathService,
         tmp_path: Path,
     ) -> None:
         """Test agent-browser detection when installed."""
-        mock_which.return_value = "/usr/bin/npm"
-        mock_run.return_value = MagicMock(
-            stdout="/usr/lib/node_modules\n└── agent-browser@1.0.0",
-            returncode=0,
-        )
+        mock_detect_all.return_value = {
+            "agent-browser": True,
+            "context7": False,
+        }
 
         service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_agent_browser()
-        assert result is True
+        context = service._detect_context()
+        assert context.browser_validation_enabled is True
 
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_agent_browser_npm_not_found(
+    @patch("claudesprint.services.optional_features_service.OptionalFeaturesService.detect_all")
+    def test_detect_context_context7_available(
         self,
-        mock_which: MagicMock,
-        mock_path_service: PathService,
-        tmp_path: Path,
-    ) -> None:
-        """Test agent-browser detection when npm is not installed."""
-        mock_which.return_value = None
-
-        service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_agent_browser()
-        assert result is False
-
-    @patch("claudesprint.services.prompt_service.subprocess.run")
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_agent_browser_timeout(
-        self,
-        mock_which: MagicMock,
-        mock_run: MagicMock,
-        mock_path_service: PathService,
-        tmp_path: Path,
-    ) -> None:
-        """Test agent-browser detection handles timeout."""
-        mock_which.return_value = "/usr/bin/npm"
-        mock_run.side_effect = subprocess.TimeoutExpired("npm", 5)
-
-        service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_agent_browser()
-        assert result is False
-
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_context7_available(
-        self,
-        mock_which: MagicMock,
+        mock_detect_all: MagicMock,
         mock_path_service: PathService,
         tmp_path: Path,
     ) -> None:
         """Test context7 detection when available."""
-        mock_which.return_value = "/usr/bin/context7"
+        mock_detect_all.return_value = {
+            "agent-browser": False,
+            "context7": True,
+        }
 
         service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_context7()
-        assert result is True
-        mock_which.assert_called_with("context7")
+        context = service._detect_context()
+        assert context.context7_available is True
 
-    @patch("claudesprint.services.prompt_service.shutil.which")
-    def test_check_context7_not_available(
+    @patch("claudesprint.services.optional_features_service.OptionalFeaturesService.detect_all")
+    def test_detect_context_context7_not_available(
         self,
-        mock_which: MagicMock,
+        mock_detect_all: MagicMock,
         mock_path_service: PathService,
         tmp_path: Path,
     ) -> None:
         """Test context7 detection when not available."""
-        mock_which.return_value = None
+        mock_detect_all.return_value = {
+            "agent-browser": False,
+            "context7": False,
+        }
 
         service = PromptService(mock_path_service, project_root=tmp_path)
-        result = service._check_context7()
-        assert result is False
+        context = service._detect_context()
+        assert context.context7_available is False
+
+    @patch("claudesprint.services.optional_features_service.OptionalFeaturesService.detect_all")
+    def test_detect_context_both_available(
+        self,
+        mock_detect_all: MagicMock,
+        mock_path_service: PathService,
+        tmp_path: Path,
+    ) -> None:
+        """Test detection when both features are available."""
+        mock_detect_all.return_value = {
+            "agent-browser": True,
+            "context7": True,
+        }
+
+        service = PromptService(mock_path_service, project_root=tmp_path)
+        context = service._detect_context()
+        assert context.browser_validation_enabled is True
+        assert context.context7_available is True
 
     def test_context_caching(
         self, mock_path_service: PathService, tmp_path: Path
@@ -787,7 +773,12 @@ class TestAnalysisProtocol:
 
 
 class TestCLIStateUpdatesInPrompts:
-    """Tests to verify prompts use CLI for state updates."""
+    """Tests to verify prompts use CLI for state updates.
+
+    Note: Prompts now use workflow engine for step transitions rather than
+    explicit CLI calls. These tests verify that prompts still use CLI
+    for recording changes and getting sprint details.
+    """
 
     def test_implement_uses_cli_for_state(self, tmp_path: Path) -> None:
         """Ensure implement prompt uses CLI for state updates."""
@@ -795,8 +786,10 @@ class TestCLIStateUpdatesInPrompts:
         service = PromptService(path_service, project_root=tmp_path)
 
         content = service.get_prompt_content("implement", render=False)
+        # Prompts use CLI for recording changes
         assert "claudesprint-tools issue change" in content
-        assert "claudesprint-tools issue step write-tests" in content
+        # Prompts use CLI for getting sprint details
+        assert "claudesprint-tools sprint details" in content
 
     def test_write_tests_uses_cli_for_state(self, tmp_path: Path) -> None:
         """Ensure write-tests prompt uses CLI for state updates."""
@@ -804,8 +797,10 @@ class TestCLIStateUpdatesInPrompts:
         service = PromptService(path_service, project_root=tmp_path)
 
         content = service.get_prompt_content("write-tests", render=False)
+        # Prompts use CLI for recording changes
         assert "claudesprint-tools issue change" in content
-        assert "claudesprint-tools issue step run-tests" in content
+        # Prompts use CLI for getting sprint details
+        assert "claudesprint-tools sprint details" in content
 
     def test_fix_code_review_uses_cli_for_state(self, tmp_path: Path) -> None:
         """Ensure fix-code-review-issues prompt uses CLI for state updates."""
@@ -813,9 +808,10 @@ class TestCLIStateUpdatesInPrompts:
         service = PromptService(path_service, project_root=tmp_path)
 
         content = service.get_prompt_content("fix-code-review-issues", render=False)
+        # Prompts use CLI for recording changes
         assert "claudesprint-tools issue change" in content
-        assert "claudesprint-tools issue step run-tests" in content
-        assert "--clear-failures" in content
+        # Prompts use CLI for clearing failures
+        assert "claudesprint-tools issue clear-failures" in content
 
     def test_select_issue_uses_cli_for_state(self, tmp_path: Path) -> None:
         """Ensure select-issue prompt uses CLI for state updates."""

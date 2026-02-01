@@ -42,6 +42,10 @@ def demo(
         bool,
         typer.Option("--clean", help="Remove existing demo directory first"),
     ] = False,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Include optional features (browser automation, context7)"),
+    ] = False,
 ) -> None:
     """Try ClaudeSprint with a sample project.
 
@@ -49,14 +53,27 @@ def demo(
     having to write your own spec. Perfect for first-time users.
 
     The demo creates a "Hello World" CLI tool with 2 simple issues.
+
+    By default, runs in minimal mode (no optional dependencies required).
+    Use --full to include browser automation and context7 if available.
     """
     import os
     import shutil
 
     # Lazy imports for speed
     from claudesprint.services.health_check_service import HealthCheckService, CheckStatus
+    from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     demo_dir = Path(directory) if directory else Path.cwd() / "claudesprint-demo"
+
+    # Determine features based on --full flag
+    if full:
+        # Auto-detect features when --full is specified
+        features_service = OptionalFeaturesService()
+        detected_features = features_service.detect_all()
+    else:
+        # Minimal mode: no optional features
+        detected_features = {"agent-browser": False, "context7": False}
 
     console.print(Panel.fit("[bold cyan]ClaudeSprint Demo[/bold cyan]", border_style="cyan"))
     console.print("")
@@ -107,20 +124,41 @@ def demo(
 
     demo_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize .claudesprint structure
+    # Initialize using InitRepoService with feature flags
+    from claudesprint.services.init_repo_service import InitRepoService
+
+    init_service = InitRepoService(demo_dir)
+    init_result = init_service.init(force=True, detected_features=detected_features)
+
+    if not init_result.success:
+        console.print(f"  {error_icon()} {init_result.error}")
+        raise typer.Exit(1)
+
+    console.print(f"  {success_icon()} Initialized .claudesprint/ directory")
+    if init_result.hooks_injected:
+        console.print(f"  {success_icon()} Claude hooks configured")
+
+    # Show feature status
+    if full:
+        if detected_features.get("agent-browser", False):
+            console.print(f"  {success_icon()} Browser automation: Available")
+        else:
+            console.print(f"  {warning_icon()} Browser automation: Not available")
+        if detected_features.get("context7", False):
+            console.print(f"  {success_icon()} Context7 MCP: Available")
+        else:
+            console.print(f"  {warning_icon()} Context7 MCP: Not available")
+    else:
+        console.print(f"  {info('Minimal mode')} (use --full for optional features)")
+
+    # Create specs directory and write demo spec
     claudesprint_dir = demo_dir / ".claudesprint"
-    (claudesprint_dir / "state").mkdir(parents=True, exist_ok=True)
-    (claudesprint_dir / "prompts").mkdir(parents=True, exist_ok=True)
-    (claudesprint_dir / "specs").mkdir(parents=True, exist_ok=True)
-    (claudesprint_dir / "sprints").mkdir(parents=True, exist_ok=True)
+    specs_dir = claudesprint_dir / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    sprints_dir = claudesprint_dir / "sprints"
+    sprints_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create .claude directory so this is recognized as project root
-    # (prevents discover_project_root from finding parent's .claude)
-    claude_dir = demo_dir / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-
-    # Write demo spec
-    spec_path = claudesprint_dir / "specs" / "hello-world.md"
+    spec_path = specs_dir / "hello-world.md"
     spec_path.write_text(_get_demo_spec_content())
     console.print(f"  {success_icon()} Created demo spec")
 

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -352,45 +350,20 @@ class PromptService:
     def _detect_context(self) -> PromptContext:
         """Detect available dependencies and build context.
 
+        Uses OptionalFeaturesService for centralized feature detection.
+
         Returns:
             PromptContext with detected dependency states
         """
+        from claudesprint.services.optional_features_service import OptionalFeaturesService
+
+        features_service = OptionalFeaturesService()
+        detected = features_service.detect_all()
+
         return PromptContext(
-            browser_validation_enabled=self._check_agent_browser(),
-            context7_available=self._check_context7(),
+            browser_validation_enabled=detected.get("agent-browser", False),
+            context7_available=detected.get("context7", False),
         )
-
-    def _check_agent_browser(self) -> bool:
-        """Check if agent-browser is available.
-
-        Checks npm global packages for agent-browser installation.
-
-        Returns:
-            True if agent-browser is installed globally
-        """
-        # shutil.which returns str if found, None if not found
-        if shutil.which("npm") is None:
-            return False
-
-        try:
-            result = subprocess.run(
-                ["npm", "list", "-g", "agent-browser", "--depth=0"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return "agent-browser" in result.stdout
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
-            return False
-
-    def _check_context7(self) -> bool:
-        """Check if context7 binary is available.
-
-        Returns:
-            True if context7 is in PATH
-        """
-        # shutil.which returns str if found, None if not found
-        return shutil.which("context7") is not None
 
     # === Template Rendering ===
 

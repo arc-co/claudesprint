@@ -48,6 +48,18 @@ def quickstart(
         bool,
         typer.Option("--skip-hooks", help="Skip injecting Claude hooks into .claude/settings.json"),
     ] = False,
+    skip_optional: Annotated[
+        bool,
+        typer.Option("--skip-optional", help="Skip all optional features (browser, context7)"),
+    ] = False,
+    enable_browser: Annotated[
+        bool | None,
+        typer.Option("--browser/--no-browser", help="Enable/disable browser automation"),
+    ] = None,
+    enable_context7: Annotated[
+        bool | None,
+        typer.Option("--context7/--no-context7", help="Enable/disable Context7 MCP"),
+    ] = None,
 ) -> None:
     """Quick start a new ClaudeSprint project in one command.
 
@@ -57,13 +69,29 @@ def quickstart(
     3. Creating a project spec from a template
     4. Initializing the sprint from the spec
     5. Optionally starting the run workflow
+
+    Optional features (browser automation, context7) are auto-detected by default.
+    Use --skip-optional to disable all, or --browser/--no-browser and
+    --context7/--no-context7 for granular control.
     """
     # Lazy imports for faster startup
     from claudesprint.services.health_check_service import HealthCheckService, CheckStatus
     from claudesprint.services.init_repo_service import InitRepoService
     from claudesprint.services.spec_service import SpecService
+    from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     project_root = Path.cwd()
+
+    # Resolve feature flags
+    if skip_optional:
+        detected_features = {"agent-browser": False, "context7": False}
+    else:
+        features_service = OptionalFeaturesService()
+        detected = features_service.detect_all()
+        detected_features = {
+            "agent-browser": enable_browser if enable_browser is not None else detected.get("agent-browser", False),
+            "context7": enable_context7 if enable_context7 is not None else detected.get("context7", False),
+        }
 
     console.print(Panel.fit("ClaudeSprint Quickstart", style=STYLES.PANEL_HEADER))
     console.print("")
@@ -117,7 +145,11 @@ def quickstart(
     if init_service.exists() and not force:
         console.print(f"  {success_icon()} Project already initialized")
     else:
-        result = init_service.init(force=force, inject_hooks=not skip_hooks)
+        result = init_service.init(
+            force=force,
+            inject_hooks=not skip_hooks,
+            detected_features=detected_features,
+        )
         if not result.success:
             console.print(f"  {error_icon()} {result.error}")
             raise typer.Exit(1)
@@ -126,6 +158,18 @@ def quickstart(
             console.print(f"  {success_icon()} Claude hooks configured")
         elif skip_hooks:
             console.print(f"  {warning_icon()} Skipped Claude hooks (--skip-hooks)")
+
+        # Show feature status
+        if detected_features.get("agent-browser", False):
+            console.print(f"  {success_icon()} Browser automation: Available")
+        else:
+            console.print(f"  {warning_icon()} Browser automation: Not available")
+            console.print(f"      → Install: {info('npm install -g agent-browser')}")
+        if detected_features.get("context7", False):
+            console.print(f"  {success_icon()} Context7 MCP: Available")
+        else:
+            console.print(f"  {warning_icon()} Context7 MCP: Not available")
+            console.print(f"      → Install: See https://context7.dev")
 
     console.print("")
 
@@ -232,13 +276,27 @@ def quickstart(
 
     console.print("")
 
+    # Build features summary for panel
+    features_summary_lines = []
+    features_summary_lines.append("  ✓ Core workflow")
+    if detected_features.get("agent-browser", False):
+        features_summary_lines.append("  ✓ Browser automation")
+    else:
+        features_summary_lines.append("  ✗ Browser automation (install agent-browser)")
+    if detected_features.get("context7", False):
+        features_summary_lines.append("  ✓ Context7 MCP")
+    else:
+        features_summary_lines.append("  ✗ Context7 MCP (install context7)")
+    features_summary = "\n".join(features_summary_lines)
+
     # Show success summary
     console.print(Panel.fit(
         f"[bold green]Setup Complete![/bold green]\n\n"
         f"Project: {name}\n"
         f"Template: {template}\n"
         f"Issues: {issue_count}\n"
-        f"Sprint: {sprint_path.relative_to(project_root)}",
+        f"Sprint: {sprint_path.relative_to(project_root)}\n\n"
+        f"[bold]Features:[/bold]\n{features_summary}",
         style=STYLES.PANEL_SUCCESS if hasattr(STYLES, 'PANEL_SUCCESS') else "green",
     ))
 
