@@ -10,30 +10,25 @@ Tests verify that the integrations between different components work correctly:
 
 import json
 import tempfile
-import warnings
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
-
+from claudesprint.core.iteration_tracker import (
+    FailureCategory,
+    IterationTracker,
+)
 from claudesprint.events.workflow_event_bus import (
-    WorkflowEventBus,
-    WorkflowEvent,
     EventPayload,
+    WorkflowEvent,
+    WorkflowEventBus,
 )
 from claudesprint.exceptions import (
     FileReadError,
     FileWriteError,
     StateCorruptionError,
-    RateLimitExceeded,
     ValidationError,
 )
-from claudesprint.core.iteration_tracker import (
-    IterationTracker,
-    FailureCategory,
-)
-from claudesprint.services.state_manager import StateManager, StateSnapshot
+from claudesprint.services.state_manager import StateManager
 from claudesprint.utils.graph import detect_cycles
 
 
@@ -66,10 +61,10 @@ class TestEventBusWiring:
         bus = WorkflowEventBus()
         counts = {"a": 0, "b": 0}
 
-        def handler_a(payload: EventPayload) -> None:
+        def handler_a(_payload: EventPayload) -> None:
             counts["a"] += 1
 
-        def handler_b(payload: EventPayload) -> None:
+        def handler_b(_payload: EventPayload) -> None:
             counts["b"] += 1
 
         bus.subscribe(WorkflowEvent.SPRINT_STARTED, handler_a)
@@ -90,7 +85,7 @@ class TestEventBusWiring:
         bus = WorkflowEventBus()
         received = []
 
-        def failing_handler(payload: EventPayload) -> None:
+        def failing_handler(_payload: EventPayload) -> None:
             raise RuntimeError("Handler error")
 
         def success_handler(payload: EventPayload) -> None:
@@ -114,7 +109,7 @@ class TestEventBusWiring:
         bus = WorkflowEventBus()
         count = [0]
 
-        def handler(payload: EventPayload) -> None:
+        def handler(_payload: EventPayload) -> None:
             count[0] += 1
 
         bus.subscribe(WorkflowEvent.RATE_LIMITED, handler)
@@ -159,7 +154,7 @@ class TestStateManagerCrashRecovery:
 
             original = {"issues": [], "original": True}
             sprint_path.write_text(json.dumps(original))
-            original_mtime = sprint_path.stat().st_mtime
+            _ = sprint_path.stat().st_mtime
 
             manager = StateManager(sprint_path, project_dir)
 
@@ -402,7 +397,7 @@ class TestCycleDetection:
 
     def test_empty_graph_has_no_cycle(self):
         """Empty graph has no cycle."""
-        cycles = detect_cycles([], lambda n: [])
+        cycles = detect_cycles([], lambda _n: [])
         assert cycles == []
 
 
@@ -413,7 +408,6 @@ class TestConfigBackwardCompatibility:
         """Project config models are accessible."""
         from claudesprint.services.project_config_service import (
             ServerConfig,
-            ModelsConfig,
         )
         # Verify models can be instantiated with defaults
         server = ServerConfig()
@@ -428,6 +422,7 @@ class TestConfigBackwardCompatibility:
         """ConfigurationManager can be instantiated."""
         import tempfile
         from pathlib import Path
+
         from claudesprint.services.configuration_manager import ConfigurationManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -460,7 +455,7 @@ class TestIssueEngineEventEmission:
 
     def test_event_emission_with_bus(self):
         """Events should be emitted when event_bus is configured."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
 
         bus = WorkflowEventBus()
         received_events: list[tuple[WorkflowEvent, dict]] = []
@@ -487,8 +482,8 @@ class TestHeartbeatServiceEventEmission:
 
     def test_heartbeat_service_accepts_event_bus(self):
         """HeartbeatService should accept event_bus parameter."""
-        from claudesprint.services.heartbeat_service import HeartbeatService
         from claudesprint.events.workflow_event_bus import WorkflowEventBus
+        from claudesprint.services.heartbeat_service import HeartbeatService
 
         bus = WorkflowEventBus()
         service = HeartbeatService(
@@ -501,11 +496,11 @@ class TestHeartbeatServiceEventEmission:
 
     def test_get_heartbeat_service_accepts_event_bus(self):
         """get_heartbeat_service factory should accept event_bus parameter."""
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
         from claudesprint.services.heartbeat_service import (
             get_heartbeat_service,
             reset_heartbeat_service,
         )
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus
 
         # Reset to ensure clean state
         reset_heartbeat_service()
@@ -525,8 +520,9 @@ class TestHeartbeatServiceEventEmission:
     def test_heartbeat_emits_process_hung_event(self):
         """HeartbeatService should emit PROCESS_HUNG event when hung detected."""
         import time
+
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
         from claudesprint.services.heartbeat_service import HeartbeatService
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
 
         bus = WorkflowEventBus()
         received_events: list[dict] = []
@@ -562,11 +558,13 @@ class TestLogsEventSubscriber:
 
     def test_subscriber_connect_and_disconnect(self):
         """LogsEventSubscriber should connect and disconnect from event bus."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus
-        from claudesprint.events.logs_subscriber import LogsEventSubscriber
-        from claudesprint.simple_logs import SimpleLogsOutput
-        from rich.console import Console
         from io import StringIO
+
+        from rich.console import Console
+
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.events.workflow_event_bus import WorkflowEventBus
+        from claudesprint.simple_logs import SimpleLogsOutput
 
         bus = WorkflowEventBus()
         console = Console(file=StringIO(), force_terminal=True)
@@ -587,11 +585,13 @@ class TestLogsEventSubscriber:
 
     def test_subscriber_forwards_step_started_event(self):
         """LogsEventSubscriber should forward STEP_STARTED events to output."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
-        from claudesprint.events.logs_subscriber import LogsEventSubscriber
-        from claudesprint.simple_logs import SimpleLogsOutput
-        from rich.console import Console
         from io import StringIO
+
+        from rich.console import Console
+
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
+        from claudesprint.simple_logs import SimpleLogsOutput
 
         bus = WorkflowEventBus()
         string_io = StringIO()
@@ -619,12 +619,14 @@ class TestLogsEventSubscriber:
 
     def test_subscriber_forwards_issue_completed_event(self):
         """LogsEventSubscriber should forward ISSUE_COMPLETED events to output."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
-        from claudesprint.events.logs_subscriber import LogsEventSubscriber
-        from claudesprint.simple_logs import SimpleLogsOutput
-        from rich.console import Console
-        from io import StringIO
         import re
+        from io import StringIO
+
+        from rich.console import Console
+
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
+        from claudesprint.simple_logs import SimpleLogsOutput
 
         bus = WorkflowEventBus()
         string_io = StringIO()
@@ -654,11 +656,13 @@ class TestLogsEventSubscriber:
 
     def test_subscriber_forwards_sprint_iteration_event(self):
         """LogsEventSubscriber should forward SPRINT_ITERATION events to output."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
-        from claudesprint.events.logs_subscriber import LogsEventSubscriber
-        from claudesprint.simple_logs import SimpleLogsOutput
-        from rich.console import Console
         from io import StringIO
+
+        from rich.console import Console
+
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
+        from claudesprint.simple_logs import SimpleLogsOutput
 
         bus = WorkflowEventBus()
         string_io = StringIO()
@@ -686,11 +690,13 @@ class TestLogsEventSubscriber:
 
     def test_subscriber_multiple_connect_calls_are_idempotent(self):
         """Multiple connect() calls should not create duplicate subscriptions."""
-        from claudesprint.events.workflow_event_bus import WorkflowEventBus, WorkflowEvent
-        from claudesprint.events.logs_subscriber import LogsEventSubscriber
-        from claudesprint.simple_logs import SimpleLogsOutput
-        from rich.console import Console
         from io import StringIO
+
+        from rich.console import Console
+
+        from claudesprint.events.logs_subscriber import LogsEventSubscriber
+        from claudesprint.events.workflow_event_bus import WorkflowEvent, WorkflowEventBus
+        from claudesprint.simple_logs import SimpleLogsOutput
 
         bus = WorkflowEventBus()
         string_io = StringIO()

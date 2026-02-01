@@ -7,14 +7,14 @@ import typer
 from rich.panel import Panel
 
 from claudesprint.commands._shared import (
-    console,
-    get_config,
     STYLES,
+    console,
     error,
-    warning,
+    error_icon,
+    get_config,
     info,
     success_icon,
-    error_icon,
+    warning,
     warning_icon,
 )
 
@@ -75,10 +75,10 @@ def quickstart(
     --context7/--no-context7 for granular control.
     """
     # Lazy imports for faster startup
-    from claudesprint.services.health_check_service import HealthCheckService, CheckStatus
+    from claudesprint.services.health_check_service import CheckStatus, HealthCheckService
     from claudesprint.services.init_repo_service import InitRepoService
-    from claudesprint.services.spec_service import SpecService
     from claudesprint.services.optional_features_service import OptionalFeaturesService
+    from claudesprint.services.spec_service import SpecService
 
     project_root = Path.cwd()
 
@@ -169,7 +169,7 @@ def quickstart(
             console.print(f"  {success_icon()} Context7 MCP: Available")
         else:
             console.print(f"  {warning_icon()} Context7 MCP: Not available")
-            console.print(f"      → Install: See https://context7.dev")
+            console.print("      → Install: See https://context7.dev")
 
     console.print("")
 
@@ -245,7 +245,7 @@ def quickstart(
         console.print(f"  {success_icon()} Created spec: {spec_path.relative_to(project_root)}")
     except (ValueError, OSError) as e:
         console.print(f"  {error_icon()} Failed to create spec: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     console.print("")
 
@@ -262,7 +262,7 @@ def quickstart(
             raise
     except SystemExit as e:
         if e.code != 0:
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
     # Get sprint info for summary
     from claudesprint.services.sprint_service import SprintService

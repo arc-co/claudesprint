@@ -1,6 +1,5 @@
 """Logging utilities for ClaudeSprint."""
 
-import sys
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -8,7 +7,7 @@ from typing import TextIO
 
 from rich.console import Console
 
-from claudesprint.utils.styles import SYMBOLS, COLORS
+from claudesprint.utils.styles import COLORS, SYMBOLS
 
 
 class LogLevel(StrEnum):
@@ -47,7 +46,7 @@ class ClaudesprintLogger:
     def setup(self) -> None:
         """Set up the log file."""
         if self.log_file:
-            self._file = open(self.log_file, "w")
+            self._file = open(self.log_file, "w")  # noqa: SIM115
             self._write_header()
 
     def close(self) -> None:

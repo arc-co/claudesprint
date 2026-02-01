@@ -1,22 +1,22 @@
 """Pydantic models for ClaudeSprint."""
 
 from claudesprint.models.config import ClaudesprintConfig
+from claudesprint.models.current_issue import (
+    ChunkType,
+    CurrentIssue,
+    FileChange,
+    IssueStep,
+    RepoState,
+)
 from claudesprint.models.sprint import (
-    Sprint,
     Issue,
+    IssueCategory,
     IssueHistory,
     IssuePriority,
     IssueStatus,
-    IssueCategory,
+    Sprint,
     SprintConfig,
     SprintMetadata,
-)
-from claudesprint.models.current_issue import (
-    CurrentIssue,
-    ChunkType,
-    IssueStep,
-    RepoState,
-    FileChange,
 )
 
 __all__ = [

@@ -4,7 +4,6 @@ PathService now focuses on package asset resolution (prompts, schemas).
 Path resolution has moved to ConfigurationManager.
 """
 
-import tempfile
 from pathlib import Path
 
 import pytest

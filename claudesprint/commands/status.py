@@ -2,33 +2,32 @@
 
 import os
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.panel import Panel
 from rich.table import Table
 
 from claudesprint.commands._shared import (
-    console,
-    get_project_root,
-    get_config,
-    COLORS,
     STYLES,
-    status_badge,
-    model_badge,
-    warning,
+    console,
     error,
+    get_config,
+    get_project_root,
+    model_badge,
     muted,
+    status_badge,
+    warning,
 )
 
 
 def show_status(
     sprint: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--sprint", help="Path to sprint.json"),
     ] = None,
     spec: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--spec", help="Spec ID to show status for"),
     ] = None,
 ) -> None:
@@ -210,7 +209,7 @@ def show_models() -> None:
     # Lazy imports
     from claudesprint.models.current_issue import IssueStep
     from claudesprint.services.configuration_manager import ConfigurationManager
-    from claudesprint.services.models_service import ModelsService, STEP_DEFAULT_MODELS
+    from claudesprint.services.models_service import ModelsService
 
     project_root = get_project_root()
     cm = ConfigurationManager(project_root)
@@ -241,7 +240,6 @@ def show_models() -> None:
     for step in IssueStep:
         step_name = step.value
         model = summary.get(step_name, "opus")
-        default = STEP_DEFAULT_MODELS.get(step, "opus")
 
         if step in [IssueStep.RUN_TESTS, IssueStep.STAGE_CHANGES, IssueStep.COMMIT_CHANGES]:
             notes = muted("automated (no AI)")

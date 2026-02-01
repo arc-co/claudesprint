@@ -8,6 +8,25 @@ from pathlib import Path
 
 from rich.console import Console
 
+from claudesprint.utils.styles import (
+    COLORS,
+    STYLES,
+    SYMBOLS,
+    ConsoleThrobber,
+    error,
+    error_icon,
+    info,
+    model_badge,
+    muted,
+    running,
+    status_badge,
+    subprocess_line,
+    success,
+    success_icon,
+    warning,
+    warning_icon,
+)
+
 # Singleton console instance
 console = Console()
 
@@ -36,26 +55,6 @@ def get_config():
 
     return ClaudesprintConfig.from_project_root(str(get_project_root()))
 
-
-# Re-export all style utilities for convenience
-from claudesprint.utils.styles import (
-    COLORS,
-    STYLES,
-    SYMBOLS,
-    ConsoleThrobber,
-    success,
-    error,
-    warning,
-    running,
-    subprocess_line,
-    status_badge,
-    model_badge,
-    muted,
-    info,
-    success_icon,
-    error_icon,
-    warning_icon,
-)
 
 __all__ = [
     # Core utilities

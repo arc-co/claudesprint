@@ -6,6 +6,7 @@ This module provides atomic writes and file locking to prevent race conditions
 when multiple processes access current_issue.json concurrently.
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -79,15 +80,11 @@ def _save_issue_atomic(data: dict[str, Any]) -> None:
     finally:
         # Clean up on failure
         if fd >= 0:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
         if temp_file.exists():
-            try:
+            with contextlib.suppress(OSError):
                 temp_file.unlink()
-            except OSError:
-                pass
 
 
 def _save_issue(data: dict[str, Any]) -> None:
@@ -345,7 +342,7 @@ def init_issue(
     Returns:
         ToolResult with success status
     """
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     try:
         with _get_lock().locked():
@@ -399,7 +396,7 @@ def init_issue(
                 "step": step,
                 "chunk_type": "IMPLEMENT",
                 "goal": goal or f"Begin work on issue {issue_id}",
-                "next_action": f"Read documentation and understand requirements",
+                "next_action": "Read documentation and understand requirements",
                 "context": {},
                 "changes": [],
                 "current_failures": "",

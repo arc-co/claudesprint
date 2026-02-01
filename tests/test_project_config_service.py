@@ -1,16 +1,12 @@
 """Tests for project configuration Pydantic models."""
 
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from claudesprint.services.project_config_service import (
-    BarkNotificationConfig,
     DEFAULT_PROJECT_CONFIG_TOML,
+    BarkNotificationConfig,
     ModelsConfig,
-    ModelsSpecialConfig,
-    ModelsStepsConfig,
     NotificationsConfig,
     ProjectConfig,
     ServerConfig,

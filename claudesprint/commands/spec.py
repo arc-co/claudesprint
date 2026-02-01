@@ -7,19 +7,17 @@ from rich.panel import Panel
 from rich.table import Table
 
 from claudesprint.commands._shared import (
-    console,
-    get_project_root,
     STYLES,
-    success,
+    console,
     error,
-    warning,
-    muted,
-    info,
-    success_icon,
-    warning_icon,
     error_icon,
+    get_project_root,
+    info,
+    muted,
+    success,
+    warning,
+    warning_icon,
 )
-
 
 # Spec command group
 spec_app = typer.Typer(
@@ -213,7 +211,7 @@ def spec_create(
 
     except ValueError as e:
         console.print(error(str(e)))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except OSError as e:
         console.print(error(f"Failed to create spec: {e}"))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None

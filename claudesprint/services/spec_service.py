@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from jinja2 import Environment, PackageLoader, TemplateNotFound
 
@@ -218,7 +217,6 @@ class SpecService:
             result.valid = False
 
         # Check for recommended sections
-        recommended_sections = {"Overview", "Goals", "Requirements", "Issues", "Features"}
         found_sections_lower = {s.lower() for s in sections}
 
         has_issues = any(
@@ -267,7 +265,7 @@ class SpecService:
             )
             template_obj = env.get_template(f"{template}.md.j2")
         except TemplateNotFound:
-            raise ValueError(f"Template '{template}' not found")
+            raise ValueError(f"Template '{template}' not found") from None
 
         content = template_obj.render(
             project_name=project_name,

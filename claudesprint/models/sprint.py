@@ -1,6 +1,6 @@
 """Sprint model - multi-spec project management with execution gates."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
 

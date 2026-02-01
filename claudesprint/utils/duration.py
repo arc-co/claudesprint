@@ -1,7 +1,6 @@
 """Duration formatting utilities."""
 
 from datetime import timedelta
-from typing import Union
 
 import isodate  # type: ignore[import-untyped]
 from isodate import Duration, ISO8601Error
@@ -79,7 +78,7 @@ def _parse_simple_duration(duration_str: str) -> int:
     return total
 
 
-def _duration_to_seconds(duration: Union[timedelta, Duration]) -> int:
+def _duration_to_seconds(duration: timedelta | Duration) -> int:
     """Convert a timedelta or isodate.Duration to integer seconds.
 
     Raises:

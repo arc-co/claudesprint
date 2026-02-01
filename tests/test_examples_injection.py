@@ -189,14 +189,18 @@ class TestExamplesEnabledToggle:
         assert "</gold_standard_examples>" not in content
 
     def test_examples_enabled_default_true(
-        self, mock_path_service: PathService, tmp_path: Path
+        self,
+        mock_path_service: PathService,  # noqa: ARG002
+        tmp_path: Path,  # noqa: ARG002
     ) -> None:
         """Test that examples_enabled defaults to True."""
         ctx = PromptContext()
         assert ctx.examples_enabled is True
 
     def test_examples_enabled_in_to_dict(
-        self, mock_path_service: PathService, tmp_path: Path
+        self,
+        mock_path_service: PathService,  # noqa: ARG002
+        tmp_path: Path,  # noqa: ARG002
     ) -> None:
         """Test that examples_enabled is included in to_dict()."""
         ctx = PromptContext(examples_enabled=False)

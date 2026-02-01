@@ -1,19 +1,19 @@
 """Run command - main workflow execution."""
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from claudesprint.commands._shared import (
-    console,
-    get_project_root,
-    get_config,
     STYLES,
-    success,
+    console,
     error,
-    warning,
+    get_config,
+    get_project_root,
     muted,
+    success,
+    warning,
 )
 from claudesprint.simple_logs import LogVerbosity
 
@@ -40,11 +40,11 @@ def run_workflow(
         typer.Option("-n", "--max-iterations", help="Maximum iterations (0 = unlimited)"),
     ] = 0,
     sprint: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--sprint", help="Path to sprint.json"),
     ] = None,
     spec: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--spec", help="Spec ID to run sprint for (e.g., SPEC_01)"),
     ] = None,
     debug_conversations: Annotated[
@@ -154,7 +154,8 @@ def _run_sprint_console(
         console.print("")
         console.print(warning("These files will be excluded from agent commits."))
         console.print("Recommended: stash or commit your changes first:")
-        console.print(f"  {muted('git stash push -m \"WIP before claudesprint\"')}")
+        stash_cmd = 'git stash push -m "WIP before claudesprint"'
+        console.print(f"  {muted(stash_cmd)}")
         console.print("")
 
         if not typer.confirm("Continue anyway?", default=False):

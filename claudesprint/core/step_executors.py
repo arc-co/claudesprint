@@ -13,16 +13,15 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner, FailureCategory
 from claudesprint.core.step_types import ParseResult, StepResult
 from claudesprint.models.current_issue import CurrentIssue, IssueStep
-from claudesprint.models.sprint import IssueStatus
 from claudesprint.services.issue_service import IssueService
 from claudesprint.services.models_service import ModelsService
 from claudesprint.services.prompt_service import PromptContext, PromptService
 from claudesprint.services.sprint_service import SprintService
+
+logger = logging.getLogger(__name__)
 
 
 class StepExecutor(ABC):

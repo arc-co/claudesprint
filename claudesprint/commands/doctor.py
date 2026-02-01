@@ -6,18 +6,18 @@ import typer
 from rich.panel import Panel
 
 from claudesprint.commands._shared import (
-    console,
-    get_project_root,
-    get_config,
     COLORS,
     STYLES,
-    success,
+    console,
     error,
-    warning,
-    muted,
-    info,
-    success_icon,
     error_icon,
+    get_config,
+    get_project_root,
+    info,
+    muted,
+    success,
+    success_icon,
+    warning,
     warning_icon,
 )
 
@@ -76,7 +76,6 @@ def doctor(
     """
     # Lazy import for faster startup
     from claudesprint.services.health_check_service import (
-        CheckStatus,
         HealthCheckService,
     )
     from claudesprint.services.optional_features_service import OptionalFeaturesService
@@ -97,12 +96,12 @@ def doctor(
     report = service.run_all_checks(verbose=verbose)
 
     # Display Environment section
-    console.print(f"[bold]=== Environment ===[/bold]")
+    console.print("[bold]=== Environment ===[/bold]")
     _display_check_results(report.checks, verbose)
 
     # Run and display Setup Readiness section
     console.print("")
-    console.print(f"[bold]=== Setup Readiness ===[/bold]")
+    console.print("[bold]=== Setup Readiness ===[/bold]")
     setup_report = service.run_setup_checks(verbose=verbose)
     _display_check_results(setup_report.checks, verbose)
 
@@ -112,8 +111,8 @@ def doctor(
 
     # Show optional features section
     console.print("")
-    console.print(f"[bold]=== Optional Features ===[/bold]")
-    for name, display_name, available, install_hint in features_service.get_features_summary():
+    console.print("[bold]=== Optional Features ===[/bold]")
+    for _name, display_name, available, install_hint in features_service.get_features_summary():
         if available:
             console.print(f"  {success_icon()} {display_name}: Available")
         else:

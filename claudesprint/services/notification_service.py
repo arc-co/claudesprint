@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from claudesprint.services.configuration_manager import ConfigurationManager
     from claudesprint.services.project_config_service import (
         NotificationsConfig,
-        ProjectConfigService,
     )
 
 logger = logging.getLogger(__name__)
@@ -84,9 +83,9 @@ class NotificationService:
     @classmethod
     def from_config_manager(
         cls,
-        config_manager: "ConfigurationManager",
+        config_manager: ConfigurationManager,
         http_timeout: float | None = None,
-    ) -> "NotificationService":
+    ) -> NotificationService:
         """Create NotificationService from ConfigurationManager.
 
         Args:

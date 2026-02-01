@@ -9,12 +9,11 @@ from rich.panel import Panel
 
 from claudesprint.commands._shared import (
     console,
-    success,
     error,
-    warning,
+    error_icon,
     info,
     success_icon,
-    error_icon,
+    warning,
     warning_icon,
 )
 
@@ -61,7 +60,7 @@ def demo(
     import shutil
 
     # Lazy imports for speed
-    from claudesprint.services.health_check_service import HealthCheckService, CheckStatus
+    from claudesprint.services.health_check_service import CheckStatus, HealthCheckService
     from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     demo_dir = Path(directory) if directory else Path.cwd() / "claudesprint-demo"
@@ -250,7 +249,7 @@ rm -rf claudesprint-demo
         except SystemExit as e:
             if e.code != 0:
                 console.print(error("Sprint initialization failed"))
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
 
         console.print("")
         console.print(Panel.fit(

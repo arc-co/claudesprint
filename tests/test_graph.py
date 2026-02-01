@@ -1,6 +1,5 @@
 """Tests for graph utilities."""
 
-import pytest
 
 from claudesprint.utils.graph import detect_cycles
 
@@ -10,12 +9,12 @@ class TestDetectCycles:
 
     def test_empty_graph_returns_empty(self) -> None:
         """Empty graph should return no cycles."""
-        result = detect_cycles(nodes=[], get_dependencies=lambda x: [])
+        result = detect_cycles(nodes=[], get_dependencies=lambda _x: [])
         assert result == []
 
     def test_single_node_no_edges_returns_empty(self) -> None:
         """Single node with no dependencies should return no cycles."""
-        result = detect_cycles(nodes=["a"], get_dependencies=lambda x: [])
+        result = detect_cycles(nodes=["a"], get_dependencies=lambda _x: [])
         assert result == []
 
     def test_simple_cycle_detected(self) -> None:

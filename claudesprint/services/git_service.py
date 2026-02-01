@@ -88,7 +88,7 @@ class GitService:
         if not self.is_repo():
             return []
 
-        success, output, _ = self._run("log", f"--oneline", f"-{count}")
+        success, output, _ = self._run("log", "--oneline", f"-{count}")
         if not success:
             return []
 

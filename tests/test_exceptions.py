@@ -1,25 +1,24 @@
 """Tests for the exception hierarchy."""
 
-import pytest
 
 from claudesprint.exceptions import (
+    ApiError,
+    AuthenticationError,
+    CheckpointError,
     ClaudeSprintError,
+    ConfigValidationError,
+    FileLockError,
     FileOperationError,
     FileReadError,
     FileWriteError,
-    FileLockError,
-    StateError,
-    StateCorruptionError,
     InvalidStateTransition,
-    CheckpointError,
-    ApiError,
-    RateLimitExceeded,
-    AuthenticationError,
-    ModelError,
-    ValidationError,
-    ConfigValidationError,
     IssueValidationError,
+    ModelError,
+    RateLimitExceeded,
     SprintValidationError,
+    StateCorruptionError,
+    StateError,
+    ValidationError,
 )
 
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 import os
 from typing import Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
-
 
 # Map of config field name -> environment variable name (module-level constant)
 _ENV_VAR_MAP: dict[str, str] = {
@@ -276,7 +275,7 @@ class ClaudesprintConfig(BaseSettings):
         return result
 
     @classmethod
-    def from_project_root(cls, project_root: str) -> "ClaudesprintConfig":
+    def from_project_root(cls, project_root: str) -> ClaudesprintConfig:
         """Create config with paths derived from project root.
 
         Configuration precedence (highest to lowest):

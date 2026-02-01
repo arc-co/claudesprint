@@ -43,7 +43,7 @@ def configure_tools():
     sprint_tools.configure(sprints_dir)
 
 
-def cmd_issue_get(args):
+def cmd_issue_get(args):  # noqa: ARG001
     """Get current issue state."""
     from claudesprint.tools.issue_tools import get_issue
 
@@ -91,7 +91,7 @@ def cmd_issue_failure(args):
     print(json.dumps(result.to_dict(), indent=2))
 
 
-def cmd_issue_clear_failures(args):
+def cmd_issue_clear_failures(args):  # noqa: ARG001
     """Clear failures and reset retry count."""
     from claudesprint.tools.issue_tools import clear_failures
 

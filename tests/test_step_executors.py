@@ -1,19 +1,19 @@
 """Tests for step executors in claudesprint.core.step_executors."""
+# ruff: noqa: ARG001, ARG002
+
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from claudesprint.core.claude_runner import ClaudeResult, FailureCategory
-from claudesprint.core.issue_engine import ParseResult, StepResult
+from claudesprint.core.issue_engine import ParseResult
 from claudesprint.core.step_executors import (
     CompletionStepExecutor,
     LlmStepExecutor,
     StepExecutor,
 )
 from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
-from claudesprint.models.sprint import IssueStatus
-
 
 # --- Fixtures ---
 
@@ -187,7 +187,6 @@ class TestLlmStepExecutor:
 
         # Verify claude_runner was called
         mock_claude_runner.run_with_content.assert_called_once()
-        call_args = mock_claude_runner.run_with_content.call_args
 
         # Verify prompt content was fetched
         mock_prompt_service.get_prompt_content.assert_called_once_with("implement")
@@ -698,7 +697,6 @@ class TestStepExecutorInterface:
 
     def test_step_executor_has_execute_method(self) -> None:
         """Test that StepExecutor defines execute method signature."""
-        import inspect
         from abc import ABC
 
         # Verify StepExecutor is abstract

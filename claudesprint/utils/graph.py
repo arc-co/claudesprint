@@ -1,6 +1,6 @@
 """Graph utilities for dependency analysis."""
 
-from typing import Callable
+from collections.abc import Callable
 
 
 def detect_cycles(

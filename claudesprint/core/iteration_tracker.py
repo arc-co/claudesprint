@@ -6,7 +6,7 @@ to enable smarter retry behavior.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 

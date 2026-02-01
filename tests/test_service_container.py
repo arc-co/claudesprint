@@ -1,7 +1,8 @@
 """Tests for ServiceContainer."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from claudesprint.services.service_container import (
     CoreServices,

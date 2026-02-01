@@ -8,11 +8,11 @@ from rich.panel import Panel
 
 from claudesprint.commands._shared import (
     console,
-    success,
     error,
-    warning,
-    muted,
     info,
+    muted,
+    success,
+    warning,
 )
 
 

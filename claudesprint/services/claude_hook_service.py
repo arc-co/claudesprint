@@ -264,12 +264,7 @@ class ClaudeHookService:
             return True
 
         # If block_without_allow_flags and no allow_flags present, block
-        if rule.block_without_allow_flags and not self._has_any_flag(
-            tokens, rule.allow_flags
-        ):
-            return True
-
-        return False
+        return bool(rule.block_without_allow_flags and not self._has_any_flag(tokens, rule.allow_flags))
 
     def _strip_quoted_content(self, command: str) -> str:
         """Remove content inside quotes to avoid matching args/messages.

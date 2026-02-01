@@ -4,12 +4,12 @@ Provides factory functions for creating tenacity retry decorators and
 context managers with configurable exponential backoff.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from tenacity import (
-    Retrying,
     RetryCallState,
+    Retrying,
     retry,
     retry_if_exception_type,
     stop_after_attempt,

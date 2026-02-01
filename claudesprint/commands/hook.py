@@ -47,7 +47,7 @@ def run_hook(
         valid_types = ", ".join(t.value for t in list(HookType))
         console.print(error(f"Invalid hook type: {hook_type}"))
         console.print(f"Valid types: {valid_types}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     # Parse input from stdin
     hook_input = HookInput.from_stdin()

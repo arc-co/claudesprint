@@ -245,7 +245,7 @@ class TestGeneralOutput:
 
         content = buffer.getvalue()
         # Count non-timestamp parts
-        lines = [l for l in content.split("\n") if l.strip()]
+        lines = [line for line in content.split("\n") if line.strip()]
         # Should have 2 lines (Line 1 and Line 2, not an empty line)
         assert len(lines) == 2
 

@@ -5,9 +5,7 @@ import logging
 import os
 import signal
 import subprocess
-import weakref
 from threading import Lock
-from typing import Set
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +36,8 @@ class ProcessManager:
 
         # Track process IDs (PIDs) of spawned processes
         # Using PIDs instead of Popen objects to avoid keeping references
-        self._pids: Set[int] = set()
-        self._process_groups: Set[int] = set()
+        self._pids: set[int] = set()
+        self._process_groups: set[int] = set()
         self._pid_lock = Lock()
 
         # Track if cleanup has been run
@@ -69,7 +67,7 @@ class ProcessManager:
             except (OSError, ValueError) as e:
                 logger.debug("Could not install signal handler for %s: %s", sig, e)
 
-    def _signal_handler(self, signum: int, frame) -> None:
+    def _signal_handler(self, signum: int, _frame) -> None:
         """Handle signals by saving state, cleaning up, and re-raising."""
         # Get signal name for state manager
         signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else f"signal-{signum}"

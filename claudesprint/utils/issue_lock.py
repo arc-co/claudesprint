@@ -8,9 +8,9 @@ Uses the existing LockFile utility for cross-platform kernel-level locking.
 
 import logging
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
 from claudesprint.utils.lock import LockFile
 

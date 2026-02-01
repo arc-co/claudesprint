@@ -1,12 +1,12 @@
 """Tests for sprint_tools module."""
+# ruff: noqa: ARG001, ARG002
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+
+import pytest
 
 from claudesprint.tools import sprint_tools
-from claudesprint.models.sprint import Sprint, Issue, IssueStatus, IssuePriority
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claudesprint.models.sprint import Sprint, IssueStatus, IssuePriority
+from claudesprint.models.sprint import IssuePriority, IssueStatus, Sprint
 from claudesprint.utils.graph import detect_cycles
 
 

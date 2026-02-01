@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from claudesprint.services.global_config_service import GlobalConfig
     from claudesprint.services.project_config_service import (
         ModelName,
         ProjectConfig,
     )
-    from claudesprint.services.global_config_service import GlobalConfig
 
 # TOML parsing: use tomllib (3.11+) or tomli (backport for 3.10)
 if sys.version_info >= (3, 11):
@@ -58,7 +58,7 @@ class ResolvedPaths:
     conversation_log_file: Path
 
     @classmethod
-    def from_project_root(cls, project_root: Path) -> "ResolvedPaths":
+    def from_project_root(cls, project_root: Path) -> ResolvedPaths:
         """Create ResolvedPaths from a project root directory."""
         config_dir = project_root / ".claudesprint"
         project_dir = config_dir / "project"
@@ -132,14 +132,14 @@ class ConfigurationManager:
         return ResolvedPaths.from_project_root(self._project_root)
 
     @property
-    def project(self) -> "ProjectConfig":
+    def project(self) -> ProjectConfig:
         """Get the project configuration (lazy-loaded and cached)."""
         if self._project_config is None:
             self._project_config = self._load_project_config()
         return self._project_config
 
     @property
-    def global_config(self) -> "GlobalConfig":
+    def global_config(self) -> GlobalConfig:
         """Get the global configuration (lazy-loaded and cached)."""
         if self._global_config is None:
             self._global_config = self._load_global_config()
@@ -152,7 +152,7 @@ class ConfigurationManager:
 
     # === Config Loading ===
 
-    def _load_project_config(self) -> "ProjectConfig":
+    def _load_project_config(self) -> ProjectConfig:
         """Load project configuration from TOML file."""
         from claudesprint.services.project_config_service import ProjectConfig
 
@@ -172,7 +172,7 @@ class ConfigurationManager:
             )
             return ProjectConfig()
 
-    def _load_global_config(self) -> "GlobalConfig":
+    def _load_global_config(self) -> GlobalConfig:
         """Load global configuration from TOML file."""
         from claudesprint.services.global_config_service import GlobalConfig
 
@@ -189,7 +189,7 @@ class ConfigurationManager:
 
     # === Explicit Loaders ===
 
-    def load_project(self) -> "ProjectConfig":
+    def load_project(self) -> ProjectConfig:
         """Explicitly load project configuration.
 
         Returns:
@@ -198,7 +198,7 @@ class ConfigurationManager:
         self._project_config = self._load_project_config()
         return self._project_config
 
-    def load_global(self) -> "GlobalConfig":
+    def load_global(self) -> GlobalConfig:
         """Explicitly load global configuration.
 
         Returns:
@@ -209,7 +209,7 @@ class ConfigurationManager:
 
     # === Config Saving ===
 
-    def save_project(self, config: "ProjectConfig | None" = None) -> bool:
+    def save_project(self, config: ProjectConfig | None = None) -> bool:
         """Save project configuration to TOML file.
 
         Args:
@@ -286,7 +286,7 @@ class ConfigurationManager:
 
     # === Convenience Methods ===
 
-    def get_model_for_step(self, step_name: str) -> "ModelName":
+    def get_model_for_step(self, step_name: str) -> ModelName:
         """Get the model to use for a workflow step.
 
         Args:
@@ -312,7 +312,7 @@ class ConfigurationManager:
         # Fall back to default
         return config.models.default_model
 
-    def get_model_for_special_step(self, step_name: str) -> "ModelName":
+    def get_model_for_special_step(self, step_name: str) -> ModelName:
         """Get the model for a special step (init, plan).
 
         Args:

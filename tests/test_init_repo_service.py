@@ -4,16 +4,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from claudesprint.services.constants import (
     AGENT_BROWSER_SKILL_CONTENT,
     CLAUDESPRINT_SKILL_CONTENT,
     PROMPTS_README_CONTENT,
 )
 from claudesprint.services.init_repo_service import (
-    InitRepoService,
     InitRepoResult,
+    InitRepoService,
 )
 from claudesprint.services.project_config_service import DEFAULT_PROJECT_CONFIG_TOML
 

@@ -1,6 +1,5 @@
 """Tests for IssueService."""
 
-import pytest
 from pathlib import Path
 
 from claudesprint.services.issue_service import IssueService

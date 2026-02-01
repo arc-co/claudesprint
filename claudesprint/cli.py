@@ -10,8 +10,6 @@ from typing import Annotated
 import typer
 
 from claudesprint import __version__
-from claudesprint.commands._shared import console
-from claudesprint.utils.process_manager import get_process_manager
 
 # Import command modules
 from claudesprint.commands import config as config_module
@@ -25,6 +23,8 @@ from claudesprint.commands import run as run_module
 from claudesprint.commands import spec as spec_module
 from claudesprint.commands import status as status_module
 from claudesprint.commands import utils as utils_module
+from claudesprint.commands._shared import console
+from claudesprint.utils.process_manager import get_process_manager
 
 # Help panel groupings for better discoverability
 PANEL_GETTING_STARTED = "Getting Started"

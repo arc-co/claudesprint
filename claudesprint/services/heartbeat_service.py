@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from claudesprint.events.workflow_event_bus import WorkflowEvent
 
@@ -61,7 +63,7 @@ class HeartbeatService:
         # Track if we've already notified for current hung state
         self._hung_notified = False
 
-    def pulse(self, step: "WorkflowStep | str") -> None:
+    def pulse(self, step: WorkflowStep | str) -> None:
         """Record activity pulse, resetting the inactivity timer.
 
         Args:
@@ -182,7 +184,7 @@ class AsyncHeartbeatService:
         enabled: bool = True,
         on_hung: Callable[[str, int], None] | None = None,
         check_interval: float | None = None,
-        event_bus: "WorkflowEventBus | None" = None,
+        event_bus: WorkflowEventBus | None = None,
     ) -> None:
         """Initialize the async heartbeat service.
 
@@ -212,7 +214,7 @@ class AsyncHeartbeatService:
         # (e.g., output handlers). This provides cross-thread safety.
         self._lock = threading.Lock()
 
-    def pulse(self, step: "WorkflowStep | str") -> None:
+    def pulse(self, step: WorkflowStep | str) -> None:
         """Record activity pulse, resetting the inactivity timer.
 
         This method is synchronous to allow calling from sync code paths
@@ -258,10 +260,8 @@ class AsyncHeartbeatService:
             except asyncio.TimeoutError:
                 logger.warning("Heartbeat monitor task did not stop in time, cancelling")
                 self._monitor_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._monitor_task
-                except asyncio.CancelledError:
-                    pass
             self._monitor_task = None
 
     async def _monitor_loop(self) -> None:
@@ -335,7 +335,7 @@ class AsyncHeartbeatService:
             self._current_step = ""
             self._hung_notified = False
 
-    async def __aenter__(self) -> "AsyncHeartbeatService":
+    async def __aenter__(self) -> AsyncHeartbeatService:
         """Async context manager entry."""
         await self.start()
         return self
@@ -355,7 +355,7 @@ def get_heartbeat_service(
     enabled: bool = True,
     on_hung: Callable[[str, int], None] | None = None,
     check_interval: float | None = None,
-    event_bus: "WorkflowEventBus | None" = None,
+    event_bus: WorkflowEventBus | None = None,
 ) -> HeartbeatService:
     """Get or create the global heartbeat service instance (thread-based).
 
@@ -386,7 +386,7 @@ def get_async_heartbeat_service(
     enabled: bool = True,
     on_hung: Callable[[str, int], None] | None = None,
     check_interval: float | None = None,
-    event_bus: "WorkflowEventBus | None" = None,
+    event_bus: WorkflowEventBus | None = None,
 ) -> AsyncHeartbeatService:
     """Get or create the global async heartbeat service instance.
 

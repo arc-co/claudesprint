@@ -159,7 +159,7 @@ class TestProcessManagerSignals:
     )
     def test_signal_handlers_installed(self):
         """Signal handlers should be installed on initialization."""
-        pm = get_process_manager()
+        get_process_manager()
 
         # Check that our handler is installed for SIGTERM
         current_handler = signal.getsignal(signal.SIGTERM)

@@ -1,10 +1,12 @@
 """Thread-safe pub/sub event bus for workflow events."""
 
+import contextlib
 import logging
 import threading
 from collections import defaultdict
+from collections.abc import Callable
 from enum import Enum, auto
-from typing import Callable, TypedDict
+from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -231,10 +233,8 @@ class WorkflowEventBus:
         """
         with self._lock:
             if event in self._subscribers:
-                try:
+                with contextlib.suppress(ValueError):
                     self._subscribers[event].remove(handler)
-                except ValueError:
-                    pass  # Handler not found, ignore
 
     def emit(self, event: WorkflowEvent, payload: EventPayload) -> None:
         """Emit an event to all subscribers.

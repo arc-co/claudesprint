@@ -1,8 +1,8 @@
 """Tests for JSON store base class."""
 
 import json
-import pytest
 from pathlib import Path
+
 from pydantic import BaseModel
 
 from claudesprint.services.base.json_store import JsonStore

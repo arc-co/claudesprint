@@ -1,10 +1,10 @@
 """Tests for the StateManager service."""
 
 import json
+
 import pytest
 
 from claudesprint.exceptions import (
-    FileLockError,
     FileReadError,
     StateCorruptionError,
 )
@@ -130,7 +130,7 @@ class TestAtomicUpdate:
         sprint_path = tmp_path / "sprint.json"
         original_content = '{"spec_id": "TEST", "value": 1}'
         sprint_path.write_text(original_content)
-        original_mtime = sprint_path.stat().st_mtime
+        _ = sprint_path.stat().st_mtime
 
         manager = StateManager(sprint_path, tmp_path / "project")
 
@@ -157,9 +157,8 @@ class TestAtomicUpdate:
         sprint_path.write_text("{}")
         manager = StateManager(sprint_path, tmp_path / "project")
 
-        with pytest.raises(ValueError):
-            with manager.atomic_update():
-                raise ValueError("test error")
+        with pytest.raises(ValueError), manager.atomic_update():
+            raise ValueError("test error")
 
         # Lock should be released, so we can acquire again
         assert manager.acquire_lock() is True

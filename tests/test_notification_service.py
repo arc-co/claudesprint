@@ -1,4 +1,5 @@
 """Tests for notification service with webhook support."""
+# ruff: noqa: ARG001, ARG002
 
 from unittest.mock import AsyncMock, MagicMock, patch
 

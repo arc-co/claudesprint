@@ -1,12 +1,14 @@
 """Tests for IssueEngine - specifically max_total_iterations feature."""
+# ruff: noqa: ARG001, ARG002
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from claudesprint.core.issue_engine import IssueEngine, IssueExitReason, StepResult
 from claudesprint.models.config import ClaudesprintConfig
-from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
+from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
 from claudesprint.models.sprint import ResolvedConfig
 
 
@@ -52,7 +54,10 @@ class TestMaxTotalIterations:
     """Tests for the max_total_iterations infinite loop prevention feature."""
 
     def test_max_iterations_exit_when_limit_reached(
-        self, tmp_path: Path, mock_config: ClaudesprintConfig, mock_execution_config: ResolvedConfig
+        self,
+        tmp_path: Path,  # noqa: ARG002
+        mock_config: ClaudesprintConfig,
+        mock_execution_config: ResolvedConfig,  # noqa: ARG002
     ) -> None:
         """Engine exits with MAX_ITERATIONS when total_iterations reaches limit."""
         # Create issue that's already at the limit
@@ -70,7 +75,9 @@ class TestMaxTotalIterations:
             total_iterations=5,  # Already at limit (max_total_iterations=5)
         )
 
-        with patch.object(IssueEngine, "__init__", lambda self, *args, **kwargs: None):
+        with patch.object(
+            IssueEngine, "__init__", lambda _self, *_args, **_kwargs: None
+        ):
             engine = IssueEngine.__new__(IssueEngine)
             engine.config = mock_config
             engine.notification_service = MagicMock()
@@ -101,7 +108,9 @@ class TestMaxTotalIterations:
             total_iterations=0,
         )
 
-        with patch.object(IssueEngine, "__init__", lambda self, *args, **kwargs: None):
+        with patch.object(
+            IssueEngine, "__init__", lambda _self, *_args, **_kwargs: None
+        ):
             engine = IssueEngine.__new__(IssueEngine)
             engine.config = mock_config
             engine.notification_service = MagicMock()
@@ -152,7 +161,9 @@ class TestMaxTotalIterations:
             persisted_iterations.append(issue.total_iterations)
             return True
 
-        with patch.object(IssueEngine, "__init__", lambda self, *args, **kwargs: None):
+        with patch.object(
+            IssueEngine, "__init__", lambda _self, *_args, **_kwargs: None
+        ):
             engine = IssueEngine.__new__(IssueEngine)
             engine.config = mock_config
             engine.notification_service = MagicMock()
@@ -197,7 +208,9 @@ class TestMaxTotalIterations:
                 return StepResult(success=True, next_step=None, output="Done")
             return StepResult(success=True, next_step=IssueStep.COMPLETE_ISSUE, output="Continue")
 
-        with patch.object(IssueEngine, "__init__", lambda self, *args, **kwargs: None):
+        with patch.object(
+            IssueEngine, "__init__", lambda _self, *_args, **_kwargs: None
+        ):
             engine = IssueEngine.__new__(IssueEngine)
             engine.config = mock_config
             engine.notification_service = MagicMock()
@@ -240,7 +253,9 @@ class TestMaxTotalIterations:
             else:  # FIX_TESTS
                 return StepResult(success=True, next_step=IssueStep.RUN_TESTS, output="test_fixed")
 
-        with patch.object(IssueEngine, "__init__", lambda self, *args, **kwargs: None):
+        with patch.object(
+            IssueEngine, "__init__", lambda _self, *_args, **_kwargs: None
+        ):
             engine = IssueEngine.__new__(IssueEngine)
             engine.config = mock_config
             engine.notification_service = MagicMock()

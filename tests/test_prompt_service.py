@@ -1,9 +1,9 @@
 """Tests for PromptService - hierarchical prompt loading and template rendering."""
+# ruff: noqa: ARG001, ARG002
 
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -712,7 +712,7 @@ class TestAnalysisProtocol:
     def test_protocol_section_in_base(self, tmp_path: Path) -> None:
         """Ensure protocol section in base template."""
         path_service = PathService(project_root=tmp_path)
-        service = PromptService(path_service, project_root=tmp_path)
+        PromptService(path_service, project_root=tmp_path)
 
         # Read the base template directly
         from importlib.resources import files

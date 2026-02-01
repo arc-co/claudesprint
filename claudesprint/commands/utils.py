@@ -1,35 +1,35 @@
 """Utility commands: validate, reset."""
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from claudesprint.commands._shared import (
-    console,
-    get_config,
     COLORS,
-    success,
+    console,
     error,
-    warning,
+    get_config,
     muted,
+    success,
+    warning,
 )
 
 
 def validate_sprint(
     sprint: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--sprint", help="Path to sprint.json"),
     ] = None,
     spec: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--spec", help="Spec ID to validate"),
     ] = None,
 ) -> None:
     """Validate sprint.json and current_issue.json structure."""
     # Lazy imports
     from claudesprint.services.sprint_service import SprintService
-    from claudesprint.validation import SprintValidator, CurrentIssueValidator
+    from claudesprint.validation import CurrentIssueValidator, SprintValidator
 
     config = get_config()
 
@@ -84,12 +84,12 @@ def validate_sprint(
 
 
 def reset_sprint(
-    sprint: Annotated[
-        Optional[str],
+    sprint: Annotated[  # noqa: ARG001
+        str | None,
         typer.Option("--sprint", help="Path to sprint.json"),
     ] = None,
-    spec: Annotated[
-        Optional[str],
+    spec: Annotated[  # noqa: ARG001
+        str | None,
         typer.Option("--spec", help="Spec ID to reset"),
     ] = None,
 ) -> None:

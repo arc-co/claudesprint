@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 # Import ModelName from project_config_service to ensure consistent type definition
 from claudesprint.services.project_config_service import ModelName
 
-
 # Default model mappings for issue steps
 STEP_DEFAULT_MODELS: dict[IssueStep, ModelName] = {
     IssueStep.SELECT_ISSUE: "sonnet",  # Algorithmic selection
@@ -55,8 +54,8 @@ class ModelsService:
 
     @classmethod
     def from_config_manager(
-        cls, config_manager: "ConfigurationManager"
-    ) -> "ModelsService":
+        cls, config_manager: ConfigurationManager
+    ) -> ModelsService:
         """Create a ModelsService that reads from ConfigurationManager.
 
         Args:

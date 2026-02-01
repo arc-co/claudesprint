@@ -218,7 +218,7 @@ class LogsEventSubscriber:
         available_issues = payload.get("available_issues", 0)
         self._output.on_sprint_iteration(iteration, available_issues)
 
-    def _on_selecting_issue(self, payload: EventPayload) -> None:
+    def _on_selecting_issue(self, payload: EventPayload) -> None:  # noqa: ARG002
         """Handle SELECTING_ISSUE event."""
         self._output.on_selecting_issue()
 
@@ -233,7 +233,7 @@ class LogsEventSubscriber:
         line = payload.get("line", "")
         self._output.on_subprocess_output(line)
 
-    def _on_subprocess_ended(self, payload: EventPayload) -> None:
+    def _on_subprocess_ended(self, payload: EventPayload) -> None:  # noqa: ARG002
         """Handle SUBPROCESS_ENDED event."""
         self._output.on_subprocess_end()
 

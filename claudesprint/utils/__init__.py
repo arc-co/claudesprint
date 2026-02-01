@@ -1,24 +1,24 @@
 """Utility modules for ClaudeSprint."""
 
-from claudesprint.utils.lock import LockFile
 from claudesprint.utils.duration import format_duration, parse_duration
-from claudesprint.utils.logging import setup_logging, get_logger, LogLevel
 from claudesprint.utils.graph import detect_cycles
+from claudesprint.utils.lock import LockFile
+from claudesprint.utils.logging import LogLevel, get_logger, setup_logging
 from claudesprint.utils.styles import (
-    SYMBOLS,
     COLORS,
     STYLES,
-    success,
+    SYMBOLS,
     error,
-    warning,
-    running,
-    subprocess_line,
-    status_badge,
+    error_icon,
+    info,
     model_badge,
     muted,
-    info,
+    running,
+    status_badge,
+    subprocess_line,
+    success,
     success_icon,
-    error_icon,
+    warning,
     warning_icon,
 )
 

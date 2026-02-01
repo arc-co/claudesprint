@@ -4,12 +4,11 @@ This module creates "views" that filter out noise (completed task history,
 metadata overhead) and presents only decision-relevant data to the LLM.
 """
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from claudesprint.models.sprint import IssueStatus, IssuePriority
+from claudesprint.models.sprint import IssuePriority, IssueStatus
 from claudesprint.services.sprint_service import SprintService
 
 # Module-level configuration

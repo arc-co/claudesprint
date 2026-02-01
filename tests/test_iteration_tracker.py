@@ -1,11 +1,9 @@
 """Tests for the IterationTracker."""
 
-import pytest
 
 from claudesprint.core.iteration_tracker import (
-    IterationTracker,
     FailureCategory,
-    FailureRecord,
+    IterationTracker,
 )
 
 

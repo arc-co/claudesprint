@@ -1,6 +1,5 @@
 """Features command for managing optional ClaudeSprint features."""
 
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -9,13 +8,12 @@ from rich.table import Table
 
 from claudesprint.commands._shared import (
     console,
-    get_project_root,
-    success,
     error,
-    warning,
-    info,
-    success_icon,
     error_icon,
+    get_project_root,
+    info,
+    success,
+    success_icon,
     warning_icon,
 )
 
@@ -45,12 +43,12 @@ def features_status(ctx: typer.Context) -> None:
     table.add_column("Status")
     table.add_column("Install")
 
-    for name, display_name, available, install_hint in features_service.get_features_summary():
+    for _name, display_name, available, install_hint in features_service.get_features_summary():
         if available:
-            status = f"[green]✓ Available[/green]"
+            status = "[green]✓ Available[/green]"
             hint = "[dim]Installed[/dim]"
         else:
-            status = f"[yellow]✗ Not available[/yellow]"
+            status = "[yellow]✗ Not available[/yellow]"
             hint = f"[dim]{install_hint}[/dim]"
         table.add_row(display_name, status, hint)
 
@@ -68,7 +66,7 @@ def features_status(ctx: typer.Context) -> None:
         console.print("")
 
     if available_features:
-        console.print(f"[dim]Features are auto-detected during initialization.[/dim]")
+        console.print("[dim]Features are auto-detected during initialization.[/dim]")
         console.print(f"[dim]Use {info('claudesprint init-repo --force')} to reconfigure.[/dim]")
 
 
@@ -85,9 +83,9 @@ def refresh_features(
     with the appropriate hooks based on what's available.
     """
     # Lazy imports
-    from claudesprint.services.optional_features_service import OptionalFeaturesService
-    from claudesprint.services.init_repo_service import InitRepoService
     from claudesprint.services.claude_settings_service import ClaudeSettingsService
+    from claudesprint.services.init_repo_service import InitRepoService
+    from claudesprint.services.optional_features_service import OptionalFeaturesService
 
     project_root = get_project_root()
 
@@ -105,7 +103,7 @@ def refresh_features(
     detected_features = features_service.reload()
 
     # Show detection results
-    for name, display_name, available, install_hint in features_service.get_features_summary():
+    for _name, display_name, available, _install_hint in features_service.get_features_summary():
         if available:
             console.print(f"  {success_icon()} {display_name}: Detected")
         else:

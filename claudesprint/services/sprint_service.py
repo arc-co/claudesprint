@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from claudesprint.models.sprint import Sprint, Issue, IssueStatus
+from claudesprint.models.sprint import Issue, IssueStatus, Sprint
 from claudesprint.services.base.json_store import JsonStore
 
 

@@ -10,7 +10,6 @@ The IssueEngine manages the inner loop:
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -27,13 +26,13 @@ if TYPE_CHECKING:
     from claudesprint.services.configuration_manager import ConfigurationManager
     from claudesprint.services.service_container import ServiceContainer
 
-from claudesprint.events.workflow_event_bus import WorkflowEvent, IssueIterationPayload, RoutingSignalPayload
 from claudesprint.core.step_executors import (
     CompletionStepExecutor,
     LlmStepExecutor,
     StepExecutor,
 )
 from claudesprint.core.step_types import ParseResult, StepResult
+from claudesprint.events.workflow_event_bus import WorkflowEvent
 from claudesprint.models.config import ClaudesprintConfig
 from claudesprint.models.current_issue import CurrentIssue, IssueStep
 from claudesprint.models.sprint import ResolvedConfig
@@ -854,9 +853,10 @@ class IssueEngine:
             if next_step == to_step:
                 return True
             # Only follow through steps that would be skipped
-            if self._should_skip_step(next_step):
-                if self._is_reachable_via_skip(next_step, to_step, visited):
-                    return True
+            if self._should_skip_step(next_step) and self._is_reachable_via_skip(
+                next_step, to_step, visited
+            ):
+                return True
 
         return False
 

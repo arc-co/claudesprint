@@ -1,20 +1,20 @@
 """Init command - create sprint from spec file."""
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from claudesprint.commands._shared import (
-    console,
-    get_project_root,
-    get_config,
     ConsoleThrobber,
-    success,
+    console,
     error,
-    warning,
-    subprocess_line,
+    get_config,
+    get_project_root,
     muted,
+    subprocess_line,
+    success,
+    warning,
 )
 
 
@@ -24,7 +24,7 @@ def init_project(
         typer.Option("--spec", "-s", help="Spec file or spec ID to create sprint from"),
     ],
     description: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--description", "-d", help="Sprint description"),
     ] = None,
     debug_conversations: Annotated[
@@ -120,7 +120,7 @@ def init_project(
         prompt_content = prompt_service.get_prompt_content("init")
     except FileNotFoundError:
         console.print(error("PROMPT_init.xml.j2 not found in package"))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     # Get model for init step
     cm = ConfigurationManager(project_root)

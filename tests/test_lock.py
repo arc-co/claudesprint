@@ -131,20 +131,17 @@ class TestLockFileContextManager:
         lock1 = LockFile(lock_path)
         lock2 = LockFile(lock_path)
 
-        with lock1:
-            with pytest.raises(RuntimeError, match="Another instance is running"):
-                with lock2:
-                    pass
+        with lock1, pytest.raises(RuntimeError, match="Another instance is running"), lock2:
+            pass
 
     def test_context_manager_releases_on_exception(self, tmp_path):
         """Context manager releases lock even when exception occurs."""
         lock_path = tmp_path / "test.lock"
         lock = LockFile(lock_path)
 
-        with pytest.raises(ValueError):
-            with lock:
-                assert lock.is_acquired is True
-                raise ValueError("test error")
+        with pytest.raises(ValueError), lock:
+            assert lock.is_acquired is True
+            raise ValueError("test error")
 
         assert lock.is_acquired is False
         assert not lock_path.exists()

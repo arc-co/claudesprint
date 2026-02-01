@@ -1,24 +1,22 @@
 """Tests for workflow event bus."""
 
 import threading
-import pytest
 
 from claudesprint.events.workflow_event_bus import (
+    IssueEventPayload,
+    IssueIterationPayload,
+    OutputPayload,
+    ProcessHungPayload,
+    RoutingSignalPayload,
+    SelectingIssuePayload,
+    SprintEventPayload,
+    SprintIterationPayload,
+    StepEventPayload,
+    StepSkippedPayload,
+    SubprocessOutputPayload,
+    SubprocessStartedPayload,
     WorkflowEvent,
     WorkflowEventBus,
-    StepEventPayload,
-    IssueEventPayload,
-    SprintEventPayload,
-    StepSkippedPayload,
-    ProcessHungPayload,
-    SubprocessStartedPayload,
-    SubprocessOutputPayload,
-    SubprocessEndedPayload,
-    IssueIterationPayload,
-    RoutingSignalPayload,
-    SprintIterationPayload,
-    SelectingIssuePayload,
-    OutputPayload,
 )
 
 
@@ -95,7 +93,7 @@ class TestWorkflowEventBus:
         bus = WorkflowEventBus()
         calls = []
 
-        def failing_handler(payload) -> None:
+        def failing_handler(_payload) -> None:
             raise ValueError("Intentional test error")
 
         def working_handler(payload) -> None:
@@ -168,7 +166,7 @@ class TestWorkflowEventBus:
         lock = threading.Lock()
 
         def create_handler(n: int):
-            def handler(payload) -> None:
+            def handler(_payload) -> None:
                 with lock:
                     handlers_called.append(n)
             return handler
@@ -201,7 +199,7 @@ class TestWorkflowEventBus:
         called = []
 
         for event in WorkflowEvent:
-            bus.subscribe(event, lambda p, e=event: called.append(e))
+            bus.subscribe(event, lambda _p, e=event: called.append(e))
 
         # Emit each event type
         step_payload: StepEventPayload = {

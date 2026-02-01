@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Sprint engine - outer loop orchestration for sprint-based workflows.
 
 The SprintEngine manages the outer loop:
@@ -9,48 +7,45 @@ The SprintEngine manages the outer loop:
 4. Create PR when all issues complete
 """
 
+from __future__ import annotations
+
 import logging
+import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Callable
 
-import re
-
-logger = logging.getLogger(__name__)
-
-from claudesprint.core.claude_runner import ClaudeRunner, ClaudeResult, FailureCategory as ClaudeFailureCategory
-from claudesprint.core.issue_engine import IssueEngine, IssueResult, IssueExitReason
+from claudesprint.core.claude_runner import ClaudeResult, ClaudeRunner
+from claudesprint.core.claude_runner import FailureCategory as ClaudeFailureCategory
+from claudesprint.core.issue_engine import IssueEngine, IssueExitReason, IssueResult
 from claudesprint.core.issue_state_machine import IssueStateMachine, SprintAction
-from claudesprint.core.iteration_tracker import IterationTracker, FailureCategory
+from claudesprint.core.iteration_tracker import FailureCategory, IterationTracker
 from claudesprint.core.rate_limit_handler import (
     RateLimitConfig,
-    RateLimitRetriesExhausted,
     create_rate_limit_retrying,
     get_retry_state_info,
 )
 from claudesprint.events.workflow_event_bus import (
-    WorkflowEventBus,
     WorkflowEvent,
-    SprintIterationPayload,
-    SelectingIssuePayload,
-    OutputPayload,
+    WorkflowEventBus,
 )
-from claudesprint.exceptions import RateLimitDetected, RateLimitExceeded, StateCorruptionError
+from claudesprint.exceptions import RateLimitDetected
 from claudesprint.models.config import ClaudesprintConfig
-from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
-from claudesprint.models.sprint import Sprint, Issue, IssueStatus, ResolvedConfig
+from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
+from claudesprint.models.sprint import Issue, IssueStatus, ResolvedConfig, Sprint
 from claudesprint.services.git_service import GitService
 from claudesprint.services.issue_service import IssueService
-from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
-from claudesprint.services.prompt_service import PromptService, PromptContext
+from claudesprint.services.prompt_service import PromptContext, PromptService
 from claudesprint.services.service_container import ServiceContainer
+from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.state_manager import StateManager
 from claudesprint.utils.duration import format_duration
 from claudesprint.utils.lock import LockFile
 
+logger = logging.getLogger(__name__)
 
 # Type alias for the IssueEngine factory
 IssueEngineFactory = Callable[[ResolvedConfig], IssueEngine]
@@ -229,7 +224,7 @@ class SprintEngine:
             payload: Event payload dictionary
         """
         if self.event_bus:
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
             payload.setdefault("timestamp", datetime.now(UTC).isoformat())
             self.event_bus.emit(event, payload)
 
@@ -266,7 +261,6 @@ class SprintEngine:
         Args:
             retry_state: Tenacity RetryCallState with attempt info.
         """
-        from tenacity import RetryCallState
 
         info = get_retry_state_info(retry_state)
         attempt = info["attempt_number"]
@@ -371,7 +365,7 @@ class SprintEngine:
     def _resume_in_progress_issue(
         self,
         issue: Issue,
-        current_issue: CurrentIssue | None,
+        current_issue: CurrentIssue | None,  # noqa: ARG002
     ) -> IssueSelectionResult:
         """Resume an in_progress issue.
 
@@ -382,7 +376,7 @@ class SprintEngine:
         Returns:
             IssueSelectionResult for the resumed issue
         """
-        rationale = f"Resuming in_progress issue from previous session"
+        rationale = "Resuming in_progress issue from previous session"
         self.issue_service.log_issue_selection(issue.id, issue.title, rationale)
         return IssueSelectionResult(
             success=True,
@@ -469,7 +463,7 @@ class SprintEngine:
     def _run_agent_selection(
         self,
         sprint: Sprint,
-        available: list[Issue],
+        available: list[Issue],  # noqa: ARG002
     ) -> IssueSelectionResult:
         """Run agent-driven issue selection using PROMPT_select-issue.xml.j2.
 
@@ -592,7 +586,6 @@ class SprintEngine:
         Returns:
             IssueSelectionResult with selected issue
         """
-        import re
 
         # Check for SPRINT_COMPLETE signal
         if "SPRINT_COMPLETE" in output:
@@ -778,7 +771,7 @@ class SprintEngine:
     def _create_current_issue(
         self,
         issue: Issue,
-        sprint: Sprint,
+        sprint: Sprint,  # noqa: ARG002
     ) -> CurrentIssue:
         """Create CurrentIssue context for the selected issue.
 

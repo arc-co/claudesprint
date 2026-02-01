@@ -7,14 +7,13 @@ import typer
 from rich.panel import Panel
 
 from claudesprint.commands._shared import (
-    console,
     STYLES,
-    success,
+    console,
     error,
-    warning,
     muted,
+    success,
+    warning,
 )
-
 
 # Config command group for global configuration
 config_app = typer.Typer(
@@ -62,7 +61,7 @@ def config_init(
         console.print(success(f"Created config file: {config_file}"))
     except OSError:
         console.print(error("Failed to create config file"))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @config_app.command("show")
@@ -127,7 +126,7 @@ def config_edit() -> None:
             console.print(success(f"Created: {config_file}"))
         except OSError:
             console.print(error("Failed to create config file"))
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
     editor = os.environ.get("EDITOR", os.environ.get("VISUAL", "vim"))
     try:
@@ -135,7 +134,7 @@ def config_edit() -> None:
     except FileNotFoundError:
         console.print(error(f"Editor not found: {editor}"))
         console.print("Set the EDITOR environment variable to your preferred editor.")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except subprocess.CalledProcessError as e:
         console.print(error(f"Editor exited with error: {e.returncode}"))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None

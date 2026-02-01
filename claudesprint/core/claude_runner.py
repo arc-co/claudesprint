@@ -1,17 +1,16 @@
 """Claude CLI subprocess wrapper."""
 
 import asyncio
+import contextlib
 import logging
-import os
 import re
-import signal
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import AsyncIterator, Callable, Optional
 
 from claudesprint.utils.logging import ConversationLogger
 from claudesprint.utils.process_manager import get_process_manager
@@ -114,10 +113,7 @@ class ClaudeRunner:
 
     def _check_rate_limit(self, output: str) -> bool:
         """Check if output indicates rate limiting."""
-        for pattern in self._rate_limit_patterns:
-            if pattern.search(output):
-                return True
-        return False
+        return any(pattern.search(output) for pattern in self._rate_limit_patterns)
 
     def _check_diagnostic(self, output: str) -> str | None:
         """Check output for diagnostic patterns (for logging only).
@@ -545,10 +541,8 @@ class ClaudeRunner:
                 timed_out = True
                 # Cancel the read task
                 read_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await read_task
-                except asyncio.CancelledError:
-                    pass
 
                 # Kill process group
                 await self._force_kill_process_async(process)

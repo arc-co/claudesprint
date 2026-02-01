@@ -6,13 +6,13 @@ exceptions, providing consistent error handling across the codebase.
 
 import functools
 import logging
-from pathlib import Path
-from typing import Any, Callable, ParamSpec, TypeVar
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 from claudesprint.exceptions.file_errors import (
+    FileOperationError,
     FileReadError,
     FileWriteError,
-    FileOperationError,
 )
 
 P = ParamSpec("P")

@@ -1,24 +1,22 @@
 """Pytest configuration and fixtures for ClaudeSprint."""
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 import pytest
-
-from claudesprint.models.config import ClaudesprintConfig
-from claudesprint.models.sprint import Sprint, Issue, IssueStatus, IssuePriority, ResolvedConfig
-from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
 
 # Import service and engine classes for Mock specs
 from claudesprint.core.claude_runner import ClaudeRunner
 from claudesprint.core.issue_engine import IssueEngine
+from claudesprint.models.config import ClaudesprintConfig
+from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
+from claudesprint.models.sprint import Issue, IssuePriority, IssueStatus, ResolvedConfig, Sprint
+from claudesprint.services.git_service import GitService
 from claudesprint.services.issue_service import IssueService
-from claudesprint.services.sprint_service import SprintService
 from claudesprint.services.notification_service import NotificationService
 from claudesprint.services.prompt_service import PromptService
-from claudesprint.services.git_service import GitService
+from claudesprint.services.sprint_service import SprintService
 
 
 @pytest.fixture
@@ -26,7 +24,7 @@ def temp_project_dir():
     """Create a temporary project directory structure."""
     with tempfile.TemporaryDirectory() as tmpdir:
         project_root = Path(tmpdir)
-        claude_dir = project_root / ".claude"
+        project_root / ".claude"
         claudesprint_dir = project_root / ".claudesprint"
         project_dir = claudesprint_dir / "project"
         prompts_dir = claudesprint_dir / "prompts"
@@ -294,7 +292,7 @@ def mock_issue_engine_factory(mock_issue_engine):
     Returns:
         A factory function that takes ResolvedConfig and returns a mock IssueEngine
     """
-    def factory(resolved_config: ResolvedConfig) -> Mock:
+    def factory(resolved_config: ResolvedConfig) -> Mock:  # noqa: ARG001
         return mock_issue_engine
     return factory
 

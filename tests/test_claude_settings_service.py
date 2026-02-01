@@ -4,10 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from claudesprint.services.claude_settings_service import (
-    CLAUDESPRINT_HOOKS,
     ClaudeSettingsService,
     HookInjectionResult,
 )
@@ -260,7 +257,7 @@ class TestRemoveHooks:
             success = service.remove_hooks()
 
             assert success is True
-            settings = service.read_settings()
+            service.read_settings()
             assert not service.has_claudesprint_hooks()
 
     def test_remove_hooks_preserves_user_hooks(self) -> None:

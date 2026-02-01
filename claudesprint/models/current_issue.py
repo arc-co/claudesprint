@@ -1,6 +1,6 @@
 """CurrentIssue model - session context for the issue loop (replaces Handoff)."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
 

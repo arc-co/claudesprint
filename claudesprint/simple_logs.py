@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from claudesprint.utils.styles import SYMBOLS, COLORS, ConsoleThrobber
+from claudesprint.utils.styles import COLORS, SYMBOLS, ConsoleThrobber
 
 if TYPE_CHECKING:
     from claudesprint.core.issue_engine import IssueStep
@@ -327,7 +327,9 @@ class SimpleLogsOutput:
         if self._throbber:
             self._throbber.start(f"{step.value}")
 
-    def on_step_complete(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
+    def on_step_complete(
+        self, step: "IssueStep", next_step: "IssueStep | None"  # noqa: ARG002
+    ) -> None:
         """Log step completion.
 
         Args:
@@ -343,7 +345,9 @@ class SimpleLogsOutput:
         self.step_start_time = None
         self.current_step = None
 
-    def on_step_skip(self, step: "IssueStep", next_step: "IssueStep | None") -> None:
+    def on_step_skip(
+        self, step: "IssueStep", next_step: "IssueStep | None"  # noqa: ARG002
+    ) -> None:
         """Log step skip.
 
         Args:

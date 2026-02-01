@@ -2,14 +2,14 @@
 
 import json
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Generator
 
 from claudesprint.models.current_issue import CurrentIssue
 from claudesprint.services.base.json_store import JsonStore
-from claudesprint.utils.issue_lock import get_issue_lock, IssueLock
+from claudesprint.utils.issue_lock import get_issue_lock
 
 
 class CurrentIssueStore(JsonStore[CurrentIssue]):

@@ -1,14 +1,13 @@
 """Tests for RoutingSignalParser."""
 
+
 import pytest
-from unittest.mock import MagicMock
 
 from claudesprint.core.routing_parser import (
-    RoutingSignalParser,
     RoutingParserConfig,
+    RoutingSignalParser,
     create_default_parser_config,
 )
-from claudesprint.core.step_types import ParseResult
 from claudesprint.models.current_issue import IssueStep
 
 

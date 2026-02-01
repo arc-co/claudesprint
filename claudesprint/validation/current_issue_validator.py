@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claudesprint.models.current_issue import CurrentIssue, ChunkType, IssueStep
+from claudesprint.models.current_issue import ChunkType, CurrentIssue, IssueStep
 
 
 @dataclass

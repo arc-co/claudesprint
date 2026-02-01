@@ -80,10 +80,12 @@ class TestConfigurationManagerInit:
 
     def test_fallback_to_cwd(self) -> None:
         """Test fallback to cwd when .claude not found."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with mock.patch.object(Path, "cwd", return_value=Path(tmpdir)):
-                cm = ConfigurationManager()
-                assert cm.project_root == Path(tmpdir)
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            mock.patch.object(Path, "cwd", return_value=Path(tmpdir)),
+        ):
+            cm = ConfigurationManager()
+            assert cm.project_root == Path(tmpdir)
 
 
 class TestConfigurationManagerPaths:

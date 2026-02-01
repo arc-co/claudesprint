@@ -1,5 +1,6 @@
 """Lock file management to prevent concurrent instances."""
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -34,10 +35,8 @@ class LockFile:
             self._acquired = True
 
             # Write PID to lock file for debugging/diagnostics
-            try:
+            with contextlib.suppress(OSError):
                 self.lock_path.write_text(str(os.getpid()))
-            except OSError:
-                pass
 
             return True, ""
         except Timeout:
@@ -55,10 +54,8 @@ class LockFile:
             self._acquired = False
 
             # Remove the lock file
-            try:
+            with contextlib.suppress(OSError):
                 self.lock_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
             return True
         except Exception:

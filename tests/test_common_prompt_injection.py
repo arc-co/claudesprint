@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from claudesprint.core.claude_runner import ClaudeRunner
 from claudesprint.services.path_service import PathService
 from claudesprint.services.prompt_service import PromptContext, PromptService
 
