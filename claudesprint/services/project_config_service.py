@@ -196,11 +196,23 @@ class BarkNotificationConfig(BaseModel):
     url: str = Field(default="", description="Bark server URL")
 
 
+class WebhookNotificationConfig(BaseModel):
+    """Generic webhook notification configuration."""
+
+    enabled: bool = Field(default=False, description="Enable webhook notifications")
+    url: str = Field(default="", description="Webhook endpoint URL")
+    timeout: float = Field(default=10.0, ge=1.0, description="HTTP timeout seconds")
+    retry_count: int = Field(default=3, ge=0, le=10, description="Retry attempts")
+    headers: dict[str, str] = Field(default_factory=dict, description="Custom HTTP headers")
+    events: list[str] = Field(default_factory=list, description="Event filter (empty = all)")
+
+
 class NotificationsConfig(BaseModel):
     """Notification settings."""
 
     enabled: bool = Field(default=True, description="Enable notifications globally")
     bark: BarkNotificationConfig = Field(default_factory=BarkNotificationConfig)
+    webhook: WebhookNotificationConfig = Field(default_factory=WebhookNotificationConfig)
 
 
 class ProjectConfig(BaseModel):
@@ -328,6 +340,20 @@ enabled = true
 enabled = false
 # Bark server URL (e.g., "https://api.day.app/YOUR_KEY")
 url = ""
+
+[notifications.webhook]
+# Enable generic webhook notifications
+enabled = false
+# Webhook endpoint URL
+url = ""
+# HTTP timeout (seconds)
+timeout = 10.0
+# Retry attempts on failure
+retry_count = 3
+# Custom headers (e.g., for authentication)
+# headers = { "Authorization" = "Bearer TOKEN" }
+# Event filter (empty = all). Valid: step, failure, exit, rate_limit, hung_process
+# events = ["failure", "exit"]
 """
 
 
