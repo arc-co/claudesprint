@@ -44,6 +44,10 @@ def quickstart(
         bool,
         typer.Option("--force", "-f", help="Reinitialize even if .claudesprint/ exists"),
     ] = False,
+    skip_hooks: Annotated[
+        bool,
+        typer.Option("--skip-hooks", help="Skip injecting Claude hooks into .claude/settings.json"),
+    ] = False,
 ) -> None:
     """Quick start a new ClaudeSprint project in one command.
 
@@ -113,13 +117,15 @@ def quickstart(
     if init_service.exists() and not force:
         console.print(f"  {success_icon()} Project already initialized")
     else:
-        result = init_service.init(force=force, inject_hooks=True)
+        result = init_service.init(force=force, inject_hooks=not skip_hooks)
         if not result.success:
             console.print(f"  {error_icon()} {result.error}")
             raise typer.Exit(1)
         console.print(f"  {success_icon()} Created .claudesprint/ directory")
         if result.hooks_injected:
             console.print(f"  {success_icon()} Claude hooks configured")
+        elif skip_hooks:
+            console.print(f"  {warning_icon()} Skipped Claude hooks (--skip-hooks)")
 
     console.print("")
 

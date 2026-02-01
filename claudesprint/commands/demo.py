@@ -114,6 +114,11 @@ def demo(
     (claudesprint_dir / "specs").mkdir(parents=True, exist_ok=True)
     (claudesprint_dir / "sprints").mkdir(parents=True, exist_ok=True)
 
+    # Create .claude directory so this is recognized as project root
+    # (prevents discover_project_root from finding parent's .claude)
+    claude_dir = demo_dir / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+
     # Write demo spec
     spec_path = claudesprint_dir / "specs" / "hello-world.md"
     spec_path.write_text(_get_demo_spec_content())

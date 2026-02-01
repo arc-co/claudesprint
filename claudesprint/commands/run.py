@@ -58,6 +58,10 @@ def run_workflow(
         int,
         typer.Option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv)"),
     ] = 0,
+    dashboard: Annotated[
+        bool,
+        typer.Option("--dashboard", help="Start web dashboard for real-time monitoring"),
+    ] = False,
 ) -> None:
     """Run the sprint workflow loop.
 
@@ -95,7 +99,7 @@ def run_workflow(
             console.print("  claudesprint run --sprint path/to/sprint.json")
             raise typer.Exit(1)
 
-    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose))
+    _run_sprint_console(project_root, config, sprint_path, max_iterations, _get_verbosity(verbose), dashboard)
 
 
 def _run_sprint_console(
@@ -104,6 +108,7 @@ def _run_sprint_console(
     sprint_path: Path,
     max_iterations: int,
     verbosity: LogVerbosity = LogVerbosity.NORMAL,
+    enable_dashboard: bool = False,
 ) -> None:
     """Run the sprint workflow with console output."""
     # Lazy imports - only load heavy modules when actually running
@@ -186,6 +191,22 @@ def _run_sprint_console(
     # Create shared event bus for workflow events
     event_bus = WorkflowEventBus()
 
+    # Start dashboard server if enabled
+    dashboard_server = None
+    if enable_dashboard:
+        try:
+            from claudesprint.dashboard.server import DashboardServer
+
+            dashboard_server = DashboardServer(event_bus)
+            dashboard_url = dashboard_server.start()
+            if dashboard_url:
+                console.print(f"Dashboard: [link={dashboard_url}]{dashboard_url}[/link]")
+                console.print("")
+            else:
+                console.print(warning("Dashboard: failed to start (port unavailable)"))
+        except ImportError:
+            console.print(warning("Dashboard requires nicegui. Install with: pip install nicegui"))
+
     # Create ClaudeRunner for sprint-level operations
     claude_runner = ClaudeRunner(
         project_root=project_root,
@@ -242,6 +263,10 @@ def _run_sprint_console(
 
     # Disconnect subscriber after sprint completes
     logs_subscriber.disconnect()
+
+    # Stop dashboard server if running
+    if dashboard_server:
+        dashboard_server.stop()
 
     console.print("")
     if result.exit_reason == SprintExitReason.COMPLETED:
