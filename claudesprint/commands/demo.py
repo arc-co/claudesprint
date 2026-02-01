@@ -268,7 +268,7 @@ rm -rf claudesprint-demo
         if start_run:
             console.print("")
             from claudesprint.commands.run import run_workflow
-            run_workflow(max_iterations=10)  # Reasonable limit for demo
+            run_workflow(max_iterations=10, dashboard=True)
 
     finally:
         os.chdir(original_cwd)
