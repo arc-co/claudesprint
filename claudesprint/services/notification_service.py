@@ -181,11 +181,11 @@ class NotificationService:
             metadata=metadata,
         )
 
-        # Send with retries
+        # Send with retries (single client for connection pooling)
         last_error: Exception | None = None
-        for attempt in range(webhook_config.retry_count + 1):
-            try:
-                async with httpx.AsyncClient(timeout=webhook_config.timeout) as client:
+        async with httpx.AsyncClient(timeout=webhook_config.timeout) as client:
+            for attempt in range(webhook_config.retry_count + 1):
+                try:
                     response = await client.post(
                         webhook_config.url,
                         json=payload.to_dict(),
@@ -197,16 +197,16 @@ class NotificationService:
                         f"Webhook notification failed: {notification_type} - HTTP {response.status_code}"
                         f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
                     )
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"Webhook notification error: {notification_type} - {e}"
-                    f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
-                )
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Webhook notification error: {notification_type} - {e}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
 
-            # Wait before retry (exponential backoff)
-            if attempt < webhook_config.retry_count:
-                await asyncio.sleep(2 ** attempt)
+                # Wait before retry (exponential backoff)
+                if attempt < webhook_config.retry_count:
+                    await asyncio.sleep(2 ** attempt)
 
         if last_error:
             logger.error(f"Webhook notification failed after {webhook_config.retry_count + 1} attempts: {last_error}")
@@ -231,6 +231,11 @@ class NotificationService:
             self._send_webhook(notification_type, message, actual_title, metadata),
             return_exceptions=True,
         )
+
+        # Log any exceptions that were returned
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error(f"Notification provider error: {notification_type} - {r}")
 
         # Return True if at least one provider succeeded
         return any(r is True for r in results)
@@ -289,12 +294,12 @@ class NotificationService:
             metadata=metadata,
         )
 
-        # Send with retries
+        # Send with retries (single client for connection pooling)
         import time
         last_error: Exception | None = None
-        for attempt in range(webhook_config.retry_count + 1):
-            try:
-                with httpx.Client(timeout=webhook_config.timeout) as client:
+        with httpx.Client(timeout=webhook_config.timeout) as client:
+            for attempt in range(webhook_config.retry_count + 1):
+                try:
                     response = client.post(
                         webhook_config.url,
                         json=payload.to_dict(),
@@ -306,15 +311,15 @@ class NotificationService:
                         f"Webhook notification failed: {notification_type} - HTTP {response.status_code}"
                         f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
                     )
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"Webhook notification error: {notification_type} - {e}"
-                    f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
-                )
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Webhook notification error: {notification_type} - {e}"
+                        f" (attempt {attempt + 1}/{webhook_config.retry_count + 1})"
+                    )
 
-            if attempt < webhook_config.retry_count:
-                time.sleep(2 ** attempt)
+                if attempt < webhook_config.retry_count:
+                    time.sleep(2 ** attempt)
 
         if last_error:
             logger.error(f"Webhook notification failed after {webhook_config.retry_count + 1} attempts: {last_error}")
