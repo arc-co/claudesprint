@@ -1,0 +1,104 @@
+# {{ project_name }}
+
+{{ description if description else "A command-line tool built with Python and Typer." }}
+
+## Overview
+
+This project implements a Python CLI application with:
+- **CLI Framework**: Typer for command parsing and help generation
+- **Output**: Rich for formatted terminal output
+- **Configuration**: TOML-based configuration files
+- **Testing**: pytest with high coverage
+
+## Technical Stack
+
+- **Language**: Python 3.10+
+- **CLI Framework**: Typer
+- **Output Formatting**: Rich
+- **Configuration**: tomli/tomllib
+- **Testing**: pytest, pytest-cov
+
+## Project Structure
+
+```
+{{ project_name | lower | replace(' ', '-') }}/
+├── src/
+│   └── {{ project_name | lower | replace(' ', '_') | replace('-', '_') }}/
+│       ├── __init__.py
+│       ├── cli.py            # Main CLI entry point
+│       ├── commands/         # Command implementations
+│       ├── services/         # Business logic
+│       └── utils/            # Helper utilities
+├── tests/
+│   ├── test_cli.py
+│   ├── test_commands/
+│   └── test_services/
+├── pyproject.toml
+└── README.md
+```
+
+## Issues
+
+### Issue 1: Project Structure Setup
+Initialize the Python project with pyproject.toml, src layout, and development dependencies.
+
+**Acceptance Criteria:**
+- Project installable with `pip install -e .`
+- Dev dependencies in optional group
+- Entry point configured for CLI
+
+### Issue 2: CLI Framework Setup
+Set up Typer CLI with main app, version flag, and help documentation.
+
+**Acceptance Criteria:**
+- `--version` flag shows version
+- `--help` shows formatted help text
+- Command groups organized logically
+
+### Issue 3: Configuration System
+Implement configuration file loading with hierarchical precedence (CLI > env > file > defaults).
+
+**Acceptance Criteria:**
+- Config file auto-discovered in standard locations
+- Environment variable overrides
+- CLI flag overrides for common options
+
+### Issue 4: Core Command Implementation
+Implement the primary command(s) that provide the main functionality.
+
+**Acceptance Criteria:**
+- Clear command interface with required and optional arguments
+- Progress indicators for long-running operations
+- Helpful error messages on failure
+
+### Issue 5: Output Formatting
+Use Rich for formatted, colorful terminal output with tables and panels.
+
+**Acceptance Criteria:**
+- Consistent styling across commands
+- Table output for structured data
+- Color-coded status messages
+
+### Issue 6: Error Handling
+Implement comprehensive error handling with user-friendly messages.
+
+**Acceptance Criteria:**
+- Custom exception classes for domain errors
+- Exit codes follow Unix conventions
+- Verbose mode shows stack traces
+
+### Issue 7: Testing Suite
+Write comprehensive tests for all commands and services.
+
+**Acceptance Criteria:**
+- Unit tests for business logic
+- CLI integration tests using CliRunner
+- >80% code coverage
+
+### Issue 8: Documentation
+Create user documentation and usage examples.
+
+**Acceptance Criteria:**
+- README with installation and quick start
+- Command reference documentation
+- Example usage for common workflows

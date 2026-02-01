@@ -1,4 +1,4 @@
-"""Init commands: init (project), plan."""
+"""Init command - create sprint from spec file."""
 
 from pathlib import Path
 from typing import Annotated, Optional
@@ -13,7 +13,6 @@ from claudesprint.commands._shared import (
     success,
     error,
     warning,
-    running,
     subprocess_line,
     muted,
 )
@@ -22,7 +21,7 @@ from claudesprint.commands._shared import (
 def init_project(
     spec: Annotated[
         str,
-        typer.Option("--spec", "-s", help="Spec file to create sprint from"),
+        typer.Option("--spec", "-s", help="Spec file or spec ID to create sprint from"),
     ],
     description: Annotated[
         Optional[str],
@@ -40,10 +39,15 @@ def init_project(
 
     Creates a new sprint.json in .claudesprint/sprints/<spec_id>/ and invokes
     the init agent to populate it with issues from the spec.
+
+    Examples:
+        claudesprint init --spec my-project
+        claudesprint init --spec .claudesprint/specs/feature.md
     """
     # Lazy imports for faster startup
     from claudesprint.core.claude_runner import ClaudeRunner
     from claudesprint.services.configuration_manager import ConfigurationManager
+    from claudesprint.services.init_repo_service import InitRepoService
     from claudesprint.services.models_service import ModelsService
     from claudesprint.services.path_service import PathService
     from claudesprint.services.prompt_service import PromptService
@@ -51,6 +55,17 @@ def init_project(
 
     project_root = get_project_root()
     config = get_config()
+
+    # Auto-initialize .claudesprint/ if needed
+    init_service = InitRepoService(project_root)
+    if not init_service.exists():
+        console.print(muted("Initializing .claudesprint/ directory..."))
+        result = init_service.init(force=False, inject_hooks=True)
+        if not result.success:
+            console.print(error(f"Failed to initialize: {result.error}"))
+            raise typer.Exit(1)
+        console.print(success("Created .claudesprint/ directory"))
+        console.print("")
 
     # Find spec file
     spec_path = Path(spec)
@@ -64,9 +79,12 @@ def init_project(
     if not spec_path.exists():
         console.print(error(f"Spec file not found: {spec}"))
         console.print("Looked in:")
-        console.print(f"  • {spec}")
-        console.print(f"  • .claudesprint/specs/{spec}")
-        console.print(f"  • .claudesprint/specs/{spec}.md")
+        console.print(f"  - {spec}")
+        console.print(f"  - .claudesprint/specs/{spec}")
+        console.print(f"  - .claudesprint/specs/{spec}.md")
+        console.print("")
+        console.print("Create a spec first:")
+        console.print("  claudesprint spec create")
         raise typer.Exit(1)
 
     sprint_service = SprintService(config.sprints_dir)
@@ -162,66 +180,4 @@ Read the spec file and populate the sprint.json with all required issues.
         console.print(error(f"Init agent failed (exit code: {result.exit_code})"))
         if result.rate_limited:
             console.print(warning("Rate limit detected. Please wait and try again."))
-        raise typer.Exit(1)
-
-
-def run_planner(
-    spec: Annotated[
-        Optional[str],
-        typer.Option("--spec", "-s", help="Spec ID to plan for"),
-    ] = None,
-    debug_conversations: Annotated[
-        bool,
-        typer.Option(
-            "--debug-conversations",
-            help="Log raw agent inputs/outputs to agent_conversations.log",
-        ),
-    ] = False,
-) -> None:
-    """Run planning mode to generate issues from a spec file."""
-    # Lazy imports for faster startup
-    from claudesprint.core.claude_runner import ClaudeRunner
-    from claudesprint.services.configuration_manager import ConfigurationManager
-    from claudesprint.services.models_service import ModelsService
-    from claudesprint.services.path_service import PathService
-    from claudesprint.services.prompt_service import PromptService
-
-    project_root = get_project_root()
-    config = get_config()
-
-    # Load prompt from package resources via PromptService
-    path_service = PathService(project_root=project_root)
-    prompt_service = PromptService(path_service, project_root=project_root)
-    try:
-        prompt_content = prompt_service.get_prompt_content("plan")
-    except FileNotFoundError:
-        console.print(error("PROMPT_plan.xml.j2 not found in package"))
-        raise typer.Exit(1)
-
-    # Get model for plan step
-    cm = ConfigurationManager(project_root)
-    models_service = ModelsService.from_config_manager(cm)
-    model = models_service.get_model_for_special_step("plan")
-
-    console.print(running(f"Running planner (model: {model})..."))
-
-    runner = ClaudeRunner(
-        project_root,
-        config.claude_timeout,
-        kill_timeout=config.kill_timeout,
-        conversation_log_file=(
-            config.conversation_log_file if debug_conversations else None
-        ),
-    )
-    result = runner.run_with_content(
-        prompt_content,
-        source_name="PROMPT_plan.xml.j2",
-        on_output=lambda line: console.print(subprocess_line(line)),
-        model=model,
-    )
-
-    if result.exit_code == 0:
-        console.print(success("Planning complete."))
-    else:
-        console.print(error(f"Planning failed (exit code: {result.exit_code})"))
         raise typer.Exit(1)

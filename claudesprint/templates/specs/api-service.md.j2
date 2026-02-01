@@ -1,0 +1,108 @@
+# {{ project_name }}
+
+{{ description if description else "A RESTful API service built with FastAPI." }}
+
+## Overview
+
+This project implements a REST API service with:
+- **Framework**: FastAPI for high-performance async API
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Validation**: Pydantic for request/response schemas
+- **Testing**: pytest with httpx for async testing
+
+## Technical Stack
+
+- **Language**: Python 3.10+
+- **Framework**: FastAPI
+- **ORM**: SQLAlchemy 2.0 (async)
+- **Database**: PostgreSQL (or SQLite for development)
+- **Validation**: Pydantic v2
+- **Testing**: pytest, pytest-asyncio, httpx
+
+## Project Structure
+
+```
+{{ project_name | lower | replace(' ', '-') }}/
+├── src/
+│   └── {{ project_name | lower | replace(' ', '_') | replace('-', '_') }}/
+│       ├── __init__.py
+│       ├── main.py           # FastAPI app entry
+│       ├── routers/          # API route handlers
+│       ├── models/           # SQLAlchemy models
+│       ├── schemas/          # Pydantic schemas
+│       ├── services/         # Business logic
+│       └── database.py       # Database connection
+├── tests/
+│   ├── conftest.py           # Test fixtures
+│   ├── test_routers/
+│   └── test_services/
+├── alembic/                  # Database migrations
+├── pyproject.toml
+└── README.md
+```
+
+## Issues
+
+### Issue 1: Project Setup
+Initialize the FastAPI project with proper structure and dependencies.
+
+**Acceptance Criteria:**
+- FastAPI app runs with `uvicorn`
+- Auto-generated OpenAPI docs at `/docs`
+- Health check endpoint at `/health`
+
+### Issue 2: Database Configuration
+Set up SQLAlchemy with async support and connection pooling.
+
+**Acceptance Criteria:**
+- Database connection configured via environment
+- Connection pool with sensible defaults
+- Graceful shutdown of connections
+
+### Issue 3: Database Models
+Create SQLAlchemy models for the core domain entities.
+
+**Acceptance Criteria:**
+- Models with proper relationships
+- Timestamps for created/updated tracking
+- Indexes for common query patterns
+
+### Issue 4: Pydantic Schemas
+Define request and response schemas with validation.
+
+**Acceptance Criteria:**
+- Schemas for all API operations
+- Validation with helpful error messages
+- OpenAPI schema generation
+
+### Issue 5: CRUD Endpoints
+Implement Create, Read, Update, Delete endpoints for core resources.
+
+**Acceptance Criteria:**
+- RESTful URL patterns
+- Pagination for list endpoints
+- Filtering and sorting support
+
+### Issue 6: Error Handling
+Implement consistent error handling across the API.
+
+**Acceptance Criteria:**
+- Custom exception handlers
+- Consistent error response format
+- Appropriate HTTP status codes
+
+### Issue 7: Authentication
+Implement authentication for protected endpoints.
+
+**Acceptance Criteria:**
+- JWT or API key authentication
+- Protected route dependencies
+- User context in request
+
+### Issue 8: Testing
+Write comprehensive API tests with database fixtures.
+
+**Acceptance Criteria:**
+- Test database setup/teardown
+- Tests for all endpoints
+- Edge case and error testing

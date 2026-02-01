@@ -1,4 +1,4 @@
-"""Utility commands: validate, reset, notify."""
+"""Utility commands: validate, reset."""
 
 from pathlib import Path
 from typing import Annotated, Optional
@@ -7,7 +7,6 @@ import typer
 
 from claudesprint.commands._shared import (
     console,
-    get_project_root,
     get_config,
     COLORS,
     success,
@@ -106,44 +105,3 @@ def reset_sprint(
         console.print("Run 'claudesprint run' to start fresh.")
     else:
         console.print(warning("No current issue to clear."))
-
-
-def send_notification(
-    notification_type: Annotated[
-        str,
-        typer.Argument(help="Notification type: step, failure, exit, rate_limit"),
-    ],
-    message: Annotated[
-        str,
-        typer.Argument(help="Notification message"),
-    ],
-    title: Annotated[
-        Optional[str],
-        typer.Option("--title", "-t", help="Optional custom title"),
-    ] = None,
-) -> None:
-    """Send a notification via Bark."""
-    # Lazy imports
-    from claudesprint.services.configuration_manager import ConfigurationManager
-    from claudesprint.services.notification_service import NotificationService, NotificationType
-
-    config = get_config()
-    project_root = get_project_root()
-    cm = ConfigurationManager(project_root)
-    service = NotificationService.from_config_manager(
-        cm, http_timeout=config.http_timeout
-    )
-
-    if not service.enabled:
-        console.print(warning("Notifications are not enabled"))
-        return
-
-    try:
-        notif_type = NotificationType(notification_type)
-    except ValueError:
-        console.print(error(f"Invalid type: {notification_type}"))
-        console.print(f"Valid types: {', '.join(t.value for t in NotificationType)}")
-        raise typer.Exit(1)
-
-    service.send_sync(notif_type, message, title)
-    console.print(success("Notification sent"))

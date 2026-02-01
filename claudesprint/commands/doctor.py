@@ -22,6 +22,39 @@ from claudesprint.commands._shared import (
 )
 
 
+def _display_check_results(checks: list, verbose: bool) -> None:
+    """Display a list of check results with proper formatting.
+
+    Args:
+        checks: List of CheckResult objects.
+        verbose: Whether to show detailed information.
+    """
+    # Import locally to avoid circular imports
+    from claudesprint.services.health_check_service import CheckStatus
+
+    for check in checks:
+        if check.status == CheckStatus.OK:
+            icon = success_icon()
+            message = check.message
+        elif check.status == CheckStatus.WARNING:
+            icon = warning_icon()
+            message = f"[{COLORS.WARNING}]{check.message}[/{COLORS.WARNING}]"
+            # Add fix hint for warnings
+            if check.fix_command:
+                message += f" → {info(check.fix_command)}"
+        else:
+            icon = error_icon()
+            message = f"[{COLORS.ERROR}]{check.message}[/{COLORS.ERROR}]"
+            if check.fix_command:
+                message += f" → {info(check.fix_command)}"
+
+        console.print(f"  {icon} {check.name}: {message}")
+
+        if verbose and check.details:
+            for line in check.details.split("\n"):
+                console.print(f"      {muted(line)}")
+
+
 def doctor(
     verbose: Annotated[
         bool,
@@ -61,23 +94,19 @@ def doctor(
     # Run all checks
     report = service.run_all_checks(verbose=verbose)
 
-    # Display results
-    for check in report.checks:
-        if check.status == CheckStatus.OK:
-            icon = success_icon()
-            message = check.message
-        elif check.status == CheckStatus.WARNING:
-            icon = warning_icon()
-            message = f"[{COLORS.WARNING}]{check.message}[/{COLORS.WARNING}]"
-        else:
-            icon = error_icon()
-            message = f"[{COLORS.ERROR}]{check.message}[/{COLORS.ERROR}]"
+    # Display Environment section
+    console.print(f"[bold]=== Environment ===[/bold]")
+    _display_check_results(report.checks, verbose)
 
-        console.print(f"  {icon} {check.name}: {message}")
+    # Run and display Setup Readiness section
+    console.print("")
+    console.print(f"[bold]=== Setup Readiness ===[/bold]")
+    setup_report = service.run_setup_checks(verbose=verbose)
+    _display_check_results(setup_report.checks, verbose)
 
-        if verbose and check.details:
-            for line in check.details.split("\n"):
-                console.print(f"      {muted(line)}")
+    # Merge setup checks into main report for summary
+    for check in setup_report.checks:
+        report.add(check)
 
     console.print("")
 

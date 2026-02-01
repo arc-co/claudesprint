@@ -145,11 +145,31 @@ class HealthCheckService:
         report.add(self.check_python_version(verbose))
         report.add(self.check_required_packages(verbose))
         report.add(self.check_claude_cli(verbose))
+        report.add(self.check_claude_auth(verbose))
         report.add(self.check_project_structure(verbose))
 
         # Optional checks
         for check in self.check_optional_deps(verbose):
             report.add(check)
+
+        return report
+
+    def run_setup_checks(self, verbose: bool = False) -> HealthReport:
+        """Run setup readiness checks.
+
+        Checks project initialization status, spec files, and sprint status.
+
+        Args:
+            verbose: Include detailed information in results.
+
+        Returns:
+            HealthReport with setup check results.
+        """
+        report = HealthReport()
+
+        report.add(self.check_project_initialized(verbose))
+        report.add(self.check_spec_files(verbose))
+        report.add(self.check_sprint_exists(verbose))
 
         return report
 
@@ -272,6 +292,234 @@ class HealthCheckService:
                 details=f"Path: {claude_path}" if verbose else None,
             )
 
+    def check_claude_auth(self, verbose: bool = False) -> CheckResult:
+        """Check if Claude CLI is authenticated.
+
+        Checks for the presence of Claude credentials file to verify auth status.
+        This is faster and more reliable than running CLI commands.
+
+        Args:
+            verbose: Include authentication details.
+
+        Returns:
+            CheckResult for Claude CLI authentication.
+        """
+        claude_path = shutil.which("claude")
+
+        if not claude_path:
+            return CheckResult(
+                name="Claude CLI Auth",
+                status=CheckStatus.ERROR,
+                message="Claude CLI not installed (cannot check auth)",
+                details="Install Claude CLI first" if verbose else None,
+            )
+
+        # Check for credentials file directly - this is fast and reliable
+        credentials_path = Path.home() / ".claude" / ".credentials.json"
+
+        if credentials_path.exists():
+            try:
+                # Verify the file has some content (basic sanity check)
+                content = credentials_path.read_text()
+                if len(content) > 10:  # Minimal valid JSON would be at least this long
+                    return CheckResult(
+                        name="Claude CLI Auth",
+                        status=CheckStatus.OK,
+                        message="Claude CLI authenticated",
+                        details=f"Credentials found at {credentials_path}" if verbose else None,
+                    )
+            except (OSError, PermissionError):
+                pass
+
+        # No credentials file found
+        return CheckResult(
+            name="Claude CLI Auth",
+            status=CheckStatus.ERROR,
+            message="Claude CLI not authenticated",
+            details=(
+                "Run 'claude login' to authenticate with your Anthropic account"
+                if verbose
+                else None
+            ),
+            fixable=False,
+            fix_command="claude login",
+        )
+
+    def check_project_initialized(self, verbose: bool = False) -> CheckResult:
+        """Check if project has been initialized with ClaudeSprint.
+
+        Args:
+            verbose: Include directory details.
+
+        Returns:
+            CheckResult for project initialization.
+        """
+        claudesprint_dir = self.project_root / ".claudesprint"
+
+        if not claudesprint_dir.exists():
+            return CheckResult(
+                name="Project Initialized",
+                status=CheckStatus.WARNING,
+                message="Project not initialized",
+                details=(
+                    "Run 'claudesprint quickstart' or 'claudesprint quickstart' to initialize"
+                    if verbose
+                    else None
+                ),
+                fixable=True,
+                fix_command="claudesprint quickstart",
+            )
+
+        # Check for essential directories
+        state_dir = claudesprint_dir / "state"
+        if not state_dir.exists():
+            return CheckResult(
+                name="Project Initialized",
+                status=CheckStatus.WARNING,
+                message="Project partially initialized (missing state/)",
+                details="Run 'claudesprint quickstart' to complete setup" if verbose else None,
+                fixable=True,
+                fix_command="claudesprint quickstart",
+            )
+
+        return CheckResult(
+            name="Project Initialized",
+            status=CheckStatus.OK,
+            message="Project initialized",
+            details=f"Directory: {claudesprint_dir}" if verbose else None,
+        )
+
+    def check_spec_files(self, verbose: bool = False) -> CheckResult:
+        """Check if spec files exist.
+
+        Args:
+            verbose: Include list of spec files.
+
+        Returns:
+            CheckResult for spec files.
+        """
+        claudesprint_dir = self.project_root / ".claudesprint"
+        specs_dir = claudesprint_dir / "specs"
+
+        if not claudesprint_dir.exists():
+            return CheckResult(
+                name="Spec Files",
+                status=CheckStatus.WARNING,
+                message="Project not initialized (no specs)",
+                details="Initialize project first" if verbose else None,
+            )
+
+        if not specs_dir.exists():
+            # Also check for .md files directly in .claudesprint
+            md_files = list(claudesprint_dir.glob("*.md"))
+            if md_files:
+                return CheckResult(
+                    name="Spec Files",
+                    status=CheckStatus.OK,
+                    message=f"{len(md_files)} spec file(s) found",
+                    details="\n".join(f.name for f in md_files) if verbose else None,
+                )
+            return CheckResult(
+                name="Spec Files",
+                status=CheckStatus.WARNING,
+                message="No spec files found",
+                details=(
+                    "Create with: claudesprint spec create"
+                    if verbose
+                    else None
+                ),
+                fixable=False,
+                fix_command="claudesprint spec create",
+            )
+
+        # Check for spec files in specs directory
+        spec_files = list(specs_dir.glob("*.md"))
+        # Also include .md files in root .claudesprint
+        spec_files.extend(list(claudesprint_dir.glob("*.md")))
+
+        if not spec_files:
+            return CheckResult(
+                name="Spec Files",
+                status=CheckStatus.WARNING,
+                message="No spec files found",
+                details=(
+                    "Create with: claudesprint spec create"
+                    if verbose
+                    else None
+                ),
+                fixable=False,
+                fix_command="claudesprint spec create",
+            )
+
+        return CheckResult(
+            name="Spec Files",
+            status=CheckStatus.OK,
+            message=f"{len(spec_files)} spec file(s) found",
+            details="\n".join(f.name for f in spec_files) if verbose else None,
+        )
+
+    def check_sprint_exists(self, verbose: bool = False) -> CheckResult:
+        """Check if at least one sprint exists.
+
+        Args:
+            verbose: Include sprint details.
+
+        Returns:
+            CheckResult for sprint existence.
+        """
+        claudesprint_dir = self.project_root / ".claudesprint"
+        state_dir = claudesprint_dir / "state"
+
+        if not state_dir.exists():
+            return CheckResult(
+                name="Sprint Status",
+                status=CheckStatus.WARNING,
+                message="No state directory (no sprints)",
+                details="Initialize sprint with: claudesprint init --spec <file>" if verbose else None,
+            )
+
+        # Look for sprint files (sprint_*.json pattern)
+        sprint_files = list(state_dir.glob("sprint_*.json"))
+
+        if not sprint_files:
+            return CheckResult(
+                name="Sprint Status",
+                status=CheckStatus.WARNING,
+                message="No sprints found",
+                details=(
+                    "Initialize with: claudesprint init --spec <file>"
+                    if verbose
+                    else None
+                ),
+                fixable=False,
+                fix_command="claudesprint init --spec <file>",
+            )
+
+        # Find the current/most recent sprint
+        current_sprint_file = state_dir / "current_sprint.json"
+        if current_sprint_file.exists():
+            return CheckResult(
+                name="Sprint Status",
+                status=CheckStatus.OK,
+                message=f"Active sprint found ({len(sprint_files)} total)",
+                details=(
+                    f"Sprint files: {', '.join(f.stem for f in sprint_files)}"
+                    if verbose
+                    else None
+                ),
+            )
+
+        return CheckResult(
+            name="Sprint Status",
+            status=CheckStatus.OK,
+            message=f"{len(sprint_files)} sprint(s) found",
+            details=(
+                f"Sprint files: {', '.join(f.stem for f in sprint_files)}"
+                if verbose
+                else None
+            ),
+        )
+
     def check_project_structure(self, verbose: bool = False) -> CheckResult:
         """Check if project has ClaudeSprint structure.
 
@@ -289,12 +537,12 @@ class HealthCheckService:
                 status=CheckStatus.WARNING,
                 message="No .claudesprint/ directory found",
                 details=(
-                    "Run 'claudesprint initrepo' to initialize ClaudeSprint in this project"
+                    "Run 'claudesprint quickstart' to initialize ClaudeSprint in this project"
                     if verbose
                     else None
                 ),
                 fixable=True,
-                fix_command="claudesprint initrepo",
+                fix_command="claudesprint quickstart",
             )
 
         # Check for expected subdirectories
