@@ -193,16 +193,6 @@
   display: none;
 }
 
-.md-header__button.md-logo {
-  width: -webkit-fill-available;
-}
-
-/* Adjust logo size in header */
-.md-header__button.md-logo img {
-  height: 1.5rem;
-  width: auto;
-}
-
 /* Footer - always black background */
 .md-footer-meta.md-typeset,
 .md-footer-meta {
