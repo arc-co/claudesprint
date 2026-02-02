@@ -53,10 +53,11 @@
 }
 
 /* Dark mode header */
-[data-md-color-scheme="slate"] .md-header {
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-header--shadow {
   background-color: rgb(9, 9, 11);
   border-bottom: 1px solid rgb(39, 39, 42);
-  box-shadow: none;
+  box-shadow: none !important;
 }
 
 /* Dark mode nav */
@@ -124,11 +125,12 @@
 }
 
 /* Light mode header */
-[data-md-color-scheme="default"] .md-header {
+[data-md-color-scheme="default"] .md-header,
+[data-md-color-scheme="default"] .md-header--shadow {
   background-color: #fdfdf8;
   border-bottom: 1px solid #e5e5e0;
   color: #1f2937;
-  box-shadow: none;
+  box-shadow: none !important;
 }
 
 [data-md-color-scheme="default"] .md-header__title {
