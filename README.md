@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Autonomous AI-driven software development.</strong><br/>
+  <strong>Autonomous AI-driven software development.</strong><br/><br/>
   ClaudeSprint orchestrates Claude Code to build complete features end-to-end.
 </p>
 
