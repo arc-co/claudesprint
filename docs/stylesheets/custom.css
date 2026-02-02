@@ -151,3 +151,14 @@
   background-color: #f3f3ee;
   color: rgb(160, 110, 75);
 }
+
+/* Hide header title - logo already contains text */
+.md-header__title {
+  display: none;
+}
+
+/* Adjust logo size in header */
+.md-header__button.md-logo img {
+  height: 1.5rem;
+  width: auto;
+}
