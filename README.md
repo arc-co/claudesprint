@@ -62,7 +62,15 @@ claudesprint quickstart
 
 Each step runs in a fresh Claude session with focused context. State is passed via JSON artifacts, not conversation history.
 
-[See detailed architecture →](https://arc-co.github.io/claudesprint/concepts/architecture/)
+<details>
+<summary><strong>View detailed architecture</strong></summary>
+<br/>
+<p align="center">
+  <img src="docs/assets/loop-detailed.jpg" alt="ClaudeSprint Detailed Loop Architecture" width="100%" />
+</p>
+</details>
+
+[Full architecture documentation →](https://arc-co.github.io/claudesprint/concepts/architecture/)
 
 ## Commands
 

@@ -22,52 +22,7 @@ ClaudeSprint solves this by:
 
 ## Dual-Loop Design
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SPRINT LOOP (Outer)                      │
-│                  Project Management Layer                   │
-├─────────────────────────────────────────────────────────────┤
-│  1. Load sprint.json                                        │
-│  2. Get bearings (summarize status)                         │
-│  3. Agent selects next issue                                │
-│  4. Create current_issue.json                               │
-│  5. Enter Issue Loop ──────────────────────┐                │
-│  6. Mark complete, clear state             │                │
-│  7. Repeat until all issues done           │                │
-└────────────────────────────────────────────┼────────────────┘
-                                             │
-                                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    ISSUE LOOP (Inner)                       │
-│                     Execution Layer                         │
-├─────────────────────────────────────────────────────────────┤
-│  read-docs ─► implement ─► write-tests ─► run-tests         │
-│                                              │               │
-│                              ┌───────────────┤               │
-│                              │ (fail)        │ (pass)        │
-│                              ▼               ▼               │
-│                          fix-tests    browser-validation     │
-│                              │               │               │
-│                              └───► run-tests │               │
-│                                              ▼               │
-│                                        code-review           │
-│                                              │               │
-│                              ┌───────────────┤               │
-│                              │ (issues)      │ (pass)        │
-│                              ▼               ▼               │
-│                      fix-code-review    update-docs          │
-│                              │               │               │
-│                              └───► run-tests │               │
-│                                              ▼               │
-│                                       stage-changes          │
-│                                              │               │
-│                                              ▼               │
-│                                       commit-changes         │
-│                                              │               │
-│                                              ▼               │
-│                                        complete              │
-└─────────────────────────────────────────────────────────────┘
-```
+![ClaudeSprint Dual-Loop Architecture](../assets/loop-detailed.jpg)
 
 ## Sprint Loop (Outer)
 
