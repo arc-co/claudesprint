@@ -6,7 +6,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**[PyPI](https://pypi.org/project/claudesprint/)** | **[Documentation](https://claudesprint.com/docs)** | **[GitHub](https://github.com/arc-co/claudesprint)**
+**[PyPI](https://pypi.org/project/claudesprint/)** | **[Documentation](https://arc-co.github.io/claudesprint/)** | **[GitHub](https://github.com/arc-co/claudesprint)**
 
 > **Alpha Software** - APIs and behavior may change. [Report issues](https://github.com/arc-co/claudesprint/issues)
 
@@ -66,7 +66,7 @@ SPRINT LOOP (outer)          ISSUE LOOP (inner)
 
 Each step runs in a fresh Claude session with focused context. State is passed via JSON artifacts, not conversation history.
 
-[Learn more about the architecture →](https://claudesprint.com/docs/concepts/architecture)
+[Learn more about the architecture →](https://arc-co.github.io/claudesprint/concepts/architecture/)
 
 ## Commands
 
@@ -80,7 +80,7 @@ claudesprint status          # View current state
 claudesprint reset           # Clear issue state
 ```
 
-[Full CLI reference →](https://claudesprint.com/docs/reference/cli-commands)
+[Full CLI reference →](https://arc-co.github.io/claudesprint/reference/cli-commands/)
 
 ## Cost Awareness
 
@@ -94,15 +94,15 @@ claudesprint run -n 5
 CLAUDESPRINT_MODEL_OVERRIDE=sonnet claudesprint run
 ```
 
-[Cost management guide →](https://claudesprint.com/docs/guides/cost-management)
+[Cost management guide →](https://arc-co.github.io/claudesprint/guides/cost-management/)
 
 ## Documentation
 
-- [Installation](https://claudesprint.com/docs/getting-started/installation)
-- [Quickstart Guide](https://claudesprint.com/docs/getting-started/quickstart)
-- [Writing Specifications](https://claudesprint.com/docs/guides/specifications)
-- [Configuration](https://claudesprint.com/docs/guides/configuration)
-- [Troubleshooting](https://claudesprint.com/docs/reference/troubleshooting)
+- [Installation](https://arc-co.github.io/claudesprint/getting-started/installation/)
+- [Quickstart Guide](https://arc-co.github.io/claudesprint/getting-started/quickstart/)
+- [Writing Specifications](https://arc-co.github.io/claudesprint/guides/specifications/)
+- [Configuration](https://arc-co.github.io/claudesprint/guides/configuration/)
+- [Troubleshooting](https://arc-co.github.io/claudesprint/reference/troubleshooting/)
 
 ## Contributing
 
