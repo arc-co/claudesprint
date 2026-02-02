@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="40" />
+  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="60" />
 </p>
 
 <p align="center">
-  <strong>Autonomous AI-driven software development.</strong><br/>
-  ClaudeSprint orchestrates Claude Code to build complete features end-to-end—from spec to tested, committed code.
+  <h2>Autonomous AI-driven software development.</h2><br/><br/>
+  ClaudeSprint orchestrates Claude Code to build complete features end-to-end.
 </p>
 
 [![PyPI](https://img.shields.io/pypi/v/claudesprint.svg)](https://pypi.org/project/claudesprint/)
