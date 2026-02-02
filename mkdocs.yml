@@ -7,7 +7,7 @@ repo_name: arc-co/claudesprint
 theme:
   name: material
   logo: assets/claudesprint_logo.svg
-  favicon: assets/claudesprint_logo.svg
+  favicon: assets/favicon.png
   palette:
     - scheme: slate
       toggle:
