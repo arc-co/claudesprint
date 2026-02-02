@@ -56,6 +56,7 @@
 [data-md-color-scheme="slate"] .md-header {
   background-color: rgb(9, 9, 11);
   border-bottom: 1px solid rgb(39, 39, 42);
+  box-shadow: none;
 }
 
 /* Dark mode nav */
@@ -127,6 +128,7 @@
   background-color: #fdfdf8;
   border-bottom: 1px solid #e5e5e0;
   color: #1f2937;
+  box-shadow: none;
 }
 
 [data-md-color-scheme="default"] .md-header__title {
