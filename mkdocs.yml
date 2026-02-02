@@ -8,14 +8,10 @@ theme:
   name: material
   palette:
     - scheme: slate
-      primary: deep orange
-      accent: orange
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
     - scheme: default
-      primary: deep orange
-      accent: orange
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -26,6 +22,9 @@ theme:
     - navigation.expand
     - toc.follow
     - content.code.copy
+
+extra_css:
+  - stylesheets/custom.css
 
 nav:
   - Home: index.md
