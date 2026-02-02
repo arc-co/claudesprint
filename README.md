@@ -17,6 +17,8 @@
 
 ## Why ClaudeSprint?
 
+Inspired by Agile sprints and Extreme Programming practices (test-first, continuous integration, small iterations), ClaudeSprint brings disciplined software development to AI agents.
+
 AI coding assistants lose context between sessions. ClaudeSprint solves this with:
 
 - **Fresh sessions per step** - Clean context prevents hallucination accumulation
