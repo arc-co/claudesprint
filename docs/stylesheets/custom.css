@@ -190,7 +190,7 @@
 
 /* Hide header title - logo already contains text */
 .md-header__title {
-  display: none;
+  opacity: 0;
 }
 
 /* Footer - always black background */
