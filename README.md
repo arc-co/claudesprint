@@ -34,6 +34,12 @@ AI coding assistants lose context between sessions. ClaudeSprint solves this wit
 pip install claudesprint
 ```
 
+Or install with [pipx](https://pipx.pypa.io/) for isolated environment:
+
+```bash
+pipx install claudesprint
+```
+
 **Requirements:** Python 3.10+ and [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (authenticated)
 
 ### 2. Verify Setup
