@@ -206,6 +206,11 @@
   display: none;
 }
 
+/* Make logo container fill space to push nav items to the right */
+.md-header__button.md-logo {
+  flex-grow: 1;
+}
+
 /* Adjust logo size in header */
 .md-header__button.md-logo img {
   height: 1.5rem;
