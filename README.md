@@ -56,22 +56,13 @@ claudesprint quickstart
 
 ## How It Works
 
-ClaudeSprint uses a dual-loop architecture:
-
-```
-SPRINT LOOP (outer)          ISSUE LOOP (inner)
-├─ Load sprint.json          ├─ read-docs
-├─ Select next issue    ──►  ├─ implement
-├─ Enter issue loop          ├─ write-tests
-├─ Mark complete             ├─ run-tests / fix-tests
-└─ Repeat                    ├─ code-review
-                             ├─ commit-changes
-                             └─ complete
-```
+<p align="center">
+  <img src="docs/assets/high-level-issue-loop.png" alt="ClaudeSprint Issue Loop" width="600" />
+</p>
 
 Each step runs in a fresh Claude session with focused context. State is passed via JSON artifacts, not conversation history.
 
-[Learn more about the architecture →](https://arc-co.github.io/claudesprint/concepts/architecture/)
+[See detailed architecture →](https://arc-co.github.io/claudesprint/concepts/architecture/)
 
 ## Commands
 
