@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="50" />
+  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="70" />
 </p>
 
 <p align="center">
