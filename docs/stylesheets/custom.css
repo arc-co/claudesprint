@@ -206,9 +206,9 @@
   display: none;
 }
 
-/* Make logo container fill space to push nav items to the right */
-.md-header__button.md-logo {
-  flex-grow: 1;
+/* Header layout - push nav items to the right */
+.md-header__inner {
+  justify-content: space-between;
 }
 
 /* Adjust logo size in header */
