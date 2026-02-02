@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="60" />
+  <img src="docs/assets/claudesprint_logo.svg" alt="ClaudeSprint" height="50" />
 </p>
 
 <p align="center">
-  <h2>Autonomous AI-driven software development.</h2><br/><br/>
+  <strong>Autonomous AI-driven software development.</strong><br/>
   ClaudeSprint orchestrates Claude Code to build complete features end-to-end.
 </p>
 
