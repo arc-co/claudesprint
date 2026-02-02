@@ -57,7 +57,7 @@ claudesprint quickstart
 ## How It Works
 
 <p align="center">
-  <img src="docs/assets/high-level-issue-loop.png" alt="ClaudeSprint Issue Loop" width="600" />
+  <img src="docs/assets/high-level-issue-loop.png" alt="ClaudeSprint Issue Loop" width="100%" />
 </p>
 
 Each step runs in a fresh Claude session with focused context. State is passed via JSON artifacts, not conversation history.
