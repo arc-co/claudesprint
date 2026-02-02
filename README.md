@@ -7,6 +7,10 @@
   ClaudeSprint orchestrates Claude Code to build complete features end-to-end.
 </p>
 
+<p align="center">
+  <img src="docs/assets/gui-demo.jpg" alt="ClaudeSprint Demo" width="100%" />
+</p>
+
 [![PyPI](https://img.shields.io/pypi/v/claudesprint.svg)](https://pypi.org/project/claudesprint/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
