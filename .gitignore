@@ -54,3 +54,4 @@ htmlcov/
 
 # MkDocs build output
 .claudesprint/site/
+site/

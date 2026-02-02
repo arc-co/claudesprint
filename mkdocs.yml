@@ -1,41 +1,66 @@
-site_name: ClaudeSprint Documentation
-docs_dir: docs
+site_name: ClaudeSprint
+site_description: Autonomous AI-driven software development
+site_url: https://claudesprint.com/docs
 repo_url: https://github.com/arc-co/claudesprint
 repo_name: arc-co/claudesprint
 
 theme:
   name: material
+  palette:
+    - scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+    - content.code.copy
 
 nav:
   - Home: index.md
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quickstart: getting-started/quickstart.md
-  - Core Concepts:
+  - Concepts:
     - Architecture: concepts/architecture.md
-    - State & Artifacts: concepts/state-management.md
-    - Workflow Steps: concepts/workflow-steps.md
   - Guides:
-    - Specifications & Scoping: guides/specifications-and-scoping.md
+    - Writing Specifications: guides/specifications.md
     - Configuration: guides/configuration.md
-    - Browser Automation: guides/browser-automation.md
     - Cost Management: guides/cost-management.md
-    - Advanced Workflows: guides/advanced-workflows.md
   - Reference:
     - CLI Commands: reference/cli-commands.md
-    - JSON Schemas: reference/schema-reference.md
     - Troubleshooting: reference/troubleshooting.md
-  - Development:
-    - Contributing: development/contributing.md
-    - Customizing Prompts: development/prompt-engineering.md
-    - Engine Internals: development/engine-internals.md
 
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
 
-extra_javascript:
-  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/arc-co/claudesprint
