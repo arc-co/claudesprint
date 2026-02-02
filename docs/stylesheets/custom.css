@@ -111,17 +111,20 @@
   --md-default-fg-color--lightest: #9ca3af;
 
   /* Accent - warm tan */
-  --md-accent-fg-color: rgb(180, 130, 95);
-  --md-accent-fg-color--transparent: rgba(180, 130, 95, 0.1);
-  --md-accent-bg-color: rgb(180, 130, 95);
-  --md-accent-bg-color--light: rgba(180, 130, 95, 0.1);
+  --md-accent-fg-color: rgb(160, 100, 60);
+  --md-accent-fg-color--transparent: rgba(160, 100, 60, 0.1);
+  --md-accent-bg-color: rgb(160, 100, 60);
+  --md-accent-bg-color--light: rgba(160, 100, 60, 0.1);
 
-  /* Primary - neutral */
+  /* Primary - dark text on light background */
   --md-primary-fg-color: #fdfdf8;
   --md-primary-fg-color--light: #f8f8f3;
   --md-primary-fg-color--dark: #eeeeea;
   --md-primary-bg-color: #1f2937;
   --md-primary-bg-color--light: #374151;
+
+  /* Typeset link color - ensures nav links are visible */
+  --md-typeset-a-color: rgb(160, 100, 60);
 }
 
 /* Light mode header */
@@ -149,7 +152,53 @@
 /* Light mode code */
 [data-md-color-scheme="default"] .md-typeset code {
   background-color: #f3f3ee;
-  color: rgb(160, 110, 75);
+  color: rgb(140, 90, 55);
+}
+
+/* Light mode nav */
+[data-md-color-scheme="default"] .md-nav__link {
+  color: #374151;
+}
+
+[data-md-color-scheme="default"] .md-nav__link--active,
+[data-md-color-scheme="default"] .md-nav__link:hover {
+  color: rgb(160, 100, 60);
+}
+
+/* Light mode sidebar */
+[data-md-color-scheme="default"] .md-sidebar {
+  background-color: #fdfdf8;
+}
+
+/* Light mode footer */
+[data-md-color-scheme="default"] .md-footer {
+  background-color: #f3f3ee;
+  color: #374151;
+}
+
+[data-md-color-scheme="default"] .md-footer a {
+  color: rgb(140, 90, 55);
+}
+
+/* Light mode search */
+[data-md-color-scheme="default"] .md-search__input {
+  background-color: #ffffff;
+  border: 1px solid #e5e5e0;
+  color: #1f2937;
+}
+
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: #9ca3af;
+}
+
+/* Light mode tables */
+[data-md-color-scheme="default"] .md-typeset table:not([class]) th {
+  background-color: #f3f3ee;
+  color: #1f2937;
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) td {
+  border-color: #e5e5e0;
 }
 
 /* Hide header title - logo already contains text */
