@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claudesprint"
-version = "2.0.0"
+dynamic = ["version"]
 description = "ClaudeSprint - Autonomous workflow orchestration for AI-driven development"
 readme = "README.md"
 license = "MIT"
@@ -66,13 +66,11 @@ all = [
 claudesprint = "claudesprint.cli:app"
 claudesprint-tools = "claudesprint.tools.cli:main"
 
+[tool.hatch.version]
+path = "claudesprint/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["claudesprint"]
-
-# Include package data (prompts and schemas)
-[tool.hatch.build.targets.wheel.force-include]
-"claudesprint/prompts" = "claudesprint/prompts"
-"claudesprint/schemas" = "claudesprint/schemas"
 
 [tool.hatch.build.targets.sdist]
 include = [

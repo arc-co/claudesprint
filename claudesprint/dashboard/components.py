@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from nicegui import ui
 
+from claudesprint import __version__
+
 if TYPE_CHECKING:
     from claudesprint.dashboard.state import DashboardState
 
@@ -118,7 +120,7 @@ def create_dashboard(state: DashboardState, refresh_callbacks: dict[str, Callabl
 def _create_header(_state: DashboardState) -> None:
     """Create the header section with title and connection status."""
     with ui.element("div").classes("section header"):
-        ui.html('<span class="logo">⚡ ClaudeSprint<span class="version">v0.0.2</span></span>', sanitize=False)
+        ui.html(f'<span class="logo">ClaudeSprint<span class="version">v{__version__}</span></span>', sanitize=False)
         ui.html(
             '<div class="header-links">'
             '<a class="header-link" href="https://www.claudesprint.com/docs" target="_blank">docs</a>'
